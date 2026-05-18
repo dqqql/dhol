@@ -132,16 +132,16 @@ function createBridgeScript(sheetId: string) {
           );
         }
 
-        function hasClickableCheckboxes(root) {
-          return getCheckboxElements(root).length > 0;
-        }
-
         function isCheckboxElement(element) {
           if (!element || !element.matches) {
             return false;
           }
 
           return element.matches('div[onclick*="toggleCustomCheckbox"], button[onclick*="toggleCustomCheckbox"]');
+        }
+
+        function hasClickableCheckboxes(root) {
+          return getCheckboxElements(root).length > 0;
         }
 
         function addResourceElements(key, elements) {
@@ -156,63 +156,53 @@ function createBridgeScript(sheetId: string) {
           });
         }
 
-        function findResourceContainer(labelText) {
-          var labels = Array.prototype.slice.call(
+        function findTextMatches(matcher) {
+          return Array.prototype.slice.call(
             document.querySelectorAll('span, div, p, label, strong, b, h1, h2, h3, h4, h5, h6')
           ).filter(function (element) {
-            return normalizeText(element.textContent) === labelText;
+            return matcher(normalizeText(element.textContent), element);
           });
-
-          for (var index = 0; index < labels.length; index += 1) {
-            var current = labels[index];
-
-            while (current && current !== document.body) {
-              if (hasClickableCheckboxes(current)) {
-                return current;
-              }
-
-              current = current.parentElement;
-            }
-          }
-
-          return null;
         }
 
-        function findResourceElementsNearLabel(labelText) {
-          var labels = Array.prototype.slice.call(
-            document.querySelectorAll('span, div, p, label, strong, b, h1, h2, h3, h4, h5, h6')
-          ).filter(function (element) {
-            return normalizeText(element.textContent) === labelText;
-          });
+        function getDirectSiblingCheckboxes(element) {
+          var matches = [];
+          var sibling = element.nextElementSibling;
 
-          for (var labelIndex = 0; labelIndex < labels.length; labelIndex += 1) {
-            var label = labels[labelIndex];
-            var directSiblings = [];
-            var sibling = label.nextElementSibling;
-
-            while (sibling) {
-              if (isCheckboxElement(sibling)) {
-                directSiblings.push(sibling);
-              }
+          while (sibling) {
+            if (isCheckboxElement(sibling)) {
+              matches.push(sibling);
               sibling = sibling.nextElementSibling;
+              continue;
             }
 
-            if (directSiblings.length > 0) {
-              return directSiblings;
+            if (matches.length > 0) {
+              break;
             }
 
-            var current = label;
-            while (current && current !== document.body) {
-              if (current.nextElementSibling && hasClickableCheckboxes(current.nextElementSibling)) {
-                return getCheckboxElements(current.nextElementSibling);
-              }
-
-              current = current.parentElement;
-            }
+            sibling = sibling.nextElementSibling;
           }
 
-          var fallbackContainer = findResourceContainer(labelText);
-          return fallbackContainer ? getCheckboxElements(fallbackContainer) : [];
+          return matches;
+        }
+
+        function getNextSiblingCheckboxGroup(element) {
+          var current = element;
+
+          while (current && current !== document.body) {
+            var direct = getDirectSiblingCheckboxes(current);
+            if (direct.length > 0) {
+              return direct;
+            }
+
+            var sibling = current.nextElementSibling;
+            if (sibling && hasClickableCheckboxes(sibling)) {
+              return getCheckboxElements(sibling);
+            }
+
+            current = current.parentElement;
+          }
+
+          return [];
         }
 
         function getExpectedTrackLength(key) {
@@ -233,24 +223,33 @@ function createBridgeScript(sheetId: string) {
             return elements;
           }
 
-          if (key === 'hp') {
-            return elements.slice(0, expectedLength);
-          }
-
           if (key === 'stress') {
             return elements.slice(elements.length - expectedLength);
           }
 
-          return elements;
+          return elements.slice(0, expectedLength);
         }
 
-        function collectResourceElementsByLabel(key, labelText) {
-          var elements = findResourceElementsNearLabel(labelText);
-          if (elements.length === 0) {
+        function collectMatchedResourceElements(key, matcher, mode) {
+          var labels = findTextMatches(matcher);
+
+          for (var index = 0; index < labels.length; index += 1) {
+            var elements = mode === 'direct'
+              ? getDirectSiblingCheckboxes(labels[index])
+              : getNextSiblingCheckboxGroup(labels[index]);
+
+            if (elements.length === 0 && mode === 'direct') {
+              elements = getNextSiblingCheckboxGroup(labels[index]);
+            }
+
+            elements = trimResourceElements(key, elements);
+            if (elements.length === 0) {
+              continue;
+            }
+
+            addResourceElements(key, elements);
             return;
           }
-
-          addResourceElements(key, trimResourceElements(key, elements));
         }
 
         function classifyElement(element) {
@@ -298,11 +297,21 @@ function createBridgeScript(sheetId: string) {
             'hope',
             Array.prototype.slice.call(document.querySelectorAll('[data-hope-index]'))
           );
-          collectResourceElementsByLabel('proficiency', '\\u719f\\u7ec3\\u503c');
-          collectResourceElementsByLabel('hp', '\\u751f\\u547d\\u70b9');
-          collectResourceElementsByLabel('stress', '\\u538b\\u529b\\u70b9');
-          collectResourceElementsByLabel('armor_slots', '\\u62a4\\u7532\\u69fd');
-          collectResourceElementsByLabel('gold', '\\u91d1\\u5e01');
+          collectMatchedResourceElements('proficiency', function (text) {
+            return text === '\\u719f\\u7ec3\\u503c';
+          }, 'direct');
+          collectMatchedResourceElements('hp', function (text) {
+            return text.indexOf('\\u751f\\u547d\\u70b9') === 0;
+          }, 'group');
+          collectMatchedResourceElements('stress', function (text) {
+            return text === '\\u538b\\u529b\\u70b9';
+          }, 'group');
+          collectMatchedResourceElements('armor_slots', function (text) {
+            return text === '\\u62a4\\u7532\\u69fd';
+          }, 'group');
+          collectMatchedResourceElements('gold', function (text) {
+            return text === '\\u91d1\\u5e01';
+          }, 'group');
         }
 
         function normalizeHopeFill(element) {
