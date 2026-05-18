@@ -1,0 +1,247 @@
+{
+  "format": "dhpack",
+  "version": 1,
+  "id": "campaign-beast-feast",
+  "pack_name": "野兽饭",
+  "description": "地下迷宫、怪物料理、魔诱核衰退与食材争夺。",
+  "cards": [
+    {
+      "id": "bf-location-aimo-village",
+      "type": "Location",
+      "title": "爱莫村",
+      "content": "古朴宁静的地表村落，坐落在巨大的鸻鸟洞穴正上方。村内全是手无寸铁的平民，因失去魔法保护而正面临怪物外溢威胁与余粮危机。",
+      "style": "#22c55e"
+    },
+    {
+      "id": "bf-location-plover-caverns",
+      "type": "Location",
+      "title": "鸻鸟洞穴",
+      "content": "无尽的地下迷宫，向下陡峭倾斜数百里，裂出无数分岔与独特生物群落。探险者已知至少包含近地层、微光层、深渊层、地极层四个层级。",
+      "style": "#22c55e"
+    },
+    {
+      "id": "bf-location-barry-restaurant",
+      "type": "Location",
+      "title": "巴里家餐厅",
+      "content": "位于地下居民大量聚集的主要洞窟中，是一家用当天鲜获烹饪热腾腾佳肴的连锁小餐馆，也是流言、食谱与怪物情报的重要集散地。",
+      "style": "#22c55e"
+    },
+    {
+      "id": "bf-location-radiant-dome",
+      "type": "Location",
+      "title": "光辉顶",
+      "content": "一个网格球形的巨大穹顶，顶部散发的光芒明亮到能比肩地表太阳。常有探险老手在此进行冥想、晨间仪式与出发前的准备。",
+      "style": "#22c55e"
+    },
+    {
+      "id": "bf-location-star-reflecting-lake",
+      "type": "Location",
+      "title": "映星湖",
+      "content": "由地下泉提供活水的地下主湖泊，上方洞顶布满光螳螂、亮爪蝎等发光生物，水中栖息着从杏仁孔雀鱼到灯乌贼等千奇百怪的水生生物。",
+      "style": "#22c55e"
+    },
+    {
+      "id": "bf-location-great-graveyard",
+      "type": "Location",
+      "title": "大坟地",
+      "content": "位于第三层深渊层最深处，地表覆盖无数极易踩碎的骨骸。这里盘踞着洞穴生态链最顶端的强悍怪物，是通往更深处地极层的必经之路。",
+      "style": "#22c55e"
+    },
+    {
+      "id": "bf-location-overgrowth",
+      "type": "Location",
+      "title": "过茂地",
+      "content": "位于近地层最北端的洞窟，长满高草，空气中弥漫茉莉花香；若闻到薰衣草味则极度危险。地表有幽灵蝎压平高草筑巢形成的圆形怪圈。",
+      "style": "#22c55e"
+    },
+    {
+      "id": "bf-location-cliffwall-black-market",
+      "type": "Location",
+      "title": "岩壁黑市",
+      "content": "建立在深层迷宫岩壁中开凿出的半永久洞穴建筑群中，由最具野心的洞穴商人把控。这里地形错综复杂，挂满怪物风干肉，是探险队以物易物、交换稀有灵植情报的中立据点。",
+      "style": "#22c55e"
+    },
+    {
+      "id": "bf-location-barry-cold-vault-one",
+      "type": "Location",
+      "title": "巴里家“1号冷库”",
+      "content": "位于巴里家主餐厅地下深处的天然冰窟，用于囤积连锁餐馆的顶级食材。这里被餐厅守卫重兵把守，储藏着从飞龙舌到恐熊肉等高阶优质蛋白，是许多竞争对手和盗贼眼馋的劫掠目标。",
+      "style": "#22c55e"
+    },
+    {
+      "id": "bf-location-toxic-fog-hideout",
+      "type": "Location",
+      "title": "毒雾隐秘所",
+      "content": "靠近过茂地的一处充满刺鼻糊糊气味的隐秘洞窟，外围涂满由幽灵蝎毒液制成的防线，怪物绝对无法靠近。这里是炼金学者和怪异道具商人的大本营，到处是咕噜作响的试剂与炖锅。",
+      "style": "#22c55e"
+    },
+    {
+      "id": "bf-location-ambusher-pass",
+      "type": "Location",
+      "title": "截杀者隘口",
+      "content": "位于近地层向下陡峭倾斜的必经狭窄隧道中。两侧天然的盲区掩体被无良冒险者改造成陷阱区，专门用来伏击并抢夺其他小队刚打到的稀有怪肉与优质灵植。",
+      "style": "#22c55e"
+    },
+    {
+      "id": "bf-location-forest-wizard-ruined-shrine",
+      "type": "Location",
+      "title": "森巫师残祠",
+      "content": "隐藏在地极层靠近魔诱核的遗迹，曾是创造诱导魔法的森巫师希拉厄斯的工作站。如今这里被一群狂热崇拜旧魔法、敌视现代冒险者的极端定居者占据，周围布满失控法阵与狂暴变异生物。",
+      "style": "#22c55e"
+    },
+    {
+      "id": "bf-feature-lure-core-decline",
+      "type": "Feature",
+      "title": "魔诱核衰退",
+      "content": "曾将周围危险生物强行引诱进洞穴深处的古老魔法“魔诱核”正在逐渐失效，导致原本温驯的森林被狂暴怪物外溢占领，地表村落的生存危机随之爆发。",
+      "style": "#a855f7"
+    },
+    {
+      "id": "bf-feature-plover-navigation-law",
+      "type": "Feature",
+      "title": "鸻鸟导航法则",
+      "content": "鸻鸟是地下迷宫中唯一能随意移动且绝对不会迷路的生物。跟随它们扑棱翅膀的叫声指引，是寻找洞穴出入口最简单、最灵验的方法。",
+      "style": "#a855f7"
+    },
+    {
+      "id": "bf-feature-living-terrain-anomaly",
+      "type": "Feature",
+      "title": "活体地貌异象",
+      "content": "地下生态系统诡异多变，甚至被认为是一个超巨大的活体生物。这里随时可能刮起拔起巨型植物、堵塞出入口的地下风暴，洞顶也可能“哭泣”降下淹没洞窟的暴雨，地表有时还会软化让人不自觉陷落。",
+      "style": "#a855f7"
+    },
+    {
+      "id": "bf-feature-everything-can-be-cooked",
+      "type": "Feature",
+      "title": "万物皆可烹",
+      "content": "深入洞穴者没有地表补给，必须通过肢解怪物与采集奇异灵植来烹饪大餐；这些食材拥有甜、咸、苦、酸、鲜、怪等风味。只要能打赢，可怕怪物就能变成恢复状态的盘中餐。",
+      "style": "#a855f7"
+    },
+    {
+      "id": "bf-feature-absurd-ecological-overlap",
+      "type": "Feature",
+      "title": "荒诞交织生态",
+      "content": "各种迥异的生物群落被魔法强行塞进同一片地下世界，生态链诡异重叠。常能见到迅猛龙、巨鸵与海星蘑菇共处一室的怪诞猎食场景。",
+      "style": "#a855f7"
+    },
+    {
+      "id": "bf-feature-ingredient-raiding-chaos",
+      "type": "Feature",
+      "title": "食材抢夺乱象",
+      "content": "洞穴内充斥着同样渴望优质食材的竞争者。一旦某洞窟出现稀有怪肉或优质灵植的情报走漏，各方探险队便会爆发争分夺秒的截杀与资源抢夺。",
+      "style": "#a855f7"
+    },
+    {
+      "id": "bf-feature-underground-sharing-order",
+      "type": "Feature",
+      "title": "地下共享秩序",
+      "content": "那些在洞穴岩壁中开凿小屋或居住在半永久帐篷中的居民，推崇独特的共享与以物易物文化，在极端地下环境中建立起自给自足的贸易网络。",
+      "style": "#a855f7"
+    },
+    {
+      "id": "bf-feature-recipe-patent-plagiarism",
+      "type": "Feature",
+      "title": "食谱专利与剽窃乱象",
+      "content": "烹饪大餐能为冒险者提供关键的生存与战斗增益，因此各大探险队和餐厅将独特的“风味组合”食谱视为最高机密。偷窥他人的烹饪过程或剽窃秘方，往往会引发帮派间的激烈火拼。",
+      "style": "#a855f7"
+    },
+    {
+      "id": "bf-feature-flavor-standard-currency",
+      "type": "Feature",
+      "title": "风味本位币",
+      "content": "在地下定居点，地表钱币毫无价值，真正的硬通货是高风味强度的食材。一块最高级“鲜味”怪肉或具备特殊效果的稀有残块，足以在黑市雇佣一支武装小队为你卖命。",
+      "style": "#a855f7"
+    },
+    {
+      "id": "bf-feature-alchemy-defense-monopoly",
+      "type": "Feature",
+      "title": "炼金防线垄断",
+      "content": "像克拉特这样掌握提炼避怪糊糊技术的炼金术士，实际上掌控了地下定居点的安全命脉。他们通过高价出售防线资源来钳制其他生存阵营，导致手无寸铁的平民与技术垄断者之间摩擦不断。",
+      "style": "#a855f7"
+    },
+    {
+      "id": "bf-feature-ingredient-ambusher-blacklist",
+      "type": "Feature",
+      "title": "食材截杀者黑名单",
+      "content": "为了反制那些专门抢夺猎物的恶劣竞争者，洞穴居民和大型猎团联合制定了通缉黑名单。一旦上榜，该小队将不被允许在任何半永久帐篷营地休息，并会被全洞穴的厨师与商人拒之门外。",
+      "style": "#a855f7"
+    },
+    {
+      "id": "bf-feature-underground-dark-stew-festival",
+      "type": "Feature",
+      "title": "地下暗黑“炖锅节”",
+      "content": "受到地表爱莫村传统节日的启发，地下聚集区的多方阵营会定期举办残酷厨艺比拼。参赛者必须当场击杀官方投放的狂暴怪物并完成烹饪，赢家可以获得一整片新发现生态群落的独家狩猎权。",
+      "style": "#a855f7"
+    },
+    {
+      "id": "beastmeal-hook-lost-one-in-the-cavern",
+      "type": "Hook",
+      "title": "洞穴中的迷失者",
+      "content": "村庄陷入混乱时，一个对你重要的人坠入了鸻鸟洞穴。你必须沿着叫声指引深入浅层网道、地下营地与餐馆情报网，把人活着带回来。否则，下一顿怪物盛宴里也许就会出现对方的名字。",
+      "style": "#2563eb"
+    },
+    {
+      "id": "beastmeal-hook-sleeping-lure-core",
+      "type": "Hook",
+      "title": "沉睡的魔诱核",
+      "content": "守护村庄多年的魔诱核正在失效，怪物已经开始逼近地表。你必须深入鸻鸟洞穴查清原因，并想办法让它重新运转。前方是层层下沉的洞穴生态、失控的怪物活动带与大坟地深处的秘密。",
+      "style": "#2563eb"
+    },
+    {
+      "id": "beastmeal-hook-alchemists-deadly-shopping-list",
+      "type": "Hook",
+      "title": "炼金术士的致命采购单",
+      "content": "一份看似简单的材料清单，把你推进了洞穴深处。你必须收集足够的特殊毒液，好让村庄外围的防线勉强维持下去。为了完成这笔交易，你得闯过高草甸、幽灵蝎巢域与气味诡异的未知生物活动区。",
+      "style": "#2563eb"
+    },
+    {
+      "id": "beastmeal-hook-survival-counterattack-for-a-full-belly",
+      "type": "Hook",
+      "title": "为了吃饱的求生反击",
+      "content": "断粮之后，活下去本身就成了最紧迫的任务。你只能拿起身边最顺手的家伙，主动向怪物和灵植下手，把挡路的一切都做成下一顿饭。很快，你会卷进地下食物链与食材争夺战。",
+      "style": "#2563eb"
+    },
+    {
+      "id": "beastmeal-hook-underground-gourmet-ecologist-ambition",
+      "type": "Hook",
+      "title": "洞穴求知者的野望",
+      "content": "魔诱核把彼此不该相遇的生物全都引进了同一座洞穴，这里既是厨房也是实验场。你想记录这套异常生态，或用它做出一道前所未有的菜。你将踏入巴里家餐厅、映星湖与地下贸易黑市，追逐知识、名声或味觉的极限。",
+      "style": "#2563eb"
+    },
+    {
+      "id": "supplement-beastmeal-hook-obsessive-of-starmirror-lake",
+      "type": "Hook",
+      "title": "寻味星镜湖的偏执狂",
+      "content": "一家连锁餐馆几乎垄断了地下生意，而你手里已经没有能翻盘的招牌。你决定前往深渊层的映星湖，猎杀传说中的巨型灯乌贼，用它研发一道谁都无法忽视的新菜。你将卷入水生生态、商业打压与地下黑市交易。",
+      "style": "#2563eb"
+    },
+    {
+      "id": "supplement-beastmeal-hook-debt-collector-in-monster-belly",
+      "type": "Hook",
+      "title": "追债追进怪物肚子的讨债人",
+      "content": "一笔追不回来的债，把你一路逼进了怪物横行的洞穴。欠债人已经被一头巨型怪物吞下，而你必须找到那家伙，把尸体和证据一起带回去。你将顺着鸻鸟叫声穿过帐篷营地与危险食物链，边追债边求生。",
+      "style": "#2563eb"
+    },
+    {
+      "id": "supplement-beastmeal-hook-texture-only-gourmet",
+      "type": "Hook",
+      "title": "只品尝“口感”的美食家",
+      "content": "别人只看到怪物入侵和全村恐慌，你看到的却是一座前所未有的食材宝库。你决定趁乱下洞，写出一本只属于极致口感与视觉呈现的食谱。为此，你得深入迷幻灵植与奇异生物盘踞的下层洞穴，和同样疯狂的人争抢食材。",
+      "style": "#2563eb"
+    },
+    {
+      "id": "supplement-beastmeal-hook-victim-family-of-hallucinogenic-fungus",
+      "type": "Hook",
+      "title": "迷幻真菌的受害者家属",
+      "content": "一种会致幻的发光真菌把你重视的人拖进了狂笑、幻觉或沉睡。你必须下到更深的洞穴，找到能够中和毒性的器官或药材，把人带回正常世界。你将穿过真菌森林、食肉植物群落与隐秘聚落的边缘。",
+      "style": "#2563eb"
+    },
+    {
+      "id": "supplement-beastmeal-hook-reluctant-underground-guide",
+      "type": "Hook",
+      "title": "被迫接客的地下向导",
+      "content": "一群仓促下洞的地表人正在把整个地下生态搅得一团糟。为了不让灾难彻底失控，你不得不亲自带路，帮他们在迷宫、怪物与食材之间活着穿过去。很快，这趟向导活会把你卷进地上人与地下居民的冲突。",
+      "style": "#2563eb"
+    }
+  ]
+}

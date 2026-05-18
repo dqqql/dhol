@@ -1,0 +1,18 @@
+name = "dhgc-realtime"
+main = "src/index.ts"
+compatibility_date = "2026-04-28"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "RoomDurableObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RoomDurableObject"]
+
+# Bind this after creating the D1 database:
+# [[d1_databases]]
+# binding = "DHGC_DB"
+# database_name = "dhgc"
+# database_id = "<replace-with-d1-id>"
+

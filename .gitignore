@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.vite/
+.wrangler/
+.env
+.env.*
+.dev.vars
+.dev.vars.*
+coverage/
+*.log

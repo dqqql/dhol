@@ -1,0 +1,18 @@
+{
+  "name": "dhol",
+  "private": true,
+  "workspaces": [
+    "fronted",
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "fronted:dev": "npm --workspace fronted run dev",
+    "fronted:build": "npm --workspace fronted run build",
+    "fronted:lint": "npm --workspace fronted run lint",
+    "realtime:dev": "npm --workspace apps/realtime run dev",
+    "realtime:deploy": "npm --workspace apps/realtime run deploy",
+    "realtime:typecheck": "npm --workspace apps/realtime run typecheck",
+    "build": "npm run fronted:build && npm run realtime:typecheck"
+  }
+}
