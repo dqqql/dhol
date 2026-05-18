@@ -10,7 +10,7 @@ function roomTypeLabel(roomType: string) {
 }
 
 export function RoomSettingsModal() {
-  const { room, currentPlayerId, isRoomSettingsOpen, closeRoomSettings, addToast } = useStore()
+  const { room, isRoomSettingsOpen, closeRoomSettings, addToast } = useStore()
   const [copied, setCopied] = useState(false)
 
   if (!room) return null

@@ -9,7 +9,6 @@ type ImportMode = 'pack' | 'room'
 export function ImportModal() {
   const {
     room,
-    currentPlayerId,
     isImportModalOpen,
     closeImportModal,
     importPack,
@@ -21,7 +20,6 @@ export function ImportModal() {
 
   if (!room) return null
 
-  const isHost = room.host_player_id === currentPlayerId
   const importsEnabled = room.settings.imports_enabled
 
   async function handleFile(file: File) {
@@ -30,22 +28,12 @@ export function ImportModal() {
       const payload = safeJsonParse(text)
 
       if (mode === 'pack') {
-        if (!isHost) {
-          addToast('只有房主可以导入整包', 'error')
-          return
-        }
-
         if (!importsEnabled) {
           addToast('请先在房间设置中启用导入功能', 'error')
           return
         }
 
         importPack(payload)
-        return
-      }
-
-      if (!isHost) {
-        addToast('只有房主可以导入房间备份', 'error')
         return
       }
 
@@ -135,9 +123,9 @@ export function ImportModal() {
         <AlertCircle size={13} color="var(--accent-amber)" />
         <span style={{ fontSize: 12, color: 'var(--accent-amber)' }}>
           {!importsEnabled
-            ? '当前房间尚未启用导入功能，请房主先到房间设置中开启。'
+            ? '当前房间尚未启用导入功能，请先到房间设置中开启。'
             : mode === 'pack'
-              ? '只有房主可以导入整包。其他玩家请使用“卡包库”导入选中的卡牌。'
+              ? '导入整包会把整套卡牌加入当前房间的卡包库与牌堆。'
               : '导入房间备份会覆盖当前房间的大部分内容，建议先导出当前房间备份。'}
         </span>
       </div>

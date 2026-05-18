@@ -26,7 +26,6 @@ type ResourceMessage = {
 export function GmPanelBoard() {
   const {
     room,
-    currentPlayerId,
     importGmCharacter,
     replaceGmCharacter,
     updateGmResource,
@@ -51,7 +50,6 @@ export function GmPanelBoard() {
   if (!room || room.room_type !== 'gm-panel' || !room.gm_panel) return null
 
   const panel = room.gm_panel
-  const isHost = room.host_player_id === currentPlayerId
   const orderedSheets = panel.sheet_order
     .map((sheetId) => panel.sheets.find((sheet) => sheet.id === sheetId) ?? null)
     .filter((sheet): sheet is GmPanelCharacterSheetEntry => Boolean(sheet))
@@ -205,7 +203,7 @@ export function GmPanelBoard() {
           value={panel.fear.value}
           max={panel.fear.max}
           countdowns={panel.countdowns}
-          editable={isHost}
+          editable
           draftName={draftCountdownName}
           draftMax={draftCountdownMax}
           onDraftNameChange={setDraftCountdownName}
@@ -230,12 +228,9 @@ export function GmPanelBoard() {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            {isHost && (
-              <button className="btn btn-primary" onClick={() => importInputRef.current?.click()}>
-                <FileUp size={14} /> 导入 HTML 角色卡
-              </button>
-            )}
-
+            <button className="btn btn-primary" onClick={() => importInputRef.current?.click()}>
+              <FileUp size={14} /> 导入 HTML 角色卡
+            </button>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -265,7 +260,7 @@ export function GmPanelBoard() {
                 key={entry.id}
                 entry={entry}
                 sheetState={sheetDocs[entry.id]}
-                canManage={isHost}
+                canManage
                 isFirst={index === 0 && currentPage === 0}
                 isLast={index === visibleSheets.length - 1 && currentPage === pageCount - 1}
                 onMoveLeft={() => moveGmSheet(entry.id, 'left')}
@@ -286,7 +281,7 @@ export function GmPanelBoard() {
             ) : (
               <EmptySlotCard
                 key={`empty-${currentPage}-${index}`}
-                canImport={isHost}
+                canImport
                 onImport={() => importInputRef.current?.click()}
               />
             )
@@ -443,7 +438,7 @@ function EmptySlotCard({ canImport, onImport }: { canImport: boolean; onImport: 
           fontWeight: 700,
         }}
       >
-        等待 GM 导入角色卡
+        等待导入角色卡
       </div>
     )
   }
