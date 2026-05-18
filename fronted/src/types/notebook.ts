@@ -13,19 +13,7 @@ export interface NotebookCounterLine {
   max: number
 }
 
-export interface NotebookDie {
-  sides: number
-  value: number
-}
-
-export interface NotebookDiceLine {
-  type: 'dice'
-  id: string
-  label: string
-  dice: NotebookDie[]
-}
-
-export type NotebookLine = NotebookTextLine | NotebookCounterLine | NotebookDiceLine
+export type NotebookLine = NotebookTextLine | NotebookCounterLine
 
 export interface NotebookPage {
   id: string

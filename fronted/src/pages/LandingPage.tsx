@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
-import { BookOpen, LogIn, Plus } from 'lucide-react'
-import { TutorialModal } from '@/components/ui/TutorialModal'
+import { LogIn, Plus } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 
 interface LandingPageProps {
@@ -13,7 +12,6 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
   const [roomName, setRoomName] = useState('匕首之心 GM 面板')
   const [nickname, setNickname] = useState('')
   const [inviteCode, setInviteCode] = useState('')
-  const [showTutorial, setShowTutorial] = useState(false)
 
   async function handleCreate(event: React.FormEvent) {
     event.preventDefault()
@@ -63,32 +61,6 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
         background: 'radial-gradient(circle at top left, rgba(249, 115, 22, 0.14), transparent 28%), radial-gradient(circle at bottom right, rgba(180, 83, 9, 0.14), transparent 26%), linear-gradient(180deg, #fffaf5 0%, #f5efe6 100%)',
       }}
     >
-      <button
-        type="button"
-        onClick={() => setShowTutorial(true)}
-        style={{
-          position: 'absolute',
-          top: 20,
-          right: 24,
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 7,
-          padding: '8px 14px',
-          borderRadius: 999,
-          border: '1px solid rgba(59, 130, 246, 0.18)',
-          background: 'rgba(255,255,255,0.8)',
-          color: '#2563eb',
-          cursor: 'pointer',
-          fontSize: 13,
-          fontWeight: 700,
-        }}
-      >
-        <BookOpen size={15} />
-        使用说明
-      </button>
-
-      {showTutorial && <TutorialModal onClose={() => setShowTutorial(false)} />}
-
       <div style={{ width: '100%', maxWidth: 1040, display: 'grid', gap: 24, gridTemplateColumns: '1.1fr 0.9fr' }}>
         <section
           style={{

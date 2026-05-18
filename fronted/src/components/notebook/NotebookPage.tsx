@@ -1,6 +1,5 @@
 import React, { useCallback, useState } from 'react'
 import { CounterLine } from './lines/CounterLine'
-import { DiceLine } from './lines/DiceLine'
 import { TextLine } from './lines/TextLine'
 import type { NotebookLine, NotebookPage as NotebookPageType } from '@/types/notebook'
 
@@ -119,16 +118,6 @@ export function NotebookPage({ page, onUpdateLine, onDeleteLine, onReorderLines 
 
               {line.type === 'counter' && (
                 <CounterLine
-                  line={line}
-                  lineHeight={lineHeight}
-                  onUpdate={(updates) => onUpdateLine(line.id, updates)}
-                  onDelete={() => onDeleteLine(line.id)}
-                  dragHandleProps={createDragHandleProps(index)}
-                />
-              )}
-
-              {line.type === 'dice' && (
-                <DiceLine
                   line={line}
                   lineHeight={lineHeight}
                   onUpdate={(updates) => onUpdateLine(line.id, updates)}

@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
-import { ChevronDown, Clock, Download, FileJson, HelpCircle, Layers, LogOut, Settings, Share2, Wifi, WifiOff } from 'lucide-react'
+import { ChevronDown, Clock, Download, FileJson, Layers, LogOut, Settings, Share2, Wifi, WifiOff } from 'lucide-react'
 import { InviteCodeModal } from '@/components/ui/InviteCodeModal'
-import { TutorialModal } from '@/components/ui/TutorialModal'
 import { fetchDhRoomBackup } from '@/lib/realtime'
 import { useStore } from '@/store/useStore'
 
@@ -12,7 +11,6 @@ function getModeLabel(roomType: string) {
 }
 
 export function TopBar({ onLeaveRoom }: { onLeaveRoom: () => void }) {
-  const [showTutorial, setShowTutorial] = useState(false)
   const [showInviteModal, setShowInviteModal] = useState(false)
   const {
     room,
@@ -183,28 +181,6 @@ export function TopBar({ onLeaveRoom }: { onLeaveRoom: () => void }) {
         )}
       </div>
 
-      <button
-        type="button"
-        onClick={() => setShowTutorial(true)}
-        title="使用说明"
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '5px 11px',
-          borderRadius: 'var(--radius-sm)',
-          border: '1px solid rgba(37,99,235,0.22)',
-          background: 'linear-gradient(135deg, rgba(37,99,235,0.10), rgba(59,130,246,0.08))',
-          color: 'var(--accent-violet)',
-          cursor: 'pointer',
-          fontSize: 12,
-          fontWeight: 700,
-        }}
-      >
-        <HelpCircle size={13} />
-        帮助
-      </button>
-
       <button className="btn btn-ghost btn-icon" onClick={openRoomSettings} title="房间设置">
         <Settings size={15} />
       </button>
@@ -226,7 +202,6 @@ export function TopBar({ onLeaveRoom }: { onLeaveRoom: () => void }) {
         onClose={() => setShowInviteModal(false)}
         onCopied={() => addToast('邀请码已复制。', 'success')}
       />
-      {showTutorial && <TutorialModal onClose={() => setShowTutorial(false)} />}
     </div>
   )
 }

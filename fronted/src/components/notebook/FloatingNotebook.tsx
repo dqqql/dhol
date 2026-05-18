@@ -26,6 +26,16 @@ function getPositionKey(roomId: string) {
   return `gm-panel:notebook-position:${roomId}`
 }
 
+function sanitizeNotebookData(value: NotebookData): NotebookData {
+  return {
+    ...value,
+    pages: value.pages.map((page) => ({
+      ...page,
+      lines: page.lines.filter((line): line is NotebookLine => line.type === 'text' || line.type === 'counter'),
+    })),
+  }
+}
+
 export function FloatingNotebook({ roomId }: { roomId: string }) {
   const [notebook, setNotebook] = useState<NotebookData>(defaultNotebookData)
   const [position, setPosition] = useState({ x: 72, y: 88 })
@@ -36,7 +46,7 @@ export function FloatingNotebook({ roomId }: { roomId: string }) {
     try {
       const stored = localStorage.getItem(getStorageKey(roomId))
       const nextNotebook = stored ? JSON.parse(stored) as NotebookData : defaultNotebookData
-      setNotebook(isNotebookData(nextNotebook) ? nextNotebook : defaultNotebookData)
+      setNotebook(isNotebookData(nextNotebook) ? sanitizeNotebookData(nextNotebook) : defaultNotebookData)
     } catch {
       setNotebook(defaultNotebookData)
     }
@@ -64,7 +74,7 @@ export function FloatingNotebook({ roomId }: { roomId: string }) {
   const updateNotebook = useCallback((updater: (current: NotebookData) => NotebookData) => {
     setNotebook((current) => {
       const next = updater(current)
-      return isNotebookData(next) ? next : current
+      return isNotebookData(next) ? sanitizeNotebookData(next) : current
     })
   }, [])
 
@@ -262,8 +272,6 @@ export function FloatingNotebook({ roomId }: { roomId: string }) {
             }}
           />
 
-          <div className="absolute bottom-0 left-6 top-0 w-0.5" style={{ backgroundColor: '#e57373' }} />
-
           <div className="relative flex-1 overflow-x-visible overflow-y-auto">
             <NotebookPage
               page={currentPage}
@@ -276,7 +284,6 @@ export function FloatingNotebook({ roomId }: { roomId: string }) {
           <NotebookToolbar
             onAddText={() => addLine({ type: 'text', id: createId(), label: '笔记', content: '' })}
             onAddCounter={() => addLine({ type: 'counter', id: createId(), label: '计数器', current: 0, max: 6 })}
-            onAddDice={() => addLine({ type: 'dice', id: createId(), label: '骰子', dice: [] })}
             disabled={currentPage.lines.length >= MAX_LINES_PER_PAGE}
           />
         </div>
