@@ -65,8 +65,8 @@ export function getGmSheetResourceSnapshot(entry: GmPanelCharacterSheetEntry): G
   }
 }
 
-export function buildGmSheetSrcDoc(sheetId: string, html: string): string {
-  const bridgeScript = createBridgeScript(sheetId)
+export function buildGmSheetSrcDoc(sheetId: string, html: string, initialResources?: GmSheetResourceSnapshot): string {
+  const bridgeScript = createBridgeScript(sheetId, initialResources)
   const withStyles = injectIntoDocument(html, '</head>', BRIDGE_STYLES)
   return injectIntoDocument(withStyles, '</body>', bridgeScript)
 }
@@ -83,11 +83,21 @@ function injectIntoDocument(source: string, closingTag: string, injection: strin
   return `${source.slice(0, index)}${injection}${source.slice(index)}`
 }
 
-function createBridgeScript(sheetId: string) {
+function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceSnapshot) {
+  const normalizedInitialResources: GmSheetResourceSnapshot = {
+    hope: initialResources?.hope ?? 0,
+    proficiency: [...(initialResources?.proficiency ?? [])],
+    hp: [...(initialResources?.hp ?? [])],
+    stress: [...(initialResources?.stress ?? [])],
+    armor_slots: [...(initialResources?.armor_slots ?? [])],
+    gold: [...(initialResources?.gold ?? [])],
+  }
+
   return `
     <script>
       (function () {
         var SHEET_ID = ${JSON.stringify(sheetId)};
+        var INITIAL_RESOURCES = ${JSON.stringify(normalizedInitialResources)};
         var resourceMap = {
           hope: [],
           proficiency: [],
@@ -97,12 +107,12 @@ function createBridgeScript(sheetId: string) {
           gold: [],
         };
         var resourceState = {
-          hope: 0,
-          proficiency: [],
-          hp: [],
-          stress: [],
-          armor_slots: [],
-          gold: [],
+          hope: typeof INITIAL_RESOURCES.hope === 'number' ? INITIAL_RESOURCES.hope : 0,
+          proficiency: Array.isArray(INITIAL_RESOURCES.proficiency) ? INITIAL_RESOURCES.proficiency.slice() : [],
+          hp: Array.isArray(INITIAL_RESOURCES.hp) ? INITIAL_RESOURCES.hp.slice() : [],
+          stress: Array.isArray(INITIAL_RESOURCES.stress) ? INITIAL_RESOURCES.stress.slice() : [],
+          armor_slots: Array.isArray(INITIAL_RESOURCES.armor_slots) ? INITIAL_RESOURCES.armor_slots.slice() : [],
+          gold: Array.isArray(INITIAL_RESOURCES.gold) ? INITIAL_RESOURCES.gold.slice() : [],
         };
         var initialized = false;
 
@@ -126,10 +136,39 @@ function createBridgeScript(sheetId: string) {
           return (element.className || '').indexOf('bg-gray-800') >= 0;
         }
 
+        function looksLikeTrackerCheckbox(element) {
+          if (!element || !element.matches) {
+            return false;
+          }
+
+          if (!element.matches('div, button')) {
+            return false;
+          }
+
+          var className = element.className || '';
+          if (className.indexOf('cursor-pointer') < 0) {
+            return false;
+          }
+
+          if (className.indexOf('border-gray-800') < 0) {
+            return false;
+          }
+
+          if (
+            className.indexOf('w-3 h-3') < 0 &&
+            className.indexOf('w-4 h-4') < 0 &&
+            className.indexOf('w-8 h-8') < 0
+          ) {
+            return false;
+          }
+
+          return true;
+        }
+
         function getCheckboxElements(root) {
-          return Array.prototype.slice.call(
-            root.querySelectorAll('div[onclick*="toggleCustomCheckbox"], button[onclick*="toggleCustomCheckbox"]')
-          );
+          return Array.prototype.slice.call(root.querySelectorAll('div, button')).filter(function (element) {
+            return isCheckboxElement(element);
+          });
         }
 
         function isCheckboxElement(element) {
@@ -137,7 +176,8 @@ function createBridgeScript(sheetId: string) {
             return false;
           }
 
-          return element.matches('div[onclick*="toggleCustomCheckbox"], button[onclick*="toggleCustomCheckbox"]');
+          return element.matches('div[onclick*="toggleCustomCheckbox"], button[onclick*="toggleCustomCheckbox"]')
+            || looksLikeTrackerCheckbox(element);
         }
 
         function hasClickableCheckboxes(root) {
@@ -185,6 +225,16 @@ function createBridgeScript(sheetId: string) {
           return matches;
         }
 
+        function filterCheckboxesByClass(elements, className) {
+          if (!className) {
+            return elements.slice();
+          }
+
+          return elements.filter(function (element) {
+            return (element.className || '').indexOf(className) >= 0;
+          });
+        }
+
         function getNextSiblingCheckboxGroup(element) {
           var current = element;
 
@@ -206,6 +256,18 @@ function createBridgeScript(sheetId: string) {
         }
 
         function getExpectedTrackLength(key) {
+          if (key !== 'hope' && Array.isArray(resourceState[key]) && resourceState[key].length > 0) {
+            return resourceState[key].length;
+          }
+
+          if (key === 'proficiency') {
+            return 6;
+          }
+
+          if (key === 'gold') {
+            return 21;
+          }
+
           if (!window.characterData || typeof window.characterData !== 'object') {
             return 0;
           }
@@ -248,6 +310,61 @@ function createBridgeScript(sheetId: string) {
             }
 
             addResourceElements(key, elements);
+            return;
+          }
+        }
+
+        function collectProficiencyElements() {
+          var labels = findTextMatches(function (text) {
+            return text === '\\u719f\\u7ec3\\u503c';
+          });
+
+          for (var index = 0; index < labels.length; index += 1) {
+            var elements = filterCheckboxesByClass(getDirectSiblingCheckboxes(labels[index]), 'w-3 h-3');
+            elements = trimResourceElements('proficiency', elements);
+            if (elements.length === 0) {
+              continue;
+            }
+
+            addResourceElements('proficiency', elements);
+            return;
+          }
+        }
+
+        function collectGoldElements() {
+          var labels = findTextMatches(function (text) {
+            return text === '\\u91d1\\u5e01';
+          });
+
+          for (var index = 0; index < labels.length; index += 1) {
+            var section = labels[index].nextElementSibling;
+            if (!section) {
+              continue;
+            }
+
+            var ordered = [];
+            ['\\u628a', '\\u888b', '\\u7bb1'].forEach(function (name) {
+              var sublabels = Array.prototype.slice.call(section.querySelectorAll('span, div, p, label, strong, b, h4, h5, h6')).filter(function (element) {
+                return normalizeText(element.textContent) === name;
+              });
+
+              for (var subIndex = 0; subIndex < sublabels.length; subIndex += 1) {
+                var container = sublabels[subIndex].parentElement;
+                if (!container || !hasClickableCheckboxes(container)) {
+                  continue;
+                }
+
+                ordered = ordered.concat(getCheckboxElements(container));
+                break;
+              }
+            });
+
+            ordered = trimResourceElements('gold', ordered);
+            if (ordered.length === 0) {
+              continue;
+            }
+
+            addResourceElements('gold', ordered);
             return;
           }
         }
@@ -297,9 +414,7 @@ function createBridgeScript(sheetId: string) {
             'hope',
             Array.prototype.slice.call(document.querySelectorAll('[data-hope-index]'))
           );
-          collectMatchedResourceElements('proficiency', function (text) {
-            return text === '\\u719f\\u7ec3\\u503c';
-          }, 'direct');
+          collectProficiencyElements();
           collectMatchedResourceElements('hp', function (text) {
             return text.indexOf('\\u751f\\u547d\\u70b9') === 0;
           }, 'group');
@@ -309,9 +424,7 @@ function createBridgeScript(sheetId: string) {
           collectMatchedResourceElements('armor_slots', function (text) {
             return text === '\\u62a4\\u7532\\u69fd';
           }, 'group');
-          collectMatchedResourceElements('gold', function (text) {
-            return text === '\\u91d1\\u5e01';
-          }, 'group');
+          collectGoldElements();
         }
 
         function normalizeHopeFill(element) {
@@ -337,6 +450,46 @@ function createBridgeScript(sheetId: string) {
           }
 
           return normalized;
+        }
+
+        function flashCheckboxPress(element) {
+          element.style.transition = 'all 0.1s ease';
+          element.style.transform = 'scale(0.95)';
+          setTimeout(function () {
+            element.style.transform = 'scale(1)';
+          }, 100);
+        }
+
+        function setBooleanFilled(element, shouldFill) {
+          if (!element) {
+            return;
+          }
+
+          var className = element.className || '';
+          var nextClassName = className;
+
+          if (className.indexOf('bg-gray-800') >= 0) {
+            nextClassName = shouldFill
+              ? className
+              : className.replace(/\\bbg-gray-800\\b/g, 'bg-white');
+          } else if (className.indexOf('bg-white') >= 0) {
+            nextClassName = shouldFill
+              ? className.replace(/\\bbg-white\\b/g, 'bg-gray-800')
+              : className;
+          } else if (shouldFill) {
+            nextClassName = className + ' bg-gray-800';
+          } else {
+            nextClassName = className + ' bg-white';
+          }
+
+          nextClassName = nextClassName.replace(/\\s+/g, ' ').trim();
+          if (nextClassName !== className) {
+            element.className = nextClassName;
+          }
+
+          element.setAttribute('aria-checked', shouldFill ? 'true' : 'false');
+          element.setAttribute('aria-pressed', shouldFill ? 'true' : 'false');
+          element.setAttribute('data-gm-filled', shouldFill ? 'true' : 'false');
         }
 
         function cloneResourceState(resources) {
@@ -393,10 +546,7 @@ function createBridgeScript(sheetId: string) {
               continue;
             }
 
-            var elementId = element.getAttribute('id');
-            if (elementId && typeof window.toggleCustomCheckbox === 'function') {
-              window.toggleCustomCheckbox(elementId);
-            }
+            setBooleanFilled(element, desired);
           }
         }
 
@@ -462,6 +612,7 @@ function createBridgeScript(sheetId: string) {
                 if (typeof event.stopImmediatePropagation === 'function') {
                   event.stopImmediatePropagation();
                 }
+                flashCheckboxPress(element);
 
                 if (resourceKey === 'hope') {
                   updateHopeResource(index);
@@ -479,6 +630,10 @@ function createBridgeScript(sheetId: string) {
             return;
           }
 
+          if (!window.characterData || typeof window.characterData !== 'object') {
+            window.characterData = {};
+          }
+
           applyHope(resources.hope);
           syncBooleanElements(resourceMap.proficiency, resources.proficiency);
           syncBooleanElements(resourceMap.hp, resources.hp);
@@ -493,6 +648,11 @@ function createBridgeScript(sheetId: string) {
             armor_slots: normalizeBooleanTrack(resources.armor_slots, resourceMap.armor_slots.length),
             gold: normalizeBooleanTrack(resources.gold, resourceMap.gold.length),
           };
+          window.characterData.proficiency = resourceState.proficiency.slice();
+          window.characterData.hp = resourceState.hp.slice();
+          window.characterData.stress = resourceState.stress.slice();
+          window.characterData.armorBoxes = resourceState.armor_slots.slice();
+          window.characterData.gold = resourceState.gold.slice();
         }
 
         function init() {

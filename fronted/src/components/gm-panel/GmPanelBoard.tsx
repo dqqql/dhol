@@ -98,7 +98,7 @@ export function GmPanelBoard() {
             ...current,
             [entry.id]: {
               htmlUpdatedAt: entry.html_updated_at,
-              srcDoc: buildGmSheetSrcDoc(entry.id, html),
+              srcDoc: buildGmSheetSrcDoc(entry.id, html, getGmSheetResourceSnapshot(entry)),
               loading: false,
             },
           }))
