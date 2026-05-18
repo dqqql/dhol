@@ -1,4 +1,11 @@
-import { BUILT_IN_PACKS, type BuiltInPack } from './built-in-packs'
+export interface BuiltInPack {
+  id: string
+  pack_name: string
+  description?: string
+  cards: any[]
+}
+const BUILT_IN_PACKS: BuiltInPack[] = []
+
 import type { DhCard, DhPack, RoomPackLibraryItem, RoomPackSource } from './types'
 
 const BUILT_IN_PACK_ID_SET = new Set(BUILT_IN_PACKS.map((pack) => pack.id))
