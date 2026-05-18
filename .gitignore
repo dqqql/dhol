@@ -8,3 +8,9 @@ dist/
 .dev.vars.*
 coverage/
 *.log
+
+# Documents and Character Sheets
+GM面板开发文档.md
+gold-deep.md
+克利夫-守护者-龙人-龙人-山岭之民-LV3.html
+阿德兰-神使-人类-人类-博识之民-LV1.html
