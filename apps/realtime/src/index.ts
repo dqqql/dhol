@@ -312,10 +312,18 @@ export class RoomDurableObject {
     const body = await request.json() as { nickname: string; playerId: string }
     const now = new Date()
     const nickname = cleanText(body.nickname, 'Player', 24)
-    const onlineDuplicate = room.players.find((item) => item.nickname === nickname && item.is_online)
-    if (onlineDuplicate) {
-      return json({ error: 'nickname_in_use', message: '该昵称已在房间中在线使用，请更换昵称或等待原会话断开。' }, { status: 409 })
-    }
+const onlineDuplicate = room.players.find((item) => item.nickname === nickname && item.is_online)
+if (onlineDuplicate) {
+  const hasActiveSocket = [...this.sockets.values()].some(
+    (session) => session.playerId === onlineDuplicate.id,
+  )
+
+  if (hasActiveSocket) {
+    return json({ error: 'nickname_in_use', message: '该昵称已在房间中在线使用，请更换昵称或等待原会话断开。' }, { status: 409 })
+  }
+
+  onlineDuplicate.is_online = false
+}
 
     const rejoinCandidate = this.findOfflinePlayerByNickname(nickname)
     if (rejoinCandidate) {
