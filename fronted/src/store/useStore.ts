@@ -264,29 +264,29 @@ function preserveTransientRoomState(previous: RoomState | null, incoming: RoomSt
 
   return {
     ...incoming,
-    map_cards: incoming.map_cards.map((card) => ({
-      ...(() => {
-        const override = localMapCardOverrides.get(card.id)
-        if (override && doesMapCardMatchOverride(card, override)) {
-          localMapCardOverrides.delete(card.id)
-        }
+    map_cards: incoming.map_cards.map((card) => {
+      const override = localMapCardOverrides.get(card.id)
+      const overrideMatches = override ? doesMapCardMatchOverride(card, override) : false
+      if (override && overrideMatches) {
+        localMapCardOverrides.delete(card.id)
+      }
 
-        return {
-          ...card,
-          ...(override && !doesMapCardMatchOverride(card, override) ? override : {}),
-          is_expanded: expandedById.get(card.id) ?? card.is_expanded,
-        }
-      })(),
-    })),
+      return {
+        ...card,
+        ...(override && !overrideMatches ? override : {}),
+        is_expanded: expandedById.get(card.id) ?? card.is_expanded,
+      }
+    }),
     annotations: incoming.annotations.map((annotation) => {
       const override = localAnnotationOverrides.get(annotation.id)
-      if (override && doesAnnotationMatchOverride(annotation, override)) {
+      const overrideMatches = override ? doesAnnotationMatchOverride(annotation, override) : false
+      if (override && overrideMatches) {
         localAnnotationOverrides.delete(annotation.id)
       }
 
       return {
         ...annotation,
-        ...(override && !doesAnnotationMatchOverride(annotation, override) ? override : {}),
+        ...(override && !overrideMatches ? override : {}),
       }
     }),
   }

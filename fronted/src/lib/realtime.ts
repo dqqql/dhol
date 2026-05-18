@@ -204,6 +204,7 @@ export class RoomSocketConnection {
 
   private scheduleReconnect(): void {
     if (this.disposed || this.intentionalClose) return
+    if (this.reconnectTimer != null) return
     if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
       this.handlers.onError?.(new Error('与房间的连接恢复失败，请检查网络后手动重连。'))
       this.handlers.onStatusChange?.('error')
@@ -214,7 +215,9 @@ export class RoomSocketConnection {
       return
     }
 
-    const delay = Math.min(BASE_BACKOFF_MS * Math.pow(2, this.reconnectAttempts), MAX_BACKOFF_MS)
+    const baseDelay = Math.min(BASE_BACKOFF_MS * Math.pow(2, this.reconnectAttempts), MAX_BACKOFF_MS)
+    const jitter = Math.floor(Math.random() * 300)
+    const delay = Math.min(baseDelay + jitter, MAX_BACKOFF_MS)
     this.reconnectAttempts++
     this.handlers.onStatusChange?.('reconnecting')
     this.reconnectTimer = setTimeout(() => {
