@@ -94,6 +94,15 @@ export default {
         return withCors(response)
       }
 
+      const sheetHtmlMatch = url.pathname.match(/^\/api\/rooms\/([A-Z0-9]{6})\/sheets\/([^/]+)\/html$/i)
+      if (sheetHtmlMatch && request.method === 'GET') {
+        const inviteCode = normaliseInvite(sheetHtmlMatch[1])
+        const sheetId = decodeURIComponent(sheetHtmlMatch[2])
+        const stub = roomStub(env, inviteCode)
+        const response = await stub.fetch(internalRequest(`/internal/sheets/${encodeURIComponent(sheetId)}/html`))
+        return withCors(response)
+      }
+
       const wsMatch = url.pathname.match(/^\/api\/rooms\/([A-Z0-9]{6})\/ws$/i)
       if (wsMatch && request.headers.get('Upgrade') === 'websocket') {
         const inviteCode = normaliseInvite(wsMatch[1])
@@ -201,6 +210,7 @@ export class RoomDurableObject {
       if (url.pathname === '/internal/create' && request.method === 'POST') return this.create(request)
       if (url.pathname === '/internal/join' && request.method === 'POST') return this.join(request)
       if (url.pathname === '/internal/export/dhroom' && request.method === 'GET') return this.exportDhRoom()
+      if (url.pathname.match(/^\/internal\/sheets\/[^/]+\/html$/) && request.method === 'GET') return this.exportSheetHtml(url)
 
       if (request.headers.get('Upgrade') === 'websocket') return this.connectWebSocket(request)
 
@@ -491,13 +501,13 @@ export class RoomDurableObject {
 
       case 'gm.importHtmlCharacter':
         this.requireGmPanelRoom()
-        this.importGmCharacter(player, message.payload.fileName, message.payload.rawCharacterData)
+        this.importGmCharacter(player, message.payload.fileName, message.payload.html)
         await this.commit('gm.importHtmlCharacter')
         return
 
       case 'gm.replaceHtmlCharacter':
         this.requireGmPanelRoom()
-        this.replaceGmCharacter(player, message.payload.sheetId, message.payload.fileName, message.payload.rawCharacterData)
+        this.replaceGmCharacter(player, message.payload.sheetId, message.payload.fileName, message.payload.html)
         await this.commit('gm.replaceHtmlCharacter')
         return
 
@@ -1184,20 +1194,22 @@ export class RoomDurableObject {
     }
   }
 
-  private importGmCharacter(player: Player, fileName: string, rawCharacterData: ImportedCharacterData): void {
+  private importGmCharacter(player: Player, fileName: string, html: string): void {
     const panel = this.requireGmPanelState()
-    const entry = createGmSheetEntry(fileName, rawCharacterData)
+    const entry = createGmSheetEntry(fileName, html)
     panel.sheets.push(entry)
     panel.sheet_order.push(entry.id)
     this.appendGmLog('sheet-import', `${player.nickname} 导入了角色卡 ${entry.parsed_sheet.character_name || entry.source_file_name}`, player)
   }
 
-  private replaceGmCharacter(player: Player, sheetId: string, fileName: string, rawCharacterData: ImportedCharacterData): void {
+  private replaceGmCharacter(player: Player, sheetId: string, fileName: string, html: string): void {
     const entry = this.requireGmSheet(sheetId)
-    const nextEntry = createGmSheetEntry(fileName, rawCharacterData, entry.id, entry.imported_at)
+    const nextEntry = createGmSheetEntry(fileName, html, entry.id, entry.imported_at)
     entry.updated_at = nextEntry.updated_at
+    entry.html_updated_at = nextEntry.html_updated_at
     entry.source_file_name = nextEntry.source_file_name
     entry.source_format = nextEntry.source_format
+    entry.source_html = nextEntry.source_html
     entry.raw_character_data = nextEntry.raw_character_data
     entry.parsed_sheet = nextEntry.parsed_sheet
     this.appendGmLog('sheet-replace', `${player.nickname} 替换了角色卡 ${entry.parsed_sheet.character_name || entry.source_file_name}`, player)
@@ -1591,6 +1603,27 @@ export class RoomDurableObject {
     return json(backup)
   }
 
+  private async exportSheetHtml(url: URL): Promise<Response> {
+    const room = await this.mustLoad()
+    const sheetId = decodeURIComponent(url.pathname.split('/')[3] ?? '')
+    const entry = room.gm_panel?.sheets.find((sheet) => sheet.id === sheetId)
+
+    if (!entry) {
+      return new Response('Sheet not found', { status: 404 })
+    }
+
+    if (!entry.source_html) {
+      return new Response('Sheet HTML unavailable', { status: 404 })
+    }
+
+    return withCors(new Response(entry.source_html, {
+      status: 200,
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+      },
+    }))
+  }
+
   private async commit(reason: string): Promise<void> {
     const room = this.requireRoom()
     room.updated_at = new Date().toISOString()
@@ -1625,7 +1658,14 @@ export class RoomDurableObject {
   }
 
   private publicState(): RoomState {
-    return structuredClone(this.requireRoom())
+    const snapshot = structuredClone(this.requireRoom())
+    if (snapshot.gm_panel) {
+      snapshot.gm_panel.sheets = snapshot.gm_panel.sheets.map((sheet) => {
+        const { source_html: _sourceHtml, ...rest } = sheet
+        return rest
+      })
+    }
+    return snapshot
   }
 
   private isExpired(room: Pick<RoomState, 'expires_at'>): boolean {
@@ -1705,7 +1745,7 @@ export class RoomDurableObject {
         ? normalizeResourceTrackerState(migrated.resource_tracker)
         : undefined,
       gm_panel: (migrated.room_type ?? 'co-creation') === 'gm-panel'
-        ? normalizeGmPanelState(migrated.gm_panel)
+        ? normalizeGmPanelStateWithHtml(migrated.gm_panel)
         : undefined,
       imported_pack_library: importedPackLibrary.map((pack) => ({
         ...pack,
@@ -2023,6 +2063,55 @@ function normalizeGmPanelState(value: GmPanelState | undefined): GmPanelState {
   }
 }
 
+function normalizeGmPanelStateWithHtml(value: GmPanelState | undefined): GmPanelState {
+  const normalized = normalizeGmPanelState(value)
+  if (!value?.sheets?.length) {
+    return normalized
+  }
+
+  normalized.sheets = value.sheets.map((sheet, index) => {
+    const fileName = cleanText(sheet.source_file_name, sheet.parsed_sheet?.file_name || 'character-sheet.html', 120)
+    const entryId = cleanText(sheet.id, normalized.sheets[index]?.id || id('gm_sheet'), 120)
+    const importedAt = cleanText(sheet.imported_at, normalized.sheets[index]?.imported_at || new Date().toISOString(), 80)
+    const updatedAt = cleanText(sheet.updated_at, normalized.sheets[index]?.updated_at || importedAt, 80)
+    const htmlUpdatedAt = cleanText(sheet.html_updated_at, updatedAt, 80)
+    const sourceHtml = cleanText(sheet.source_html, '', 2_000_000)
+
+    if (sourceHtml) {
+      return createGmSheetEntry(fileName, sourceHtml, entryId, importedAt, updatedAt, htmlUpdatedAt)
+    }
+
+    const fallback = normalized.sheets[index]
+    if (fallback) {
+      return {
+        ...fallback,
+        id: entryId,
+        imported_at: importedAt,
+        updated_at: updatedAt,
+        html_updated_at: htmlUpdatedAt,
+        source_file_name: fileName,
+      }
+    }
+
+    const safeRaw = normalizeImportedCharacterData(sheet.raw_character_data)
+    return {
+      id: entryId,
+      imported_at: importedAt,
+      updated_at: updatedAt,
+      html_updated_at: htmlUpdatedAt,
+      source_file_name: fileName,
+      source_format: 'mydhcharsheet-html',
+      raw_character_data: safeRaw,
+      parsed_sheet: normalizeResourceTrackerSheet(
+        sheet.parsed_sheet ?? buildSheetFromImportedCharacterData(safeRaw, fileName),
+        fileName,
+      ),
+    }
+  })
+
+  return normalized
+}
+
 function normalizeResourceTrackerCountdown(
   countdown: Partial<ResourceTrackerCountdown> | undefined,
   index: number,
@@ -2048,18 +2137,25 @@ function normalizeImportedCharacterData(value: ImportedCharacterData | undefined
 
 function createGmSheetEntry(
   fileName: string,
-  rawCharacterData: ImportedCharacterData,
+  source: string | ImportedCharacterData,
   existingId = id('gm_sheet'),
   importedAt = new Date().toISOString(),
   updatedAt = new Date().toISOString(),
+  htmlUpdatedAt = updatedAt,
 ): GmPanelCharacterSheetEntry {
-  const safeRaw = normalizeImportedCharacterData(rawCharacterData)
+  const safeHtml = typeof source === 'string'
+    ? cleanText(sanitizeImportedHtml(source), '', 2_000_000)
+    : undefined
+  const parsedSource = typeof source === 'string' ? extractCharacterDataFromHtml(safeHtml ?? '') : source
+  const safeRaw = normalizeImportedCharacterData(parsedSource)
   return {
     id: existingId,
     imported_at: importedAt,
     updated_at: updatedAt,
+    html_updated_at: htmlUpdatedAt,
     source_file_name: cleanText(fileName, '角色卡.html', 120),
     source_format: 'mydhcharsheet-html',
+    source_html: safeHtml,
     raw_character_data: safeRaw,
     parsed_sheet: normalizeResourceTrackerSheet(
       buildSheetFromImportedCharacterData(safeRaw, fileName),
@@ -2147,6 +2243,86 @@ function normalizeBooleanTrack(value: unknown, maxLength: number): boolean[] {
   const normalizedLength = Math.max(0, maxLength)
   const source = Array.isArray(value) ? value : []
   return Array.from({ length: normalizedLength }, (_, index) => Boolean(source[index]))
+}
+
+const CHARACTER_DATA_MARKER = 'window.characterData ='
+const TRANSPARENT_IMAGE_DATA_URL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
+const INLINE_IMAGE_DATA_URL_PATTERN = /data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g
+
+function sanitizeImportedHtml(html: string): string {
+  return html
+    .replace(INLINE_IMAGE_DATA_URL_PATTERN, TRANSPARENT_IMAGE_DATA_URL)
+    .trim()
+}
+
+function extractCharacterDataFromHtml(html: string): ImportedCharacterData {
+  const start = html.indexOf(CHARACTER_DATA_MARKER)
+  if (start < 0) {
+    throw new Error('Unsupported HTML export: window.characterData was not found.')
+  }
+
+  const objectStart = html.indexOf('{', start)
+  if (objectStart < 0) {
+    throw new Error('Unsupported HTML export: characterData object start was not found.')
+  }
+
+  const objectEnd = findObjectLiteralEnd(html, objectStart)
+  const objectText = html.slice(objectStart, objectEnd)
+
+  try {
+    return JSON.parse(objectText) as ImportedCharacterData
+  } catch {
+    try {
+      return Function(`"use strict"; return (${objectText});`)() as ImportedCharacterData
+    } catch (error) {
+      throw new Error(error instanceof Error ? `Character data parse failed: ${error.message}` : 'Character data parse failed.')
+    }
+  }
+}
+
+function findObjectLiteralEnd(source: string, objectStart: number): number {
+  let depth = 0
+  let inString = false
+  let quote = ''
+  let escaped = false
+
+  for (let index = objectStart; index < source.length; index += 1) {
+    const char = source[index]
+
+    if (inString) {
+      if (escaped) {
+        escaped = false
+        continue
+      }
+
+      if (char === '\\') {
+        escaped = true
+        continue
+      }
+
+      if (char === quote) {
+        inString = false
+        quote = ''
+      }
+      continue
+    }
+
+    if (char === '"' || char === '\'' || char === '`') {
+      inString = true
+      quote = char
+      continue
+    }
+
+    if (char === '{') depth += 1
+    if (char === '}') {
+      depth -= 1
+      if (depth === 0) {
+        return index + 1
+      }
+    }
+  }
+
+  throw new Error('characterData object was not terminated.')
 }
 
 function buildImportedExperiences(names: unknown, values: unknown) {

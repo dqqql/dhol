@@ -1,18 +1,14 @@
 import React, { useState } from 'react'
-import { ChevronDown, Clock, Download, FileJson, FileText, HelpCircle, Layers, LogOut, Play, Settings, Share2, StopCircle, Upload, Wifi, WifiOff } from 'lucide-react'
+import { ChevronDown, Clock, Download, FileJson, HelpCircle, Layers, LogOut, Settings, Share2, Wifi, WifiOff } from 'lucide-react'
 import { InviteCodeModal } from '@/components/ui/InviteCodeModal'
 import { TutorialModal } from '@/components/ui/TutorialModal'
 import { fetchDhRoomBackup } from '@/lib/realtime'
 import { useStore } from '@/store/useStore'
-import { getCardBodyText } from '@/utils/cardText'
-import { getCardTypeLabel } from '@/utils/cardTypeConfig'
 
-function getModeLabel(roomType: string, mode: string) {
+function getModeLabel(roomType: string) {
   if (roomType === 'gm-panel') return 'GM 面板'
   if (roomType === 'resource-tracker') return '追踪资源'
-  if (mode === 'co-creation') return '共创模式'
-  if (mode === 'normal') return '普通模式'
-  return '自由模式'
+  return '房间'
 }
 
 export function TopBar({ onLeaveRoom }: { onLeaveRoom: () => void }) {
@@ -20,15 +16,10 @@ export function TopBar({ onLeaveRoom }: { onLeaveRoom: () => void }) {
   const [showInviteModal, setShowInviteModal] = useState(false)
   const {
     room,
-    currentPlayerId,
     connectionStatus,
     isExportMenuOpen,
     toggleExportMenu,
-    openImportModal,
     openRoomSettings,
-    openCardLibrary,
-    startCoCreation,
-    openEndConfirm,
     manualReconnect,
     leaveRoom,
     addToast,
@@ -37,12 +28,9 @@ export function TopBar({ onLeaveRoom }: { onLeaveRoom: () => void }) {
   if (!room) return null
   const currentRoom = room
 
-  const isHost = currentRoom.host_player_id === currentPlayerId
-  const isBoardRoom = currentRoom.room_type === 'resource-tracker' || currentRoom.room_type === 'gm-panel'
-  const isCoCreation = currentRoom.mode === 'co-creation'
   const isDisconnected = connectionStatus === 'error' || connectionStatus === 'idle'
   const isReconnecting = connectionStatus === 'reconnecting' || connectionStatus === 'connecting'
-  const modeLabel = getModeLabel(currentRoom.room_type, currentRoom.mode)
+  const modeLabel = getModeLabel(currentRoom.room_type)
   const expiresAt = new Date(currentRoom.expires_at)
   const daysLeft = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
 
@@ -60,47 +48,6 @@ export function TopBar({ onLeaveRoom }: { onLeaveRoom: () => void }) {
     } catch (error) {
       addToast(error instanceof Error ? error.message : '导出房间备份失败。', 'error')
     }
-  }
-
-  function exportMarkdown() {
-    let markdown = `# ${currentRoom.room_name}\n\n`
-    const sections = [
-      { title: '角色', cards: currentRoom.map_cards.filter((card) => card.type === 'Role') },
-      { title: '地点', cards: currentRoom.map_cards.filter((card) => card.type === 'Location') },
-      { title: '特征', cards: currentRoom.map_cards.filter((card) => card.type === 'Feature') },
-      { title: '故事钩子', cards: currentRoom.map_cards.filter((card) => card.type === 'Hook') },
-    ]
-
-    for (const section of sections) {
-      if (!section.cards.length) continue
-      markdown += `## ${section.title}\n`
-      for (const card of section.cards) {
-        markdown += `### ${card.title}\n${getCardBodyText(card)}\n\n`
-      }
-    }
-
-    const customCards = currentRoom.map_cards.filter((card) => card.type === 'Custom')
-    const groupedCustomCards = new Map<string, typeof customCards>()
-    for (const card of customCards) {
-      const label = getCardTypeLabel(card.type, card.custom_type_name)
-      groupedCustomCards.set(label, [...(groupedCustomCards.get(label) ?? []), card])
-    }
-    for (const [label, cards] of groupedCustomCards.entries()) {
-      markdown += `## ${label}\n`
-      for (const card of cards) {
-        markdown += `### ${card.title}\n${getCardBodyText(card)}\n\n`
-      }
-    }
-
-    const blob = new Blob([markdown], { type: 'text/markdown' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${currentRoom.room_name}.md`
-    link.click()
-    URL.revokeObjectURL(url)
-    addToast('Markdown 摘要已导出。', 'success')
-    toggleExportMenu()
   }
 
   return (
@@ -214,31 +161,6 @@ export function TopBar({ onLeaveRoom }: { onLeaveRoom: () => void }) {
         <Share2 size={13} /> 邀请码
       </button>
 
-      {!isBoardRoom && (
-        <>
-          <button className="btn btn-secondary btn-sm" onClick={openCardLibrary}>
-            <Layers size={13} /> 卡包
-          </button>
-          {isHost && (
-            <button className="btn btn-secondary btn-sm" onClick={openImportModal}>
-              <Upload size={13} /> 导入
-            </button>
-          )}
-        </>
-      )}
-
-      {!isBoardRoom && !isCoCreation && isHost && (
-        <button className="btn btn-primary btn-sm" onClick={startCoCreation}>
-          <Play size={13} /> 开始共创
-        </button>
-      )}
-
-      {isHost && !isBoardRoom && isCoCreation && (
-        <button className="btn btn-danger btn-sm" onClick={openEndConfirm}>
-          <StopCircle size={13} /> 结束共创
-        </button>
-      )}
-
       <div style={{ position: 'relative' }}>
         <button className="btn btn-secondary btn-sm" onClick={toggleExportMenu}>
           <Download size={13} /> 导出 <ChevronDown size={11} />
@@ -257,11 +179,6 @@ export function TopBar({ onLeaveRoom }: { onLeaveRoom: () => void }) {
             <div className="context-menu__item" onClick={exportDhRoom}>
               <FileJson size={13} /> 房间备份 (.dhroom.json)
             </div>
-            {!isBoardRoom && (
-              <div className="context-menu__item" onClick={exportMarkdown}>
-                <FileText size={13} /> Markdown 摘要 (.md)
-              </div>
-            )}
           </div>
         )}
       </div>

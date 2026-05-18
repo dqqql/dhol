@@ -6,7 +6,6 @@ import {
   type ClientMessage,
   type DhCard,
   type GmPanelResourceKey,
-  type ImportedCharacterData,
   type MapCard,
   type ResourceTrackerResourceKey,
   type ResourceTrackerSheet,
@@ -105,8 +104,8 @@ interface AppStore extends UIState {
   approveTrackerResourceRequest: (requestId: string) => void
   rejectTrackerResourceRequest: (requestId: string) => void
 
-  importGmCharacter: (fileName: string, rawCharacterData: ImportedCharacterData) => void
-  replaceGmCharacter: (sheetId: string, fileName: string, rawCharacterData: ImportedCharacterData) => void
+  importGmCharacter: (fileName: string, html: string) => void
+  replaceGmCharacter: (sheetId: string, fileName: string, html: string) => void
   updateGmSheet: (sheetId: string, sheet: ResourceTrackerSheet) => void
   updateGmResource: (sheetId: string, resourceKey: GmPanelResourceKey, nextValue: number | boolean[]) => void
   updateGmFear: (value: number) => void
@@ -679,26 +678,18 @@ export const useStore = create<AppStore>((set, get) => {
       })
     },
 
-    importGmCharacter: (fileName, rawCharacterData) => {
-      const sent = sendMessage({
+    importGmCharacter: (fileName, html) => {
+      sendMessage({
         type: 'gm.importHtmlCharacter',
-        payload: { fileName, rawCharacterData },
+        payload: { fileName, html },
       })
-
-      if (sent) {
-        get().addToast(`已上传角色卡 ${fileName}`, 'success')
-      }
     },
 
-    replaceGmCharacter: (sheetId, fileName, rawCharacterData) => {
-      const sent = sendMessage({
+    replaceGmCharacter: (sheetId, fileName, html) => {
+      sendMessage({
         type: 'gm.replaceHtmlCharacter',
-        payload: { sheetId, fileName, rawCharacterData },
+        payload: { sheetId, fileName, html },
       })
-
-      if (sent) {
-        get().addToast(`已替换角色卡 ${fileName}`, 'success')
-      }
     },
 
     updateGmSheet: (sheetId, sheet) => {

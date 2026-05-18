@@ -32,8 +32,8 @@ export type ClientMessage =
   | { type: 'tracker.moveColumn'; requestId?: string; payload: { columnId: string; direction: 'left' | 'right' } }
   | { type: 'tracker.approveResourceChange'; requestId?: string; payload: { requestIdToResolve: string } }
   | { type: 'tracker.rejectResourceChange'; requestId?: string; payload: { requestIdToResolve: string } }
-  | { type: 'gm.importHtmlCharacter'; requestId?: string; payload: { fileName: string; rawCharacterData: ImportedCharacterData } }
-  | { type: 'gm.replaceHtmlCharacter'; requestId?: string; payload: { sheetId: string; fileName: string; rawCharacterData: ImportedCharacterData } }
+  | { type: 'gm.importHtmlCharacter'; requestId?: string; payload: { fileName: string; html: string } }
+  | { type: 'gm.replaceHtmlCharacter'; requestId?: string; payload: { sheetId: string; fileName: string; html: string } }
   | { type: 'gm.updateSheet'; requestId?: string; payload: { sheetId: string; sheet: ResourceTrackerSheet } }
   | { type: 'gm.updateResource'; requestId?: string; payload: { sheetId: string; resourceKey: GmPanelResourceKey; nextValue: number | boolean[] } }
   | { type: 'gm.updateFear'; requestId?: string; payload: { value: number } }

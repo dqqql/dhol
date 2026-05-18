@@ -1,20 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React from 'react'
 import { GmPanelBoard } from '@/components/gm-panel/GmPanelBoard'
 import { TopBar } from '@/components/layout/TopBar'
-import { MapCanvas } from '@/components/map/MapCanvas'
-import { HandArea } from '@/components/panels/HandArea'
-import { PlayerPanel } from '@/components/panels/PlayerPanel'
-import { ResourceTrackerBoard } from '@/components/resource/ResourceTrackerBoard'
-import { CardLibraryModal } from '@/components/ui/CardLibraryModal'
-import { ConnectionModal } from '@/components/ui/ConnectionModal'
-import { CreateCardModal } from '@/components/ui/CreateCardModal'
-import { DrawModal } from '@/components/ui/DrawModal'
-import { EditCardModal } from '@/components/ui/EditCardModal'
-import { EndCoCreationConfirm } from '@/components/ui/EndCoCreationConfirm'
-import { ImportModal } from '@/components/ui/ImportModal'
 import { RoomSettingsModal } from '@/components/ui/RoomSettingsModal'
 import { ToastContainer } from '@/components/ui/Toast'
-import { TurnStartModal } from '@/components/ui/TurnStartModal'
 import { useStore } from '@/store/useStore'
 
 interface RoomPageProps {
@@ -22,48 +10,7 @@ interface RoomPageProps {
 }
 
 export function RoomPage({ onLeaveRoom }: RoomPageProps) {
-  const { room, connectionStatus, manualReconnect, currentPlayerId, drawCards } = useStore()
-  const [isTurnStartModalOpen, setIsTurnStartModalOpen] = useState(false)
-  const previousTurnPlayerIdRef = useRef<string | null>(null)
-  const previousHasDrawnThisTurnRef = useRef(false)
-  const hasPromptedCurrentTurnRef = useRef(false)
-
-  useEffect(() => {
-    if (!room || room.mode !== 'co-creation') {
-      previousTurnPlayerIdRef.current = room?.current_turn_player_id ?? null
-      previousHasDrawnThisTurnRef.current = false
-      hasPromptedCurrentTurnRef.current = false
-      setIsTurnStartModalOpen(false)
-      return
-    }
-
-    const currentTurnPlayerId = room.current_turn_player_id
-    const previousTurnPlayerId = previousTurnPlayerIdRef.current
-    const isMyTurn = currentTurnPlayerId === currentPlayerId
-    const hasDrawnThisTurn = room.drawn_this_turn[currentPlayerId] ?? false
-
-    if (previousTurnPlayerId !== currentTurnPlayerId) {
-      hasPromptedCurrentTurnRef.current = false
-    }
-
-    // In a single-player room, the turn can advance back to the same player id.
-    // Treat a drawn=true -> false reset as a fresh turn so the turn-start flow reopens.
-    if (previousHasDrawnThisTurnRef.current && !hasDrawnThisTurn) {
-      hasPromptedCurrentTurnRef.current = false
-    }
-
-    if (isMyTurn && !hasDrawnThisTurn && !hasPromptedCurrentTurnRef.current) {
-      setIsTurnStartModalOpen(true)
-      hasPromptedCurrentTurnRef.current = true
-    }
-
-    if (!isMyTurn || hasDrawnThisTurn) {
-      setIsTurnStartModalOpen(false)
-    }
-
-    previousTurnPlayerIdRef.current = currentTurnPlayerId
-    previousHasDrawnThisTurnRef.current = hasDrawnThisTurn
-  }, [room, currentPlayerId])
+  const { room, connectionStatus, manualReconnect } = useStore()
 
   if (!room) {
     return (
@@ -86,13 +33,6 @@ export function RoomPage({ onLeaveRoom }: RoomPageProps) {
   }
 
   const showReconnectBanner = connectionStatus === 'reconnecting' || connectionStatus === 'error'
-  const isResourceTracker = room.room_type === 'resource-tracker'
-  const isGmPanel = room.room_type === 'gm-panel'
-
-  function handleTurnStartDraw() {
-    setIsTurnStartModalOpen(false)
-    drawCards()
-  }
 
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden' }}>
@@ -143,34 +83,10 @@ export function RoomPage({ onLeaveRoom }: RoomPageProps) {
       )}
 
       <div style={{ position: 'absolute', inset: 0, top: showReconnectBanner ? 92 : 52 }}>
-        {isGmPanel ? <GmPanelBoard /> : isResourceTracker ? <ResourceTrackerBoard /> : <MapCanvas />}
+        <GmPanelBoard />
       </div>
 
-      {!isResourceTracker && !isGmPanel && (
-        <>
-          <PlayerPanel />
-          <HandArea />
-
-          <DrawModal />
-          <TurnStartModal
-            open={isTurnStartModalOpen}
-            onClose={() => setIsTurnStartModalOpen(false)}
-            onDraw={handleTurnStartDraw}
-          />
-          <CreateCardModal />
-          <EditCardModal />
-          <ConnectionModal />
-          <EndCoCreationConfirm />
-        </>
-      )}
       <RoomSettingsModal />
-      {!isResourceTracker && !isGmPanel && (
-        <>
-          <ImportModal />
-          <CardLibraryModal />
-        </>
-      )}
-
       <ToastContainer />
     </div>
   )

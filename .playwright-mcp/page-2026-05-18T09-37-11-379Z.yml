@@ -1,0 +1,29 @@
+- generic [ref=e3]:
+  - button "使用说明" [ref=e4] [cursor=pointer]:
+    - img [ref=e5]
+    - text: 使用说明
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - generic [ref=e9]: GM
+      - heading "匕首之心 GM 面板" [level=1] [ref=e10]
+      - paragraph [ref=e11]: "导入 `MyDHcharsheet` 导出的 HTML 角色卡，固定 4 列直接查看原始角色卡页面，并在多人房间里同步资源、恐惧点和进度钟。"
+      - generic [ref=e12]:
+        - generic [ref=e13]: 直接渲染角色卡 HTML，而不是再拆成摘要卡片
+        - generic [ref=e14]: 资源点击后实时同步给所有在线成员
+        - generic [ref=e15]: 恐惧点与进度钟集中放在 GM 顶部面板
+        - generic [ref=e16]: 悬浮笔记按房间保存在本地，不进入同步链路
+    - generic [ref=e17]:
+      - generic [ref=e18]:
+        - button "创建房间" [ref=e19] [cursor=pointer]
+        - button "加入房间" [ref=e20] [cursor=pointer]
+      - generic [ref=e22]:
+        - generic [ref=e23]:
+          - generic [ref=e24]: 房间名称
+          - textbox [ref=e25]: 匕首之心 GM 面板
+        - generic [ref=e26]:
+          - generic [ref=e27]: 你的昵称
+          - textbox [ref=e28]
+        - generic [ref=e29]: "房间默认保留 3 天。当前版本只保留 `GM 面板` 这一种房间形态，创建后即可直接导入 HTML 角色卡。"
+        - button "创建房间并进入" [ref=e30] [cursor=pointer]:
+          - img [ref=e31]
+          - text: 创建房间并进入

@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import type { RoomType } from '@dhgc/shared'
 import { BookOpen, LogIn, Plus } from 'lucide-react'
 import { TutorialModal } from '@/components/ui/TutorialModal'
 import { useStore } from '@/store/useStore'
@@ -8,18 +7,12 @@ interface LandingPageProps {
   onEnterRoom: () => void
 }
 
-const ROOM_TYPES: Array<{ id: RoomType; title: string; desc: string }> = [
-  { id: 'gm-panel', title: 'GM 面板', desc: '导入 MyDHcharsheet HTML，分页展示角色卡并实时同步资源。' },
-  { id: 'co-creation', title: '共创房间', desc: '保留参考项目原本的多人共创地图玩法。' },
-]
-
 export function LandingPage({ onEnterRoom }: LandingPageProps) {
   const { createRoom, joinRoom, isEnteringRoom, addToast } = useStore()
   const [tab, setTab] = useState<'create' | 'join'>('create')
   const [roomName, setRoomName] = useState('匕首之心 GM 面板')
   const [nickname, setNickname] = useState('')
   const [inviteCode, setInviteCode] = useState('')
-  const [roomType, setRoomType] = useState<RoomType>('gm-panel')
   const [showTutorial, setShowTutorial] = useState(false)
 
   async function handleCreate(event: React.FormEvent) {
@@ -32,7 +25,7 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
     const entered = await createRoom({
       nickname,
       roomName,
-      roomType,
+      roomType: 'gm-panel',
     })
 
     if (entered) onEnterRoom()
@@ -124,15 +117,14 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
           </div>
           <h1 style={{ margin: 0, fontSize: 40, lineHeight: 1.05, fontWeight: 900 }}>匕首之心 GM 面板</h1>
           <p style={{ marginTop: 16, marginBottom: 0, maxWidth: 520, fontSize: 16, lineHeight: 1.7, color: 'rgba(255,255,255,0.82)' }}>
-            按开发文档实现的多人实时 GM 面板。导入 `MyDHcharsheet` 导出的 HTML 角色卡，固定槽位分页展示，
-            实时同步恐惧点、进度钟与角色资源，同时保留本地悬浮笔记。
+            导入 `MyDHcharsheet` 导出的 HTML 角色卡，固定 4 列直接查看原始角色卡页面，并在多人房间里同步资源、恐惧点和进度钟。
           </p>
 
           <div style={{ display: 'grid', gap: 12, marginTop: 28 }}>
             {[
-              '支持 `window.characterData` 直提取导入，不依赖 DOM 结构',
-              '每页默认 4 张角色卡，单卡独立滚动，便于同屏查看长卡',
-              '所有在线成员同权编辑，所有变更进入活动日志',
+              '直接渲染角色卡 HTML，而不是再拆成摘要卡片',
+              '资源点击后实时同步给所有在线成员',
+              '恐惧点与进度钟集中放在 GM 顶部面板',
               '悬浮笔记按房间保存在本地，不进入同步链路',
             ].map((item) => (
               <div
@@ -191,33 +183,6 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
                 </div>
 
                 <div>
-                  <label className="label">房间类型</label>
-                  <div style={{ display: 'grid', gap: 10 }}>
-                    {ROOM_TYPES.map((item) => {
-                      const active = roomType === item.id
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => setRoomType(item.id)}
-                          style={{
-                            textAlign: 'left',
-                            padding: '14px 16px',
-                            borderRadius: 16,
-                            border: active ? '1px solid #ea580c' : '1px solid var(--border-default)',
-                            background: active ? 'rgba(249, 115, 22, 0.08)' : 'rgba(255,255,255,0.9)',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>{item.title}</div>
-                          <div style={{ marginTop: 4, fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)' }}>{item.desc}</div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                <div>
                   <label className="label">你的昵称</label>
                   <input className="input" value={nickname} onChange={(event) => setNickname(event.target.value)} maxLength={20} required />
                 </div>
@@ -233,7 +198,7 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
                     lineHeight: 1.7,
                   }}
                 >
-                  房间默认保留 3 天。`GM 面板` 是当前仓库的主功能入口；如果只是想按文档体验完整流程，直接保持默认即可。
+                  房间默认保留 3 天。当前版本只保留 `GM 面板` 这一种房间形态，创建后即可直接导入 HTML 角色卡。
                 </div>
 
                 <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} disabled={isEnteringRoom}>

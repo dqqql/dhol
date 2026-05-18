@@ -18,50 +18,51 @@ export function NotebookPagination({
   onAddPage,
   onDeletePage,
 }: NotebookPaginationProps) {
+  const canAddPage = totalPages < maxPages
+  const canDeletePage = totalPages > 1
+
   return (
     <div
       className="flex items-center justify-between px-3 py-2"
       style={{
-        background: 'linear-gradient(180deg, #4e342e 0%, #3e2723 100%)',
-        borderTop: '2px solid #3e2723',
+        background: 'linear-gradient(180deg, #4E342E 0%, #3E2723 100%)',
+        borderTop: '2px solid #3E2723',
       }}
     >
-      <button
-        type="button"
-        onClick={onDeletePage}
-        disabled={totalPages <= 1}
-        style={buttonStyle(totalPages <= 1)}
-        title="删除当前页"
-      >
-        <Trash2 size={14} />
-      </button>
+      <div className="w-20">
+        {canDeletePage && (
+          <button
+            type="button"
+            onClick={onDeletePage}
+            className="p-1.5 text-amber-300/60 transition-colors hover:text-red-400"
+            title="删除当前页"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
+      </div>
 
       <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={() => onGoToPage(currentPage - 1)}
           disabled={currentPage <= 0}
-          style={buttonStyle(currentPage <= 0)}
-          title="上一页"
+          className="p-1 text-amber-200 transition-colors hover:text-amber-100 disabled:cursor-not-allowed disabled:text-amber-900"
         >
-          <ChevronLeft size={14} />
+          <ChevronLeft className="h-4 w-4" />
         </button>
 
         <div className="flex items-center gap-1">
-          {Array.from({ length: totalPages }, (_, index) => (
+          {Array(totalPages).fill(0).map((_, index) => (
             <button
               key={index}
               type="button"
               onClick={() => onGoToPage(index)}
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: 999,
-                border: 'none',
-                background: index === currentPage ? '#fde68a' : '#8d6e63',
-                cursor: 'pointer',
-                transform: index === currentPage ? 'scale(1.25)' : 'none',
-              }}
+              className={`h-2 w-2 rounded-full transition-all ${
+                index === currentPage
+                  ? 'bg-amber-200 scale-125'
+                  : 'bg-amber-800 hover:bg-amber-600'
+              }`}
               title={`第 ${index + 1} 页`}
             />
           ))}
@@ -71,37 +72,24 @@ export function NotebookPagination({
           type="button"
           onClick={() => onGoToPage(currentPage + 1)}
           disabled={currentPage >= totalPages - 1}
-          style={buttonStyle(currentPage >= totalPages - 1)}
-          title="下一页"
+          className="p-1 text-amber-200 transition-colors hover:text-amber-100 disabled:cursor-not-allowed disabled:text-amber-900"
         >
-          <ChevronRight size={14} />
+          <ChevronRight className="h-4 w-4" />
         </button>
       </div>
 
-      <button
-        type="button"
-        onClick={onAddPage}
-        disabled={totalPages >= maxPages}
-        style={buttonStyle(totalPages >= maxPages)}
-        title={`新增页面 (${totalPages}/${maxPages})`}
-      >
-        <Plus size={14} />
-      </button>
+      <div className="flex w-20 justify-end">
+        {canAddPage && (
+          <button
+            type="button"
+            onClick={onAddPage}
+            className="p-1.5 text-amber-300/60 transition-colors hover:text-amber-100"
+            title={`添加新页 (${totalPages}/${maxPages})`}
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        )}
+      </div>
     </div>
   )
-}
-
-function buttonStyle(disabled: boolean): React.CSSProperties {
-  return {
-    width: 28,
-    height: 28,
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    border: 'none',
-    borderRadius: 8,
-    background: 'transparent',
-    color: disabled ? '#6d4c41' : '#fde68a',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-  }
 }

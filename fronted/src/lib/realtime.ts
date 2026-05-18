@@ -47,6 +47,21 @@ export async function fetchDhRoomBackup(inviteCode: string) {
   return response.blob()
 }
 
+export async function fetchGmSheetHtml(inviteCode: string, sheetId: string) {
+  let response: Response
+  try {
+    response = await fetch(`${getRealtimeApiBase()}/api/rooms/${inviteCode}/sheets/${sheetId}/html`)
+  } catch {
+    throw new Error('无法获取角色卡 HTML，请检查网络后重试。')
+  }
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response))
+  }
+
+  return response.text()
+}
+
 export interface RoomSocketHandlers {
   onClose?: () => void
   onError?: (error: Error) => void
