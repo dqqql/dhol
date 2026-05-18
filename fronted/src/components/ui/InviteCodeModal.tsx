@@ -42,15 +42,13 @@ export function InviteCodeModal({
           background: 'var(--bg-elevated)',
           border: '1px solid var(--border-subtle)',
           boxShadow: 'var(--shadow-panel)',
-          borderRadius: 'var(--radius-xl)',
-          overflow: 'hidden',
           animation: 'slideUp var(--transition-normal)',
           position: 'relative',
         }}
       >
         <div
           style={{
-            background: 'linear-gradient(135deg, #2563eb, #7c3aed)',
+            background: 'linear-gradient(135deg, #b8860b, #7c4f31)',
             padding: '24px 24px 20px',
             position: 'relative',
             overflow: 'hidden',
@@ -114,7 +112,6 @@ export function InviteCodeModal({
                 justifyContent: 'center',
                 width: 48,
                 height: 48,
-                borderRadius: 'var(--radius-lg)',
                 background: 'rgba(255,255,255,0.18)',
                 color: 'white',
                 marginBottom: 12,
@@ -145,8 +142,7 @@ export function InviteCodeModal({
           <div
             style={{
               background: 'var(--bg-overlay)',
-              borderRadius: 'var(--radius-md)',
-              padding: 14,
+                           padding: 14,
               marginBottom: 16,
               border: '1px solid var(--border-subtle)',
             }}
@@ -162,10 +158,9 @@ export function InviteCodeModal({
           <div style={{ marginBottom: 18 }}>
             <div
               style={{
-                background: 'linear-gradient(180deg, rgba(37,99,235,0.06), rgba(124,58,237,0.04))',
-                border: '1px solid rgba(37,99,235,0.14)',
-                borderRadius: 'var(--radius-md)',
-                padding: '14px 16px',
+                background: 'linear-gradient(180deg, rgba(184,134,11,0.06), rgba(124,79,49,0.04))',
+                border: '1px solid rgba(184,134,11,0.15)',
+                               padding: '14px 16px',
                 textAlign: 'center',
                 marginBottom: 12,
               }}
@@ -179,7 +174,7 @@ export function InviteCodeModal({
                   fontWeight: 800,
                   letterSpacing: '0.24em',
                   fontFamily: 'monospace',
-                  color: 'var(--accent-violet)',
+                  color: 'var(--accent-gold)',
                   paddingLeft: '0.24em',
                 }}
               >

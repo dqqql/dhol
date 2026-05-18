@@ -9,8 +9,8 @@ interface NotebookToolbarProps {
 
 export function NotebookToolbar({ onAddText, onAddCounter, disabled }: NotebookToolbarProps) {
   const buttonClass = disabled
-    ? 'flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors text-gray-400 cursor-not-allowed'
-    : 'flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors hover:bg-amber-100 text-amber-900'
+    ? 'flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors text-gray-400 cursor-not-allowed'
+    : 'flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors hover:bg-amber-100 text-amber-900'
 
   return (
     <div

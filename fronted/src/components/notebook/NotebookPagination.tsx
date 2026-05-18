@@ -58,7 +58,7 @@ export function NotebookPagination({
               key={index}
               type="button"
               onClick={() => onGoToPage(index)}
-              className={`h-2 w-2 rounded-full transition-all ${
+              className={`h-2 w-2 transition-all ${
                 index === currentPage
                   ? 'bg-amber-200 scale-125'
                   : 'bg-amber-800 hover:bg-amber-600'

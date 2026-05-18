@@ -25,7 +25,7 @@ export function TextLine({ line, lineHeight, onUpdate, onDelete, dragHandleProps
     <div className="relative">
       <div
         {...dragHandleProps}
-        className="absolute -left-8 bottom-0 top-0 w-6 cursor-grab rounded hover:bg-amber-100/40"
+        className="absolute -left-8 bottom-0 top-0 w-6 cursor-grab hover:bg-amber-100/40"
         title="拖拽排序"
       />
 
@@ -44,7 +44,7 @@ export function TextLine({ line, lineHeight, onUpdate, onDelete, dragHandleProps
                 setIsEditingLabel(false)
               }
             }}
-            className="rounded border border-amber-300 bg-white px-1 py-0.5 text-xs outline-none"
+            className="border border-amber-300 bg-white px-1 py-0.5 text-xs outline-none"
           />
         ) : (
           <button

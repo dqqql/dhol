@@ -58,73 +58,18 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
         justifyContent: 'center',
         padding: 24,
         boxSizing: 'border-box',
-        background: 'radial-gradient(circle at top left, rgba(249, 115, 22, 0.14), transparent 28%), radial-gradient(circle at bottom right, rgba(180, 83, 9, 0.14), transparent 26%), linear-gradient(180deg, #fffaf5 0%, #f5efe6 100%)',
+        background: 'radial-gradient(circle at top left, rgba(217, 119, 6, 0.1), transparent 28%), radial-gradient(circle at bottom right, rgba(180, 83, 9, 0.1), transparent 26%), linear-gradient(180deg, #fdfaf5 0%, #f6f1e8 50%, #ede0ce 100%)',
       }}
     >
-      <div style={{ width: '100%', maxWidth: 1040, display: 'grid', gap: 24, gridTemplateColumns: '1.1fr 0.9fr' }}>
-        <section
-          style={{
-            padding: 36,
-            borderRadius: 28,
-            background: 'linear-gradient(135deg, rgba(124, 79, 49, 0.96), rgba(67, 44, 33, 0.98))',
-            color: 'white',
-            boxShadow: '0 28px 60px rgba(67, 44, 33, 0.22)',
-          }}
-        >
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 64,
-              height: 64,
-              borderRadius: 18,
-              background: 'linear-gradient(135deg, #fb923c, #ea580c)',
-              marginBottom: 20,
-              fontSize: 26,
-              fontWeight: 900,
-            }}
-          >
-            GM
-          </div>
-          <h1 style={{ margin: 0, fontSize: 40, lineHeight: 1.05, fontWeight: 900 }}>匕首之心 GM 面板</h1>
-          <p style={{ marginTop: 16, marginBottom: 0, maxWidth: 520, fontSize: 16, lineHeight: 1.7, color: 'rgba(255,255,255,0.82)' }}>
-            导入 `MyDHcharsheet` 导出的 HTML 角色卡，固定 4 列直接查看原始角色卡页面，并在多人房间里同步资源、恐惧点和进度钟。
-          </p>
-
-          <div style={{ display: 'grid', gap: 12, marginTop: 28 }}>
-            {[
-              '直接渲染角色卡 HTML，而不是再拆成摘要卡片',
-              '资源点击后实时同步给所有在线成员',
-              '恐惧点与进度钟集中放在 GM 顶部面板',
-              '悬浮笔记按房间保存在本地，不进入同步链路',
-            ].map((item) => (
-              <div
-                key={item}
-                style={{
-                  padding: '12px 14px',
-                  borderRadius: 16,
-                  background: 'rgba(255,255,255,0.08)',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  fontSize: 14,
-                  lineHeight: 1.6,
-                }}
-              >
-                {item}
-              </div>
-            ))}
-          </div>
-        </section>
-
+      <div style={{ width: '100%', maxWidth: 440 }}>
         <section
           className="glass-panel"
           style={{
             padding: 28,
-            borderRadius: 28,
-            boxShadow: '0 28px 60px rgba(31, 41, 55, 0.12)',
+            boxShadow: '0 28px 64px rgba(60, 30, 0, 0.1), inset 0 1px 0 rgba(255,255,255,0.8)',
           }}
         >
-          <div style={{ display: 'flex', gap: 8, marginBottom: 24, background: 'var(--bg-overlay)', padding: 4, borderRadius: 999 }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 24, background: 'var(--bg-overlay)', padding: 4, border: '1px solid var(--border-subtle)' }}>
             {(['create', 'join'] as const).map((value) => (
               <button
                 key={value}
@@ -133,7 +78,6 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
                 style={{
                   flex: 1,
                   padding: '10px 0',
-                  borderRadius: 999,
                   border: 'none',
                   background: tab === value ? 'white' : 'transparent',
                   color: tab === value ? 'var(--text-primary)' : 'var(--text-muted)',
@@ -157,20 +101,6 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
                 <div>
                   <label className="label">你的昵称</label>
                   <input className="input" value={nickname} onChange={(event) => setNickname(event.target.value)} maxLength={20} required />
-                </div>
-
-                <div
-                  style={{
-                    padding: '12px 14px',
-                    borderRadius: 16,
-                    border: '1px solid rgba(249, 115, 22, 0.16)',
-                    background: 'rgba(255, 247, 237, 0.94)',
-                    color: '#9a3412',
-                    fontSize: 12,
-                    lineHeight: 1.7,
-                  }}
-                >
-                  房间默认保留 3 天。当前版本只保留 `GM 面板` 这一种房间形态，创建后即可直接导入 HTML 角色卡。
                 </div>
 
                 <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} disabled={isEnteringRoom}>

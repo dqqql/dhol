@@ -205,11 +205,10 @@ export function FloatingNotebook({ roomId }: { roomId: string }) {
           alignItems: 'center',
           gap: 8,
           padding: '10px 14px',
-          borderRadius: 999,
-          border: '1px solid rgba(122, 79, 49, 0.28)',
+          border: '1px solid rgba(184, 134, 11, 0.2)',
           background: 'linear-gradient(135deg, #fff7ed, #ffedd5)',
           color: '#7c4f31',
-          boxShadow: '0 10px 24px rgba(122, 79, 49, 0.15)',
+          boxShadow: '0 10px 24px rgba(122, 79, 49, 0.12)',
           cursor: 'pointer',
           fontWeight: 700,
         }}
@@ -230,7 +229,7 @@ export function FloatingNotebook({ roomId }: { roomId: string }) {
       }}
     >
       <div
-        className="relative overflow-hidden rounded-lg"
+        className="relative overflow-hidden"
         style={{
           border: '4px solid #5d4037',
           background: 'linear-gradient(135deg, #6d4c41 0%, #4e342e 100%)',
@@ -252,7 +251,7 @@ export function FloatingNotebook({ roomId }: { roomId: string }) {
           <button
             type="button"
             onClick={toggleOpen}
-            className="rounded p-1 transition-colors hover:bg-amber-900/50"
+            className="p-1 transition-colors hover:bg-amber-900/50"
           >
             <X className="h-4 w-4 text-amber-200" />
           </button>

@@ -22,9 +22,9 @@ export function Modal({ open, onClose, title, children, maxWidth = 480 }: ModalP
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal-content" style={{ maxWidth }}>
         {title && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-            <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</h2>
-            <button className="btn btn-ghost btn-icon" onClick={onClose}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, paddingBottom: 14, borderBottom: '1px solid var(--border-subtle)' }}>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>{title}</h2>
+            <button className="btn btn-ghost btn-icon" onClick={onClose} >
               <X size={16} />
             </button>
           </div>

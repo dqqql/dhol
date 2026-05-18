@@ -20,7 +20,7 @@ export function CounterLine({ line, lineHeight, onUpdate, onDelete, dragHandlePr
     <div className="relative">
       <div
         {...dragHandleProps}
-        className="absolute -left-8 bottom-0 top-0 w-6 cursor-grab rounded hover:bg-amber-100/40"
+        className="absolute -left-8 bottom-0 top-0 w-6 cursor-grab hover:bg-amber-100/40"
         title="拖拽排序"
       />
 
@@ -33,7 +33,7 @@ export function CounterLine({ line, lineHeight, onUpdate, onDelete, dragHandlePr
               onUpdate({ label: editLabel || '计数器' })
               setIsEditingLabel(false)
             }}
-            className="rounded border border-amber-300 bg-white px-1 py-0.5 text-xs outline-none"
+            className="border border-amber-300 bg-white px-1 py-0.5 text-xs outline-none"
           />
         ) : (
           <button
@@ -56,7 +56,7 @@ export function CounterLine({ line, lineHeight, onUpdate, onDelete, dragHandlePr
                 onUpdate({ max: nextMax, current: Math.min(line.current, nextMax) })
                 setIsEditingMax(false)
               }}
-              className="ml-1 w-10 rounded border border-amber-300 bg-white px-1 py-0.5 text-xs outline-none"
+              className="ml-1 w-10 border border-amber-300 bg-white px-1 py-0.5 text-xs outline-none"
             />
           ) : (
             <button
@@ -78,7 +78,7 @@ export function CounterLine({ line, lineHeight, onUpdate, onDelete, dragHandlePr
         <button
           type="button"
           onClick={() => onUpdate({ current: Math.max(0, line.current - 1) })}
-          className="rounded p-1 text-gray-500 hover:bg-gray-200"
+          className="p-1 text-gray-500 hover:bg-gray-200"
         >
           <Minus size={14} />
         </button>
@@ -103,7 +103,7 @@ export function CounterLine({ line, lineHeight, onUpdate, onDelete, dragHandlePr
         <button
           type="button"
           onClick={() => onUpdate({ current: Math.min(line.max, line.current + 1) })}
-          className="rounded p-1 text-gray-500 hover:bg-gray-200"
+          className="p-1 text-gray-500 hover:bg-gray-200"
         >
           <Plus size={14} />
         </button>

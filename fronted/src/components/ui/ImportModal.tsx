@@ -95,17 +95,17 @@ export function ImportModal() {
           if (file) void handleFile(file)
         }}
         style={{
-          border: `2px dashed ${dragOver ? 'var(--accent-violet)' : 'var(--border-default)'}`,
+          border: `2px dashed ${dragOver ? 'var(--accent-gold)' : 'var(--border-default)'}`,
           padding: 32,
           textAlign: 'center',
-          background: dragOver ? 'rgba(124,111,222,0.06)' : 'var(--bg-overlay)',
+          background: dragOver ? 'rgba(184,134,11,0.04)' : 'var(--bg-overlay)',
           transition: 'all 0.15s',
           marginBottom: 16,
           cursor: 'pointer',
         }}
         onClick={() => document.getElementById('dh-import-file-input')?.click()}
       >
-        <Upload size={28} color={dragOver ? 'var(--accent-violet)' : 'var(--text-muted)'} style={{ margin: '0 auto 10px' }} />
+        <Upload size={28} color={dragOver ? 'var(--accent-gold)' : 'var(--text-muted)'} style={{ margin: '0 auto 10px' }} />
         <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>拖拽文件到这里</div>
         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>或点击选择文件</div>
         <input
@@ -127,7 +127,6 @@ export function ImportModal() {
           alignItems: 'center',
           gap: 6,
           padding: '8px 10px',
-          borderRadius: 'var(--radius-sm)',
           background: 'rgba(245,158,11,0.08)',
           border: '1px solid rgba(245,158,11,0.2)',
           marginBottom: 20,

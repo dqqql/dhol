@@ -17,8 +17,6 @@ export function RoomSettingsModal() {
   const currentRoom = room
 
   const expiresAt = new Date(currentRoom.expires_at)
-  const isHost = currentRoom.host_player_id === currentPlayerId
-
   async function copyCode() {
     try {
       await navigator.clipboard.writeText(currentRoom.invite_code)
@@ -36,13 +34,12 @@ export function RoomSettingsModal() {
         <section
           style={{
             padding: 16,
-            borderRadius: 16,
-            background: 'var(--bg-overlay)',
+                       background: 'var(--bg-overlay)',
             border: '1px solid var(--border-subtle)',
           }}
         >
-          <div style={{ marginBottom: 4, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{currentRoom.room_name}</div>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 14 }}>{roomTypeLabel(currentRoom.room_type)}</div>
+          <div style={{ marginBottom: 4, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>{currentRoom.room_name}</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 14 }}>{roomTypeLabel(currentRoom.room_type)}</div>
 
           <div style={{ display: 'grid', gap: 10 }}>
             <div style={rowStyle}>
@@ -59,22 +56,13 @@ export function RoomSettingsModal() {
                 {Number.isNaN(expiresAt.getTime()) ? currentRoom.expires_at : expiresAt.toLocaleString()}
               </span>
             </div>
-            <div style={rowStyle}>
-              <span style={labelStyle}>当前模式</span>
-              <span style={valueStyle}>{currentRoom.mode}</span>
-            </div>
-            <div style={rowStyle}>
-              <span style={labelStyle}>你的身份</span>
-              <span style={valueStyle}>{isHost ? '房主' : '成员'}</span>
-            </div>
           </div>
         </section>
 
         <section
           style={{
             padding: 16,
-            borderRadius: 16,
-            background: 'var(--bg-overlay)',
+                       background: 'var(--bg-overlay)',
             border: '1px solid var(--border-subtle)',
           }}
         >
@@ -89,8 +77,7 @@ export function RoomSettingsModal() {
                   justifyContent: 'space-between',
                   gap: 12,
                   padding: 12,
-                  borderRadius: 12,
-                  background: 'white',
+                                   background: 'white',
                   border: '1px solid var(--border-subtle)',
                 }}
               >

@@ -13,7 +13,7 @@ const TOAST_ICONS: Record<Toast['type'], React.ReactNode> = {
 const TOAST_COLORS: Record<Toast['type'], string> = {
   info:    'var(--accent-cyan)',
   success: 'var(--accent-emerald)',
-  warning: 'var(--accent-amber)',
+  warning: 'var(--accent-gold)',
   error:   'var(--accent-rose)',
 }
 

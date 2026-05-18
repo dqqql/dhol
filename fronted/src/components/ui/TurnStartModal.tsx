@@ -20,8 +20,8 @@ export function TurnStartModal({ open, onClose, onDraw }: TurnStartModalProps) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'rgba(16,185,129,0.12)',
-            color: 'var(--accent-emerald)',
+            background: 'rgba(184,134,11,0.1)',
+            color: 'var(--accent-gold)',
             flexShrink: 0,
           }}
         >

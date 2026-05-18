@@ -51,8 +51,8 @@ export function RoomPage({ onLeaveRoom }: RoomPageProps) {
             justifyContent: 'center',
             gap: 10,
             padding: '8px 14px',
-            background: connectionStatus === 'error' ? 'rgba(244,63,94,0.12)' : 'rgba(245,158,11,0.12)',
-            borderBottom: `1px solid ${connectionStatus === 'error' ? 'var(--accent-rose)' : 'var(--accent-amber)'}`,
+            background: connectionStatus === 'error' ? 'rgba(185,28,28,0.08)' : 'rgba(217,119,6,0.08)',
+            borderBottom: `1px solid ${connectionStatus === 'error' ? 'rgba(185,28,28,0.18)' : 'rgba(217,119,6,0.18)'}`,
             fontSize: 13,
             color: connectionStatus === 'error' ? 'var(--accent-rose)' : 'var(--accent-amber)',
             backdropFilter: 'blur(4px)',
@@ -64,7 +64,6 @@ export function RoomPage({ onLeaveRoom }: RoomPageProps) {
               <button
                 style={{
                   padding: '3px 12px',
-                  borderRadius: 99,
                   border: '1px solid var(--accent-rose)',
                   background: 'var(--accent-rose)',
                   color: 'white',
