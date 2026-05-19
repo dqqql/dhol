@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import type { GmPanelCharacterSheetEntry, GmPanelResourceKey, ResourceTrackerCountdown } from '@dhgc/shared'
 import { ChevronLeft, ChevronRight, FileUp, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { FloatingBattlePanel } from '@/components/gm-panel/FloatingBattlePanel'
 import { FloatingNotebook } from '@/components/notebook/FloatingNotebook'
 import { Modal } from '@/components/ui/Modal'
 import { fetchGmSheetHtml } from '@/lib/realtime'
@@ -332,6 +333,7 @@ export function GmPanelBoard() {
         <ActivityLogPanel logs={panel.activity_log} />
       </div>
 
+      <FloatingBattlePanel roomId={room.room_id} />
       <FloatingNotebook roomId={room.room_id} />
 
       <input ref={importInputRef} type="file" accept=".html,text/html" style={{ display: 'none' }} onChange={handleImportChange} />

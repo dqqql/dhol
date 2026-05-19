@@ -289,6 +289,7 @@ export class RoomDurableObject {
       settings: {
         imports_enabled: true,
         resource_change_requires_approval: false,
+        battle_panel_visibility: 'shared',
       },
       selected_built_in_pack_ids: selectedPackIds,
       drawn_this_turn: {},
@@ -299,7 +300,7 @@ export class RoomDurableObject {
     }
 
     await this.save()
-    await this.scheduleExpiryAlarm(this.room)
+    await this.scheduleExpiryAlarm(this.requireRoom())
     return json({ state: this.publicState(), player: host })
   }
 
@@ -411,25 +412,21 @@ export class RoomDurableObject {
         return
 
       case 'room.startCoCreation':
-        this.requireHost(player)
         this.startCoCreation()
         await this.commit('room.startCoCreation')
         return
 
       case 'room.endCoCreation':
-        this.requireHost(player)
         this.endCoCreation()
         await this.commit('room.endCoCreation')
         return
 
       case 'room.updateSelectedPacks':
-        this.requireHost(player)
         this.updateSelectedPacks(message.payload.selectedPackIds)
         await this.commit('room.updateSelectedPacks')
         return
 
       case 'room.updateSettings':
-        this.requireHost(player)
         this.updateSettings(message.payload)
         await this.commit('room.updateSettings')
         return
@@ -454,49 +451,42 @@ export class RoomDurableObject {
 
       case 'tracker.updateFear':
         this.requireResourceTrackerRoom()
-        this.requireHost(player)
         this.updateTrackerFear(player, message.payload.value)
         await this.commit('tracker.updateFear')
         return
 
       case 'tracker.createCountdown':
         this.requireResourceTrackerRoom()
-        this.requireHost(player)
         this.createTrackerCountdown(player, message.payload.name, message.payload.max)
         await this.commit('tracker.createCountdown')
         return
 
       case 'tracker.updateCountdown':
         this.requireResourceTrackerRoom()
-        this.requireHost(player)
         this.updateTrackerCountdown(player, message.payload.countdownId, message.payload.value)
         await this.commit('tracker.updateCountdown')
         return
 
       case 'tracker.deleteCountdown':
         this.requireResourceTrackerRoom()
-        this.requireHost(player)
         this.deleteTrackerCountdown(player, message.payload.countdownId)
         await this.commit('tracker.deleteCountdown')
         return
 
       case 'tracker.moveColumn':
         this.requireResourceTrackerRoom()
-        this.requireHost(player)
         this.moveTrackerColumn(player, message.payload.columnId, message.payload.direction)
         await this.commit('tracker.moveColumn')
         return
 
       case 'tracker.approveResourceChange':
         this.requireResourceTrackerRoom()
-        this.requireHost(player)
         this.resolveTrackerRequest(player, message.payload.requestIdToResolve, true)
         await this.commit('tracker.approveResourceChange')
         return
 
       case 'tracker.rejectResourceChange':
         this.requireResourceTrackerRoom()
-        this.requireHost(player)
         this.resolveTrackerRequest(player, message.payload.requestIdToResolve, false)
         await this.commit('tracker.rejectResourceChange')
         return
@@ -574,7 +564,6 @@ export class RoomDurableObject {
         return
 
       case 'turn.forceSkip':
-        this.requireHost(player)
         this.advanceTurn(message.payload.playerId)
         await this.commit('turn.forceSkip')
         return
@@ -726,7 +715,6 @@ export class RoomDurableObject {
         return
 
       case 'room.importPack': {
-        this.requireHost(player)
         this.requireImportsEnabled()
         const pack = assertDhPack(message.payload.pack)
         this.importPack(pack)
@@ -735,7 +723,6 @@ export class RoomDurableObject {
       }
 
       case 'room.importLibraryPack':
-        this.requireHost(player)
         this.requireImportsEnabled()
         this.importLibraryPack(message.payload.packId)
         await this.commit('room.importLibraryPack')
@@ -748,7 +735,6 @@ export class RoomDurableObject {
         return
 
       case 'room.importRoomBackup': {
-        this.requireHost(player)
         this.requireImportsEnabled()
         const backup = assertDhRoomBackup(message.payload.backup)
         this.importRoomBackup(backup)
@@ -864,8 +850,8 @@ export class RoomDurableObject {
     const room = this.requireRoom()
     const card = this.requireMapCard(cardId)
     if (room.mode !== 'co-creation') throw new Error('Recycle is only available during co-creation')
-    if (card.placed_by_player_id !== player.id && player.id !== room.host_player_id) {
-      throw new Error('Only the owner or host can recycle this card')
+    if (card.placed_by_player_id !== player.id) {
+      throw new Error('Only the owner can recycle this card')
     }
     room.map_cards = room.map_cards.filter(item => item.id !== cardId)
     room.connections = room.connections.filter(conn => conn.from_card_id !== cardId && conn.to_card_id !== cardId)
@@ -1755,6 +1741,7 @@ export class RoomDurableObject {
       settings: {
         imports_enabled: migrated.settings?.imports_enabled ?? true,
         resource_change_requires_approval: migrated.settings?.resource_change_requires_approval ?? false,
+        battle_panel_visibility: 'shared',
       },
       room_type: migrated.room_type ?? 'co-creation',
       resource_tracker: (migrated.room_type ?? 'co-creation') === 'resource-tracker'
@@ -1788,10 +1775,6 @@ export class RoomDurableObject {
     const pack = createPackLibrary(this.requireRoom().imported_pack_library).find((item) => item.id === packId)
     if (!pack) throw new Error('Unknown pack')
     return pack
-  }
-
-  private requireHost(_player: Player): void {
-    return
   }
 
   private requireResourceTrackerRoom(): void {

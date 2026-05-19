@@ -97,6 +97,7 @@ export interface RoomPackLibraryItem {
 export interface RoomSettings {
   imports_enabled: boolean
   resource_change_requires_approval: boolean
+  battle_panel_visibility: 'host-only' | 'shared'
 }
 
 export interface ResourceTrackerExperience {

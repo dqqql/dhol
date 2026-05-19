@@ -17,7 +17,7 @@ export type ClientMessage =
   | { type: 'room.startCoCreation'; requestId?: string; payload?: Record<string, never> }
   | { type: 'room.endCoCreation'; requestId?: string; payload?: Record<string, never> }
   | { type: 'room.updateSelectedPacks'; requestId?: string; payload: { selectedPackIds: string[] } }
-  | { type: 'room.updateSettings'; requestId?: string; payload: { importsEnabled?: boolean; resourceChangeRequiresApproval?: boolean } }
+  | { type: 'room.updateSettings'; requestId?: string; payload: { importsEnabled?: boolean; resourceChangeRequiresApproval?: boolean; battlePanelVisibility?: 'host-only' | 'shared' } }
   | { type: 'room.importPack'; requestId?: string; payload: { pack: DhPack } }
   | { type: 'room.importLibraryPack'; requestId?: string; payload: { packId: string } }
   | { type: 'room.importCards'; requestId?: string; payload: { packId: string; cardIds: string[] } }

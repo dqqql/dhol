@@ -117,6 +117,7 @@ export function assertDhRoomBackup(value: unknown): DhRoomBackup {
     ;(backup as { settings?: unknown }).settings = {
       imports_enabled: false,
       resource_change_requires_approval: false,
+      battle_panel_visibility: 'host-only',
     }
   }
 
@@ -180,6 +181,12 @@ function assertRoomSettings(settings: unknown): asserts settings is RoomSettings
   }
   if (candidate.resource_change_requires_approval === undefined) {
     candidate.resource_change_requires_approval = false
+  }
+  if (candidate.battle_panel_visibility !== undefined && candidate.battle_panel_visibility !== 'host-only' && candidate.battle_panel_visibility !== 'shared') {
+    throw new Error('Room battle_panel_visibility must be host-only or shared')
+  }
+  if (candidate.battle_panel_visibility === undefined) {
+    candidate.battle_panel_visibility = 'host-only'
   }
 }
 

@@ -94,7 +94,7 @@ export function RoomSettingsModal() {
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{player.nickname}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                      {player.is_host ? '房主' : '成员'} · {player.is_online ? '在线' : '离线'}
+                      {player.is_online ? '在线' : '离线'}
                     </div>
                   </div>
                 </div>
