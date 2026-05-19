@@ -384,16 +384,16 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
               return 'proficiency';
             }
 
-            if (text.indexOf('生命点') >= 0 && className.indexOf('w-4 h-4') >= 0) {
-              return 'hp';
+            if ((text.indexOf('护甲槽') >= 0 || text.indexOf('护甲') >= 0) && text.indexOf('生命点') < 0 && text.indexOf('压力点') < 0 && className.indexOf('w-4 h-4') >= 0) {
+              return 'armor_slots';
             }
 
-            if (text.indexOf('压力点') >= 0 && className.indexOf('w-4 h-4') >= 0) {
+            if (text.indexOf('压力点') >= 0 && text.indexOf('生命点') < 0 && className.indexOf('w-4 h-4') >= 0) {
               return 'stress';
             }
 
-            if (text.indexOf('护甲槽') >= 0 && className.indexOf('w-4 h-4') >= 0) {
-              return 'armor_slots';
+            if (text.indexOf('生命点') >= 0 && className.indexOf('w-4 h-4') >= 0) {
+              return 'hp';
             }
 
             if (text.indexOf('金币') >= 0) {
@@ -455,13 +455,13 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
           );
           collectProficiencyElements();
           collectMatchedResourceElements('hp', function (text) {
-            return text.indexOf('\\u751f\\u547d\\u70b9') === 0;
+            return text === '\\u751f\\u547d\\u70b9' || (text.indexOf('\\u751f\\u547d\\u70b9') === 0 && text.indexOf('\\u538b\\u529b\\u70b9') < 0);
           }, 'group');
           collectMatchedResourceElements('stress', function (text) {
             return text === '\\u538b\\u529b\\u70b9';
           }, 'group');
           collectMatchedResourceElements('armor_slots', function (text) {
-            return text === '\\u62a4\\u7532\\u69fd';
+            return text === '\\u62a4\\u7532' || text === '\\u62a4\\u7532\\u69fd' || text.indexOf('\\u62a4\\u7532\\u69fd') === 0;
           }, 'group');
           collectGoldElements();
           collectClassifiedResourceElements();
