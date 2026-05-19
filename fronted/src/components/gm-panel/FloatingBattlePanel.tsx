@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Shield, Swords, Upload } from 'lucide-react'
-import battlePanelExport from '../../../../battle_panel_export.json'
 import { Modal } from '@/components/ui/Modal'
 
 const FIELD = {
@@ -80,6 +79,10 @@ function getDataStorageKey(roomId: string) {
   return `gm-panel:battle-panel-data:${roomId}`
 }
 
+function getImportedFlagKey(roomId: string) {
+  return `gm-panel:battle-panel-imported:${roomId}`
+}
+
 function asText(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value.trim() : fallback
 }
@@ -148,7 +151,7 @@ function buildBattleState(monsters: BattleMonster[], existing: BattlePanelState 
   }))
 }
 
-const defaultMonsterEntries = battlePanelExport as RawBattlePanelEntry[]
+const defaultMonsterEntries: RawBattlePanelEntry[] = []
 
 export function FloatingBattlePanel({ roomId }: { roomId: string }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -162,8 +165,9 @@ export function FloatingBattlePanel({ roomId }: { roomId: string }) {
   useEffect(() => {
     let nextEntries = defaultMonsterEntries
     try {
+      const hasImportedLocalData = localStorage.getItem(getImportedFlagKey(roomId)) === 'true'
       const storedEntries = localStorage.getItem(getDataStorageKey(roomId))
-      if (storedEntries) {
+      if (hasImportedLocalData && storedEntries) {
         const parsed = JSON.parse(storedEntries) as RawBattlePanelEntry[]
         if (Array.isArray(parsed)) {
           nextEntries = parsed
@@ -215,6 +219,7 @@ export function FloatingBattlePanel({ roomId }: { roomId: string }) {
       const nextMonsters = normalizeExport(parsed)
       if (!nextMonsters.length) throw new Error('没有读取到怪物数据')
 
+      localStorage.setItem(getImportedFlagKey(roomId), 'true')
       setMonsterEntries(parsed)
       setStateByMonsterId((current) => buildBattleState(nextMonsters, current))
       setStatusMessage(`已在本地导入 ${nextMonsters.length} 张怪物卡`)
@@ -282,12 +287,8 @@ export function FloatingBattlePanel({ roomId }: { roomId: string }) {
             }}
           >
             <div>
-              <div>{'\u672c\u5730\u6807\u8bb0\u751f\u547d\u70b9\u4e0e\u538b\u529b\u70b9\uff0c\u4e0d\u540c\u6b65\u5230\u623f\u95f4\uff0c\u4e5f\u4e0d\u5199\u5165\u6d3b\u52a8\u8bb0\u5f55\u3002'}</div>
-              <div style={{ marginTop: 4, color: '#94a3b8' }}>
-                {'\u6bcf\u4e2a\u4eba\u90fd\u53ef\u4ee5\u5728\u8fd9\u91cc\u5bfc\u5165\u81ea\u5df1\u672c\u5730\u7684 battle_panel_export.json\u3002'}
-              </div>
               {statusMessage && (
-                <div style={{ marginTop: 6, color: '#0f766e', fontWeight: 700 }}>{statusMessage}</div>
+                <div style={{ color: '#0f766e', fontWeight: 700 }}>{statusMessage}</div>
               )}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
