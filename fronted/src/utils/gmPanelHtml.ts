@@ -375,29 +375,68 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
           }
 
           var className = element.className || '';
-          var text = ancestorText(element);
+          var current = element;
 
-          if (text.indexOf('熟练值') >= 0 && className.indexOf('w-3 h-3') >= 0) {
-            return 'proficiency';
-          }
+          for (var depth = 0; current && depth < 8; depth += 1) {
+            var text = normalizeText(current.textContent);
 
-          if (text.indexOf('生命点') >= 0 && className.indexOf('w-4 h-4') >= 0) {
-            return 'hp';
-          }
+            if (text.indexOf('熟练值') >= 0 && className.indexOf('w-3 h-3') >= 0) {
+              return 'proficiency';
+            }
 
-          if (text.indexOf('压力点') >= 0 && className.indexOf('w-4 h-4') >= 0) {
-            return 'stress';
-          }
+            if (text.indexOf('生命点') >= 0 && className.indexOf('w-4 h-4') >= 0) {
+              return 'hp';
+            }
 
-          if (text.indexOf('护甲槽') >= 0 && className.indexOf('w-4 h-4') >= 0) {
-            return 'armor_slots';
-          }
+            if (text.indexOf('压力点') >= 0 && className.indexOf('w-4 h-4') >= 0) {
+              return 'stress';
+            }
 
-          if (text.indexOf('金币') >= 0) {
-            return 'gold';
+            if (text.indexOf('护甲槽') >= 0 && className.indexOf('w-4 h-4') >= 0) {
+              return 'armor_slots';
+            }
+
+            if (text.indexOf('金币') >= 0) {
+              return 'gold';
+            }
+
+            current = current.parentElement;
           }
 
           return null;
+        }
+
+        function collectClassifiedResourceElements() {
+          var buckets = {
+            hope: [],
+            proficiency: [],
+            hp: [],
+            stress: [],
+            armor_slots: [],
+            gold: [],
+          };
+
+          getCheckboxElements(document.body).forEach(function (element) {
+            if (element.getAttribute('data-gm-resource')) {
+              return;
+            }
+
+            var key = classifyElement(element);
+            if (!key) {
+              return;
+            }
+
+            buckets[key].push(element);
+          });
+
+          Object.keys(buckets).forEach(function (key) {
+            var elements = trimResourceElements(key, buckets[key]);
+            if (elements.length === 0) {
+              return;
+            }
+
+            addResourceElements(key, elements);
+          });
         }
 
         function collectResourceElements() {
@@ -425,6 +464,7 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
             return text === '\\u62a4\\u7532\\u69fd';
           }, 'group');
           collectGoldElements();
+          collectClassifiedResourceElements();
         }
 
         function normalizeHopeFill(element) {
