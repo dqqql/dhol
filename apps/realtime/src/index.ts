@@ -67,6 +67,7 @@ const PLAYER_COLORS = ['#f43f5e', '#2563eb', '#f59e0b', '#10b981', '#a855f7', '#
 const ROOM_TTL_MS = 3 * 24 * 60 * 60 * 1000
 const DRAW_TYPES: DeckCardType[] = ['Location', 'Feature', 'Hook']
 const STARTING_CARDS_PER_TYPE = 2
+const GM_SHEET_HTML_STORAGE_KEY_PREFIX = 'gm_sheet_html:'
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -1638,6 +1639,9 @@ export class RoomDurableObject {
     if (this.room) return this.room
     const storedRoom = await this.ctx.storage.get<RoomState>('room') ?? null
     this.room = storedRoom ? this.migrateRoomState(storedRoom) : null
+    if (this.room) {
+      await this.hydrateStoredGmSheetHtml(this.room)
+    }
     if (this.room && !this.isExpired(this.room)) {
       await this.scheduleExpiryAlarm(this.room)
     }
@@ -1656,7 +1660,51 @@ export class RoomDurableObject {
 
   private async save(): Promise<void> {
     if (!this.room) return
-    await this.ctx.storage.put('room', this.room)
+    const snapshot = structuredClone(this.room)
+    const activeHtmlKeys = new Set<string>()
+    const htmlEntries: Array<[string, string]> = []
+
+    if (snapshot.gm_panel) {
+      snapshot.gm_panel.sheets = snapshot.gm_panel.sheets.map((sheet) => {
+        if (sheet.source_html) {
+          const storageKey = getGmSheetHtmlStorageKey(sheet.id)
+          activeHtmlKeys.add(storageKey)
+          htmlEntries.push([storageKey, sheet.source_html])
+        }
+
+        const { source_html: _sourceHtml, ...rest } = sheet
+        return rest
+      })
+    }
+
+    await this.ctx.storage.put('room', snapshot)
+
+    for (const [storageKey, html] of htmlEntries) {
+      await this.ctx.storage.put(storageKey, html)
+    }
+
+    const storedHtmlEntries = await this.ctx.storage.list<string>({ prefix: GM_SHEET_HTML_STORAGE_KEY_PREFIX })
+    for (const storageKey of storedHtmlEntries.keys()) {
+      if (!activeHtmlKeys.has(storageKey)) {
+        await this.ctx.storage.delete(storageKey)
+      }
+    }
+  }
+
+  private async hydrateStoredGmSheetHtml(room: RoomState): Promise<void> {
+    const sheets = room.gm_panel?.sheets ?? []
+    const pendingSheets = sheets.filter((sheet) => !sheet.source_html)
+
+    if (!pendingSheets.length) {
+      return
+    }
+
+    await Promise.all(pendingSheets.map(async (sheet) => {
+      const html = await this.ctx.storage.get<string>(getGmSheetHtmlStorageKey(sheet.id))
+      if (typeof html === 'string' && html) {
+        sheet.source_html = html
+      }
+    }))
   }
 
   private publicState(): RoomState {
@@ -2238,6 +2286,10 @@ function normalizeBooleanTrack(value: unknown, maxLength: number): boolean[] {
 const CHARACTER_DATA_MARKER = 'window.characterData ='
 const TRANSPARENT_IMAGE_DATA_URL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
 const INLINE_IMAGE_DATA_URL_PATTERN = /data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g
+
+function getGmSheetHtmlStorageKey(sheetId: string): string {
+  return `${GM_SHEET_HTML_STORAGE_KEY_PREFIX}${sheetId}`
+}
 
 function sanitizeImportedHtml(html: string): string {
   return html
