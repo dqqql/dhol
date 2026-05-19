@@ -513,6 +513,12 @@ export class RoomDurableObject {
         await this.commit('gm.replaceHtmlCharacter')
         return
 
+      case 'gm.deleteSheet':
+        this.requireGmPanelRoom()
+        this.deleteGmSheet(player, message.payload.sheetId)
+        await this.commit('gm.deleteSheet')
+        return
+
       case 'gm.updateSheet':
         this.requireGmPanelRoom()
         this.updateGmSheet(player, message.payload.sheetId, message.payload.sheet)
@@ -1209,6 +1215,16 @@ export class RoomDurableObject {
     entry.raw_character_data = nextEntry.raw_character_data
     entry.parsed_sheet = nextEntry.parsed_sheet
     this.appendGmLog('sheet-replace', `${player.nickname} 替换了角色卡 ${entry.parsed_sheet.character_name || entry.source_file_name}`, player)
+  }
+
+  private deleteGmSheet(player: Player, sheetId: string): void {
+    const panel = this.requireGmPanelState()
+    const sheetIndex = panel.sheets.findIndex((item) => item.id === sheetId)
+    if (sheetIndex < 0) throw new Error('Unknown character sheet')
+
+    const [entry] = panel.sheets.splice(sheetIndex, 1)
+    panel.sheet_order = panel.sheet_order.filter((id) => id !== sheetId)
+    this.appendGmLog('sheet-delete', `${player.nickname} 鍒犻櫎浜嗚鑹插崱 ${entry.parsed_sheet.character_name || entry.source_file_name}`, player)
   }
 
   private updateGmSheet(player: Player, sheetId: string, sheet: ResourceTrackerSheet): void {

@@ -29,6 +29,7 @@ export function GmPanelBoard() {
     room,
     importGmCharacter,
     replaceGmCharacter,
+    deleteGmCharacter,
     updateGmResource,
     updateGmFear,
     createGmCountdown,
@@ -42,6 +43,8 @@ export function GmPanelBoard() {
   const [draftCountdownName, setDraftCountdownName] = useState('')
   const [draftCountdownMax, setDraftCountdownMax] = useState('6')
   const [replaceTargetId, setReplaceTargetId] = useState<string | null>(null)
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
+  const [deleteConfirmStep, setDeleteConfirmStep] = useState<1 | 2>(1)
   const [sheetDocs, setSheetDocs] = useState<Record<string, SheetDocState>>({})
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const replaceInputRef = useRef<HTMLInputElement | null>(null)
@@ -58,6 +61,9 @@ export function GmPanelBoard() {
   const visibleSheets = orderedSheets.slice(currentPage * SHEETS_PER_PAGE, (currentPage + 1) * SHEETS_PER_PAGE)
   const visibleSheetSignature = visibleSheets.map((entry) => `${entry.id}:${entry.html_updated_at}`).join('|')
   const slotEntries = Array.from({ length: SHEETS_PER_PAGE }, (_, index) => visibleSheets[index] ?? null)
+  const deleteTargetEntry = deleteTargetId
+    ? panel.sheets.find((sheet) => sheet.id === deleteTargetId) ?? null
+    : null
 
   useEffect(() => {
     if (panel.cards_per_page !== SHEETS_PER_PAGE) {
@@ -196,6 +202,26 @@ export function GmPanelBoard() {
     await handleImport(file, targetSheetId)
   }
 
+  function openDeleteConfirm(sheetId: string) {
+    setDeleteTargetId(sheetId)
+    setDeleteConfirmStep(1)
+  }
+
+  function closeDeleteConfirm() {
+    setDeleteTargetId(null)
+    setDeleteConfirmStep(1)
+  }
+
+  function confirmDeleteStepOne() {
+    setDeleteConfirmStep(2)
+  }
+
+  function handleDeleteSheet() {
+    if (!deleteTargetId) return
+    deleteGmCharacter(deleteTargetId)
+    closeDeleteConfirm()
+  }
+
   function submitCountdown() {
     const max = Math.max(2, Math.min(12, Number.parseInt(draftCountdownMax, 10) || 6))
     createGmCountdown(draftCountdownName.trim() || `进度钟 ${panel.countdowns.length + 1}`, max)
@@ -283,6 +309,7 @@ export function GmPanelBoard() {
                   setReplaceTargetId(entry.id)
                   replaceInputRef.current?.click()
                 }}
+                onDelete={() => openDeleteConfirm(entry.id)}
                 onIframeReady={(iframe) => {
                   iframeRefs.current[entry.id] = iframe
                   iframe.contentWindow?.postMessage({
@@ -309,6 +336,48 @@ export function GmPanelBoard() {
 
       <input ref={importInputRef} type="file" accept=".html,text/html" style={{ display: 'none' }} onChange={handleImportChange} />
       <input ref={replaceInputRef} type="file" accept=".html,text/html" style={{ display: 'none' }} onChange={handleReplaceChange} />
+
+      <Modal open={Boolean(deleteTargetEntry)} onClose={closeDeleteConfirm} title={'\u5220\u9664\u89d2\u8272\u5361'} maxWidth={460}>
+        {deleteTargetEntry && (
+          <div style={{ display: 'grid', gap: 14 }}>
+            <div style={{ fontSize: 13, lineHeight: 1.7, color: '#4b5563' }}>
+              {deleteConfirmStep === 1
+                ? `\u8fd9\u5c06\u6c38\u4e45\u5220\u9664\u300c${deleteTargetEntry.parsed_sheet.character_name || deleteTargetEntry.source_file_name}\u300d\u3002\u5220\u9664\u540e\u65e0\u6cd5\u6062\u590d\u3002`
+                : `\u8bf7\u518d\u6b21\u786e\u8ba4\uff1a\u89d2\u8272\u5361\u300c${deleteTargetEntry.parsed_sheet.character_name || deleteTargetEntry.source_file_name}\u300d\u4f1a\u7acb\u523b\u4ece\u5f53\u524d\u623f\u95f4\u72b6\u6001\u4e2d\u79fb\u9664\u3002`}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button className="btn btn-secondary" onClick={closeDeleteConfirm}>
+                {'\u53d6\u6d88'}
+              </button>
+              {deleteConfirmStep === 1 ? (
+                <button
+                  className="btn"
+                  onClick={confirmDeleteStepOne}
+                  style={{
+                    background: 'linear-gradient(180deg, #f97316, #ea580c)',
+                    borderColor: '#ea580c',
+                    color: 'white',
+                  }}
+                >
+                  {'\u6211\u77e5\u9053\u4e86\uff0c\u7ee7\u7eed'}
+                </button>
+              ) : (
+                <button
+                  className="btn"
+                  onClick={handleDeleteSheet}
+                  style={{
+                    background: 'linear-gradient(180deg, #b91c1c, #991b1b)',
+                    borderColor: '#991b1b',
+                    color: 'white',
+                  }}
+                >
+                  <Trash2 size={14} /> {'\u786e\u8ba4\u6c38\u4e45\u5220\u9664'}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }
@@ -322,9 +391,10 @@ function HtmlSheetCard(props: {
   onMoveLeft: () => void
   onMoveRight: () => void
   onReplace: () => void
+  onDelete: () => void
   onIframeReady: (iframe: HTMLIFrameElement) => void
 }) {
-  const { entry, sheetState, canManage, isFirst, isLast, onMoveLeft, onMoveRight, onReplace, onIframeReady } = props
+  const { entry, sheetState, canManage, isFirst, isLast, onMoveLeft, onMoveRight, onReplace, onDelete, onIframeReady } = props
 
   return (
     <article
@@ -379,9 +449,23 @@ function HtmlSheetCard(props: {
 
         {canManage && (
           <div style={{ display: 'grid', gap: 6 }}>
-            <button className="btn btn-secondary btn-sm" onClick={onReplace}>
-              <RefreshCw size={13} /> 替换
-            </button>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button className="btn btn-secondary btn-sm" onClick={onReplace}>
+                <RefreshCw size={13} /> 替换
+              </button>
+              <button
+                className="btn btn-sm"
+                onClick={onDelete}
+                style={{
+                  background: 'linear-gradient(180deg, #fee2e2, #fecaca)',
+                  borderColor: '#fca5a5',
+                  color: '#b91c1c',
+                }}
+                title={'\u6c38\u4e45\u5220\u9664\u8fd9\u5f20\u89d2\u8272\u5361'}
+              >
+                <Trash2 size={13} /> 删除
+              </button>
+            </div>
             <div style={{ display: 'flex', gap: 6 }}>
               <button className="btn btn-secondary btn-sm" disabled={isFirst} onClick={onMoveLeft}>
                 <ChevronLeft size={13} />

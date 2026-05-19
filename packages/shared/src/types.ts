@@ -250,6 +250,7 @@ export interface GmPanelActivityLogItem {
   kind:
     | 'sheet-import'
     | 'sheet-replace'
+    | 'sheet-delete'
     | 'sheet-change'
     | 'resource-change'
     | 'fear-change'
