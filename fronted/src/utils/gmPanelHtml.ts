@@ -256,6 +256,17 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
         }
 
         function getExpectedTrackLength(key) {
+          if (key === 'armor_slots') {
+            if (window.characterData && typeof window.characterData === 'object') {
+              var armorMax = Number(window.characterData.armorMax);
+              if (Number.isFinite(armorMax) && armorMax > 0) {
+                return Math.max(0, Math.min(12, Math.round(armorMax)));
+              }
+            }
+
+            return Array.isArray(resourceState.armor_slots) ? resourceState.armor_slots.length : 0;
+          }
+
           if (key !== 'hope' && Array.isArray(resourceState[key]) && resourceState[key].length > 0) {
             return resourceState[key].length;
           }
@@ -270,10 +281,6 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
 
           if (!window.characterData || typeof window.characterData !== 'object') {
             return 0;
-          }
-
-          if (key === 'armor_slots') {
-            return Array.isArray(window.characterData.armorBoxes) ? window.characterData.armorBoxes.length : 0;
           }
 
           return Array.isArray(window.characterData[key]) ? window.characterData[key].length : 0;
@@ -369,6 +376,24 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
           }
         }
 
+        function collectArmorSlotElements() {
+          var labels = findTextMatches(function (text) {
+            return text === '\\u62a4\\u7532\\u69fd';
+          });
+
+          for (var index = 0; index < labels.length; index += 1) {
+            var elements = getNextSiblingCheckboxGroup(labels[index]);
+            if (elements.length === 0) {
+              continue;
+            }
+
+            addResourceElements('armor_slots', elements);
+            return true;
+          }
+
+          return false;
+        }
+
         function classifyElement(element) {
           if (element.hasAttribute('data-hope-index')) {
             return 'hope';
@@ -430,6 +455,10 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
           });
 
           Object.keys(buckets).forEach(function (key) {
+            if (key === 'armor_slots' && resourceMap.armor_slots.length > 0) {
+              return;
+            }
+
             var elements = trimResourceElements(key, buckets[key]);
             if (elements.length === 0) {
               return;
@@ -460,9 +489,11 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
           collectMatchedResourceElements('stress', function (text) {
             return text === '\\u538b\\u529b\\u70b9';
           }, 'group');
-          collectMatchedResourceElements('armor_slots', function (text) {
-            return text === '\\u62a4\\u7532' || text === '\\u62a4\\u7532\\u69fd' || text.indexOf('\\u62a4\\u7532\\u69fd') === 0;
-          }, 'group');
+          if (!collectArmorSlotElements()) {
+            collectMatchedResourceElements('armor_slots', function (text) {
+              return text === '\\u62a4\\u7532' || text === '\\u62a4\\u7532\\u69fd' || text.indexOf('\\u62a4\\u7532\\u69fd') === 0;
+            }, 'group');
+          }
           collectGoldElements();
           collectClassifiedResourceElements();
         }
@@ -613,12 +644,13 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
           };
         }
 
-        function postResourceChange(resourceKey, value) {
+        function postResourceChange(resourceKey, value, index) {
           parent.postMessage({
             type: 'dhol-gm-resource-change',
             sheetId: SHEET_ID,
             resourceKey: resourceKey,
             value: value,
+            index: typeof index === 'number' ? index : null,
           }, '*');
         }
 
@@ -628,7 +660,7 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
           currentTrack[index] = !currentTrack[index];
           nextResources[resourceKey] = currentTrack;
           applyResources(nextResources);
-          postResourceChange(resourceKey, currentTrack);
+          postResourceChange(resourceKey, currentTrack, index);
         }
 
         function updateHopeResource(index) {

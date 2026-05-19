@@ -3,7 +3,10 @@
     "allow": [
       "Bash(npx tsc *)",
       "Bash(npx vite *)",
-      "Bash(grep -oP '.{0,40}\\(生命|压力|护甲|金币\\).{0,40}' \"D:/Dql/Desktop/dhol/新角色-吟游诗人-械灵-械灵-高城之民-LV1.html\")"
+      "Bash(grep -oP '.{0,40}\\(生命|压力|护甲|金币\\).{0,40}' \"D:/Dql/Desktop/dhol/新角色-吟游诗人-械灵-械灵-高城之民-LV1.html\")",
+      "Bash(grep -oP '生命点.{0,300}')",
+      "Bash(grep -o '.{0,50}生命点[^<]*')",
+      "Bash(grep -oE '.{0,100}toggleCustomCheckbox.{0,100}' \"克利夫-守护者-龙人-龙人-山岭之民-LV3.html\")"
     ]
   }
 }

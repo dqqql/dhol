@@ -1227,6 +1227,10 @@ export class RoomDurableObject {
     const entry = this.requireGmSheet(sheetId)
     const currentValue = cloneTrackerResourceValue(getTrackerResourceValue(entry.parsed_sheet, resourceKey))
     const normalizedValue = normalizeTrackerResourceValue(entry.parsed_sheet, resourceKey, nextValue)
+    const displayCurrentValue =
+      resourceKey === 'armor_slots' && Array.isArray(currentValue) && Array.isArray(normalizedValue)
+        ? normalizeBooleanTrack(currentValue, normalizedValue.length)
+        : currentValue
 
     if (isTrackerResourceValueEqual(currentValue, normalizedValue)) {
       return
@@ -1236,7 +1240,7 @@ export class RoomDurableObject {
     entry.updated_at = new Date().toISOString()
     this.appendGmLog(
       'resource-change',
-      `${player.nickname} 将 ${entry.parsed_sheet.character_name} 的 ${getTrackerResourceLabel(resourceKey)}从 ${formatTrackerResourceValue(currentValue)} 调整为 ${formatTrackerResourceValue(normalizedValue)}`,
+      `${player.nickname} 将 ${entry.parsed_sheet.character_name} 的 ${getTrackerResourceLabel(resourceKey)}从 ${formatTrackerResourceValue(displayCurrentValue)} 调整为 ${formatTrackerResourceValue(normalizedValue)}`,
       player,
     )
   }
@@ -2128,6 +2132,16 @@ function createGmSheetEntry(
     : undefined
   const parsedSource = typeof source === 'string' ? extractCharacterDataFromHtml(safeHtml ?? '') : source
   const safeRaw = normalizeImportedCharacterData(parsedSource)
+  const parsedSheet = normalizeResourceTrackerSheet(
+    buildSheetFromImportedCharacterData(safeRaw, fileName),
+    fileName,
+  )
+  const htmlArmorSlots = safeHtml ? extractArmorSlotsFromHtml(safeHtml) : []
+  if (htmlArmorSlots.length > 0) {
+    parsedSheet.resources.armor_max = htmlArmorSlots.length
+    parsedSheet.resources.armor_slots = htmlArmorSlots
+  }
+
   return {
     id: existingId,
     imported_at: importedAt,
@@ -2137,10 +2151,7 @@ function createGmSheetEntry(
     source_format: 'mydhcharsheet-html',
     source_html: safeHtml,
     raw_character_data: safeRaw,
-    parsed_sheet: normalizeResourceTrackerSheet(
-      buildSheetFromImportedCharacterData(safeRaw, fileName),
-      fileName,
-    ),
+    parsed_sheet: parsedSheet,
   }
 }
 
@@ -2258,6 +2269,38 @@ function extractCharacterDataFromHtml(html: string): ImportedCharacterData {
       throw new Error(error instanceof Error ? `Character data parse failed: ${error.message}` : 'Character data parse failed.')
     }
   }
+}
+
+function extractArmorSlotsFromHtml(html: string): boolean[] {
+  const label = '护甲槽'
+  const labelIndexes: number[] = []
+  let searchIndex = -1
+
+  while ((searchIndex = html.indexOf(label, searchIndex + 1)) >= 0) {
+    labelIndexes.push(searchIndex)
+  }
+
+  const labelIndex = labelIndexes.find((index) => html.slice(index, index + 600).includes('grid grid-cols-3'))
+  if (labelIndex === undefined) {
+    return []
+  }
+
+  const gridStart = html.indexOf('grid grid-cols-3', labelIndex)
+  if (gridStart < 0) {
+    return []
+  }
+
+  const gridEndMarker = html.indexOf('mt-2.5', gridStart)
+  const gridHtml = html.slice(gridStart, gridEndMarker > gridStart ? gridEndMarker : gridStart + 4_000)
+  const slots: boolean[] = []
+  const slotPattern = /class="([^"]*\bw-4 h-4 border border-gray-800 cursor-pointer\b[^"]*)"/g
+  let match: RegExpExecArray | null
+
+  while ((match = slotPattern.exec(gridHtml)) !== null && slots.length < 12) {
+    slots.push(match[1].includes('bg-gray-800'))
+  }
+
+  return slots
 }
 
 function findObjectLiteralEnd(source: string, objectStart: number): number {
@@ -2506,7 +2549,8 @@ function setTrackerResourceValue(sheet: ResourceTrackerSheet, resourceKey: Resou
       sheet.resources.stress = [...(nextValue as boolean[])]
       return
     case 'armor_slots':
-      sheet.resources.armor_slots = [...(nextValue as boolean[])]
+      sheet.resources.armor_max = clamp((nextValue as boolean[]).length, 0, 12)
+      sheet.resources.armor_slots = normalizeBooleanTrack(nextValue, sheet.resources.armor_max)
       return
     case 'gold':
       sheet.resources.gold = [...(nextValue as boolean[])]
@@ -2529,7 +2573,10 @@ function normalizeTrackerResourceValue(
     case 'stress':
       return normalizeBooleanTrack(nextValue, sheet.resources.stress_max)
     case 'armor_slots':
-      return normalizeBooleanTrack(nextValue, sheet.resources.armor_max)
+      return normalizeBooleanTrack(
+        nextValue,
+        Array.isArray(nextValue) ? clamp(nextValue.length, 0, 12) : sheet.resources.armor_max,
+      )
     case 'gold':
       return normalizeBooleanTrack(nextValue, sheet.resources.gold.length)
   }
