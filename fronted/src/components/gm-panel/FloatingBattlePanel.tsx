@@ -75,14 +75,6 @@ function getStorageKey(roomId: string) {
   return `gm-panel:battle-panel:${roomId}`
 }
 
-function getDataStorageKey(roomId: string) {
-  return `gm-panel:battle-panel-data:${roomId}`
-}
-
-function getImportedFlagKey(roomId: string) {
-  return `gm-panel:battle-panel-imported:${roomId}`
-}
-
 function asText(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value.trim() : fallback
 }
@@ -94,6 +86,52 @@ function asNumber(value: unknown, fallback = 0): number {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
+}
+
+function renderInlineMarkdown(text: string) {
+  const nodes: React.ReactNode[] = []
+  const pattern = /(\*\*[^*]+\*\*|\*[^*]+\*)/g
+  let lastIndex = 0
+
+  for (const match of text.matchAll(pattern)) {
+    const matched = match[0]
+    const index = match.index ?? 0
+
+    if (index > lastIndex) {
+      nodes.push(text.slice(lastIndex, index))
+    }
+
+    if (matched.startsWith('**') && matched.endsWith('**')) {
+      nodes.push(
+        <strong key={`bold-${index}`} style={{ fontWeight: 800, color: '#1f2937' }}>
+          {matched.slice(2, -2)}
+        </strong>,
+      )
+    } else if (matched.startsWith('*') && matched.endsWith('*')) {
+      nodes.push(
+        <em key={`italic-${index}`} style={{ fontStyle: 'italic' }}>
+          {matched.slice(1, -1)}
+        </em>,
+      )
+    }
+
+    lastIndex = index + matched.length
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex))
+  }
+
+  return nodes
+}
+
+function renderSimpleMarkdown(text: string) {
+  return text.split(/\r?\n/).map((line, index, lines) => (
+    <React.Fragment key={`line-${index}`}>
+      {renderInlineMarkdown(line)}
+      {index < lines.length - 1 && <br />}
+    </React.Fragment>
+  ))
 }
 
 function normalizeExport(entries: RawBattlePanelEntry[]): BattleMonster[] {
@@ -163,22 +201,8 @@ export function FloatingBattlePanel({ roomId }: { roomId: string }) {
   const monsters = useMemo(() => normalizeExport(monsterEntries), [monsterEntries])
 
   useEffect(() => {
-    let nextEntries = defaultMonsterEntries
-    try {
-      const hasImportedLocalData = localStorage.getItem(getImportedFlagKey(roomId)) === 'true'
-      const storedEntries = localStorage.getItem(getDataStorageKey(roomId))
-      if (hasImportedLocalData && storedEntries) {
-        const parsed = JSON.parse(storedEntries) as RawBattlePanelEntry[]
-        if (Array.isArray(parsed)) {
-          nextEntries = parsed
-        }
-      }
-    } catch {
-      nextEntries = defaultMonsterEntries
-    }
-
-    const nextMonsters = normalizeExport(nextEntries)
-    setMonsterEntries(nextEntries)
+    const nextMonsters = normalizeExport(defaultMonsterEntries)
+    setMonsterEntries(defaultMonsterEntries)
 
     try {
       const storedState = localStorage.getItem(getStorageKey(roomId))
@@ -187,10 +211,6 @@ export function FloatingBattlePanel({ roomId }: { roomId: string }) {
       setStateByMonsterId(buildBattleState(nextMonsters))
     }
   }, [roomId])
-
-  useEffect(() => {
-    localStorage.setItem(getDataStorageKey(roomId), JSON.stringify(monsterEntries))
-  }, [monsterEntries, roomId])
 
   useEffect(() => {
     if (!Object.keys(stateByMonsterId).length) return
@@ -219,7 +239,6 @@ export function FloatingBattlePanel({ roomId }: { roomId: string }) {
       const nextMonsters = normalizeExport(parsed)
       if (!nextMonsters.length) throw new Error('没有读取到怪物数据')
 
-      localStorage.setItem(getImportedFlagKey(roomId), 'true')
       setMonsterEntries(parsed)
       setStateByMonsterId((current) => buildBattleState(nextMonsters, current))
       setStatusMessage(`已在本地导入 ${nextMonsters.length} 张怪物卡`)
@@ -374,12 +393,12 @@ function BattleMonsterCard(props: {
         </div>
 
         {monster.intro && (
-          <div style={{ marginTop: 8, fontSize: 12, lineHeight: 1.6, color: '#475569' }}>{monster.intro}</div>
+          <div style={{ marginTop: 8, fontSize: 12, lineHeight: 1.6, color: '#475569' }}>{renderSimpleMarkdown(monster.intro)}</div>
         )}
 
         {monster.tactics && (
           <div style={{ marginTop: 8, fontSize: 12, lineHeight: 1.6, color: '#334155' }}>
-            <strong style={{ color: '#1f2937' }}>{'\u52a8\u673a\u4e0e\u6218\u672f\uff1a'}</strong> {monster.tactics}
+            <strong style={{ color: '#1f2937' }}>{'\u52a8\u673a\u4e0e\u6218\u672f\uff1a'}</strong> {renderSimpleMarkdown(monster.tactics)}
           </div>
         )}
       </div>
@@ -395,7 +414,7 @@ function BattleMonsterCard(props: {
 
         {monster.experience && (
           <div style={{ marginTop: 10, fontSize: 12, lineHeight: 1.6, color: '#334155' }}>
-            <strong style={{ color: '#1f2937' }}>{'\u7ecf\u5386\uff1a'}</strong> {monster.experience}
+            <strong style={{ color: '#1f2937' }}>{'\u7ecf\u5386\uff1a'}</strong> {renderSimpleMarkdown(monster.experience)}
           </div>
         )}
       </div>
@@ -434,7 +453,7 @@ function BattleMonsterCard(props: {
             </div>
             {trait.description && (
               <div style={{ padding: '9px 10px', fontSize: 12, lineHeight: 1.7, color: '#475569', whiteSpace: 'pre-wrap' }}>
-                {trait.description}
+                {renderSimpleMarkdown(trait.description)}
               </div>
             )}
           </div>
