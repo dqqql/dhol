@@ -115,6 +115,8 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
           gold: Array.isArray(INITIAL_RESOURCES.gold) ? INITIAL_RESOURCES.gold.slice() : [],
         };
         var initialized = false;
+        var refreshBindingsTimer = null;
+        var mutationObserver = null;
 
         function normalizeText(value) {
           return (value || '').replace(/\\s+/g, '').trim();
@@ -130,6 +132,51 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
           }
 
           return parts.join(' ');
+        }
+
+        function getWindowCharacterData() {
+          if (!window.characterData || typeof window.characterData !== 'object') {
+            window.characterData = {};
+          }
+
+          return window.characterData;
+        }
+
+        function getWindowTrackValue(resourceKey) {
+          var data = getWindowCharacterData();
+
+          if (resourceKey === 'armor_slots') {
+            if (Array.isArray(data.armorBoxes)) {
+              return data.armorBoxes;
+            }
+            if (Array.isArray(data.armor_slots)) {
+              return data.armor_slots;
+            }
+            return [];
+          }
+
+          if (resourceKey === 'hope') {
+            return typeof data.hope === 'number' ? data.hope : 0;
+          }
+
+          return Array.isArray(data[resourceKey]) ? data[resourceKey] : [];
+        }
+
+        function setWindowTrackValue(resourceKey, nextValue) {
+          var data = getWindowCharacterData();
+
+          if (resourceKey === 'armor_slots') {
+            data.armorBoxes = Array.isArray(nextValue) ? nextValue.slice() : [];
+            data.armor_slots = Array.isArray(nextValue) ? nextValue.slice() : [];
+            return;
+          }
+
+          if (resourceKey === 'hope') {
+            data.hope = typeof nextValue === 'number' ? nextValue : 0;
+            return;
+          }
+
+          data[resourceKey] = Array.isArray(nextValue) ? nextValue.slice() : [];
         }
 
         function isFilled(element) {
@@ -257,6 +304,11 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
 
         function getExpectedTrackLength(key) {
           if (key === 'armor_slots') {
+            var armorTrack = getWindowTrackValue('armor_slots');
+            if (Array.isArray(armorTrack) && armorTrack.length > 0) {
+              return armorTrack.length;
+            }
+
             if (window.characterData && typeof window.characterData === 'object') {
               var armorMax = Number(window.characterData.armorMax);
               if (Number.isFinite(armorMax) && armorMax > 0) {
@@ -279,11 +331,8 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
             return 21;
           }
 
-          if (!window.characterData || typeof window.characterData !== 'object') {
-            return 0;
-          }
-
-          return Array.isArray(window.characterData[key]) ? window.characterData[key].length : 0;
+          var windowTrack = getWindowTrackValue(key);
+          return Array.isArray(windowTrack) ? windowTrack.length : 0;
         }
 
         function trimResourceElements(key, elements) {
@@ -394,6 +443,46 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
           return false;
         }
 
+        function supplementResourceElements(key, elements) {
+          var expectedLength = getExpectedTrackLength(key);
+          var remaining = expectedLength - resourceMap[key].length;
+          if (remaining <= 0) {
+            return;
+          }
+
+          addResourceElements(key, elements.slice(0, remaining));
+        }
+
+        function collectFallbackResourceElements() {
+          var unassigned = getCheckboxElements(document.body).filter(function (element) {
+            return !element.getAttribute('data-gm-resource');
+          });
+
+          supplementResourceElements('proficiency', unassigned.filter(function (element) {
+            return (element.className || '').indexOf('w-3 h-3') >= 0;
+          }));
+
+          supplementResourceElements('gold', unassigned.filter(function (element) {
+            return (element.className || '').indexOf('w-8 h-8') >= 0;
+          }));
+
+          var medium = unassigned.filter(function (element) {
+            return (element.className || '').indexOf('w-4 h-4') >= 0;
+          });
+          var offset = 0;
+
+          ['hp', 'stress', 'armor_slots'].forEach(function (key) {
+            var expectedLength = getExpectedTrackLength(key);
+            var remaining = expectedLength - resourceMap[key].length;
+            if (remaining <= 0) {
+              return;
+            }
+
+            addResourceElements(key, medium.slice(offset, offset + remaining));
+            offset += remaining;
+          });
+        }
+
         function classifyElement(element) {
           if (element.hasAttribute('data-hope-index')) {
             return 'hope';
@@ -466,6 +555,8 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
 
             addResourceElements(key, elements);
           });
+
+          collectFallbackResourceElements();
         }
 
         function collectResourceElements() {
@@ -523,12 +614,114 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
           return normalized;
         }
 
-        function flashCheckboxPress(element) {
-          element.style.transition = 'all 0.1s ease';
-          element.style.transform = 'scale(0.95)';
-          setTimeout(function () {
-            element.style.transform = 'scale(1)';
-          }, 100);
+        function isResourceValueEqual(left, right) {
+          if (Array.isArray(left) && Array.isArray(right)) {
+            if (left.length !== right.length) {
+              return false;
+            }
+
+            for (var index = 0; index < left.length; index += 1) {
+              if (Boolean(left[index]) !== Boolean(right[index])) {
+                return false;
+              }
+            }
+
+            return true;
+          }
+
+          return left === right;
+        }
+
+        function findChangedResourceKeys(previousResources, nextResources) {
+          return ['hope', 'proficiency', 'hp', 'stress', 'armor_slots', 'gold'].filter(function (key) {
+            return !isResourceValueEqual(previousResources[key], nextResources[key]);
+          });
+        }
+
+        function getResourceElementPosition(element) {
+          var resourceKeys = ['hope', 'proficiency', 'hp', 'stress', 'armor_slots', 'gold'];
+
+          for (var resourceKeyIndex = 0; resourceKeyIndex < resourceKeys.length; resourceKeyIndex += 1) {
+            var resourceKey = resourceKeys[resourceKeyIndex];
+            var index = resourceMap[resourceKey].indexOf(element);
+            if (index >= 0) {
+              return {
+                resourceKey: resourceKey,
+                index: index,
+              };
+            }
+          }
+
+          return null;
+        }
+
+        function applyFallbackToggle(position, previousResources) {
+          if (!position) {
+            return null;
+          }
+
+          var nextResources = cloneResourceState(previousResources);
+          if (position.resourceKey === 'hope') {
+            nextResources.hope = previousResources.hope === position.index + 1 ? 0 : position.index + 1;
+          } else {
+            var currentTrack = Array.isArray(nextResources[position.resourceKey]) ? nextResources[position.resourceKey].slice() : [];
+            currentTrack[position.index] = !currentTrack[position.index];
+            nextResources[position.resourceKey] = currentTrack;
+          }
+
+          return nextResources;
+        }
+
+        function ensureInteractiveElements() {
+          Array.prototype.slice.call(document.querySelectorAll('[data-hope-index]')).forEach(function (element) {
+            element.setAttribute('data-gm-allow-click', 'true');
+          });
+
+          getCheckboxElements(document.body).forEach(function (element) {
+            element.setAttribute('data-gm-allow-click', 'true');
+          });
+        }
+
+        function rebindResourceElements() {
+          collectResourceElements();
+          ensureInteractiveElements();
+          wireResourceClicks();
+        }
+
+        function refreshResourceBindings() {
+          rebindResourceElements();
+          applyResources(resourceState);
+        }
+
+        function scheduleRefreshBindings() {
+          if (refreshBindingsTimer) {
+            return;
+          }
+
+          refreshBindingsTimer = window.setTimeout(function () {
+            refreshBindingsTimer = null;
+            refreshResourceBindings();
+          }, 0);
+        }
+
+        function startMutationObserver() {
+          if (mutationObserver || !window.MutationObserver || !document.body) {
+            return;
+          }
+
+          mutationObserver = new MutationObserver(function (mutations) {
+            for (var index = 0; index < mutations.length; index += 1) {
+              if (mutations[index].type === 'childList') {
+                scheduleRefreshBindings();
+                return;
+              }
+            }
+          });
+
+          mutationObserver.observe(document.body, {
+            childList: true,
+            subtree: true,
+          });
         }
 
         function setBooleanFilled(element, shouldFill) {
@@ -576,10 +769,7 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
 
         function applyHope(value) {
           var nextValue = typeof value === 'number' ? value : 0;
-          if (!window.characterData || typeof window.characterData !== 'object') {
-            window.characterData = {};
-          }
-          window.characterData.hope = nextValue;
+          setWindowTrackValue('hope', nextValue);
 
           resourceMap.hope.forEach(function (element, index) {
             var shouldFill = index < nextValue;
@@ -623,14 +813,22 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
 
         function readResourceValue(resourceKey) {
           if (resourceKey === 'hope') {
-            return typeof window.characterData?.hope === 'number'
-              ? window.characterData.hope
-              : resourceMap.hope.filter(function (element) { return normalizeHopeFill(element); }).length;
+            if (resourceMap.hope.length > 0) {
+              return resourceMap.hope.filter(function (element) { return normalizeHopeFill(element); }).length;
+            }
+
+            return getWindowTrackValue('hope');
           }
 
-          return resourceMap[resourceKey].map(function (element) {
-            return isFilled(element);
-          });
+          var expectedLength = getExpectedTrackLength(resourceKey);
+          if (resourceMap[resourceKey].length > 0) {
+            return normalizeBooleanTrack(resourceMap[resourceKey].map(function (element) {
+              return isFilled(element);
+            }), expectedLength || resourceMap[resourceKey].length);
+          }
+
+          var windowTrack = getWindowTrackValue(resourceKey);
+          return normalizeBooleanTrack(windowTrack, expectedLength || windowTrack.length);
         }
 
         function readAllResources() {
@@ -654,46 +852,41 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
           }, '*');
         }
 
-        function updateBooleanResource(resourceKey, index) {
-          var nextResources = cloneResourceState(resourceState);
-          var currentTrack = Array.isArray(nextResources[resourceKey]) ? nextResources[resourceKey].slice() : [];
-          currentTrack[index] = !currentTrack[index];
-          nextResources[resourceKey] = currentTrack;
-          applyResources(nextResources);
-          postResourceChange(resourceKey, currentTrack, index);
-        }
-
-        function updateHopeResource(index) {
-          var nextResources = cloneResourceState(resourceState);
-          nextResources.hope = nextResources.hope === index + 1 ? 0 : index + 1;
-          applyResources(nextResources);
-          postResourceChange('hope', nextResources.hope);
-        }
-
         function wireResourceClicks() {
-          Object.keys(resourceMap).forEach(function (resourceKey) {
-            resourceMap[resourceKey].forEach(function (element, index) {
-              if (element.getAttribute('data-gm-wired') === 'true') {
-                return;
-              }
+          var interactiveElements = Array.prototype.slice.call(document.querySelectorAll('[data-hope-index]'))
+            .concat(getCheckboxElements(document.body));
 
-              element.setAttribute('data-gm-wired', 'true');
-              element.addEventListener('click', function (event) {
-                event.preventDefault();
-                event.stopPropagation();
-                if (typeof event.stopImmediatePropagation === 'function') {
-                  event.stopImmediatePropagation();
+          interactiveElements.forEach(function (element) {
+            if (element.getAttribute('data-gm-wired') === 'true') {
+              return;
+            }
+
+            element.setAttribute('data-gm-wired', 'true');
+            element.addEventListener('click', function () {
+              var previousResources = cloneResourceState(readAllResources());
+              var position = getResourceElementPosition(element);
+
+              window.setTimeout(function () {
+                rebindResourceElements();
+                var nextResources = readAllResources();
+                var changedKeys = findChangedResourceKeys(previousResources, nextResources);
+
+                if (changedKeys.length === 0) {
+                  var fallbackResources = applyFallbackToggle(position, previousResources);
+                  if (fallbackResources) {
+                    applyResources(fallbackResources);
+                    nextResources = cloneResourceState(fallbackResources);
+                    changedKeys = findChangedResourceKeys(previousResources, nextResources);
+                  }
                 }
-                flashCheckboxPress(element);
 
-                if (resourceKey === 'hope') {
-                  updateHopeResource(index);
-                  return;
-                }
+                resourceState = cloneResourceState(nextResources);
 
-                updateBooleanResource(resourceKey, index);
-              }, true);
-            });
+                changedKeys.forEach(function (resourceKey) {
+                  postResourceChange(resourceKey, nextResources[resourceKey]);
+                });
+              }, 0);
+            }, true);
           });
         }
 
@@ -702,29 +895,32 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
             return;
           }
 
-          if (!window.characterData || typeof window.characterData !== 'object') {
-            window.characterData = {};
-          }
-
           applyHope(resources.hope);
           syncBooleanElements(resourceMap.proficiency, resources.proficiency);
           syncBooleanElements(resourceMap.hp, resources.hp);
           syncBooleanElements(resourceMap.stress, resources.stress);
           syncBooleanElements(resourceMap.armor_slots, resources.armor_slots);
           syncBooleanElements(resourceMap.gold, resources.gold);
+
+          var proficiencyLength = getExpectedTrackLength('proficiency') || resourceMap.proficiency.length || (Array.isArray(resources.proficiency) ? resources.proficiency.length : 0);
+          var hpLength = getExpectedTrackLength('hp') || resourceMap.hp.length || (Array.isArray(resources.hp) ? resources.hp.length : 0);
+          var stressLength = getExpectedTrackLength('stress') || resourceMap.stress.length || (Array.isArray(resources.stress) ? resources.stress.length : 0);
+          var armorLength = getExpectedTrackLength('armor_slots') || resourceMap.armor_slots.length || (Array.isArray(resources.armor_slots) ? resources.armor_slots.length : 0);
+          var goldLength = getExpectedTrackLength('gold') || resourceMap.gold.length || (Array.isArray(resources.gold) ? resources.gold.length : 0);
+
           resourceState = {
             hope: typeof resources.hope === 'number' ? resources.hope : 0,
-            proficiency: normalizeBooleanTrack(resources.proficiency, resourceMap.proficiency.length),
-            hp: normalizeBooleanTrack(resources.hp, resourceMap.hp.length),
-            stress: normalizeBooleanTrack(resources.stress, resourceMap.stress.length),
-            armor_slots: normalizeBooleanTrack(resources.armor_slots, resourceMap.armor_slots.length),
-            gold: normalizeBooleanTrack(resources.gold, resourceMap.gold.length),
+            proficiency: normalizeBooleanTrack(resources.proficiency, proficiencyLength),
+            hp: normalizeBooleanTrack(resources.hp, hpLength),
+            stress: normalizeBooleanTrack(resources.stress, stressLength),
+            armor_slots: normalizeBooleanTrack(resources.armor_slots, armorLength),
+            gold: normalizeBooleanTrack(resources.gold, goldLength),
           };
-          window.characterData.proficiency = resourceState.proficiency.slice();
-          window.characterData.hp = resourceState.hp.slice();
-          window.characterData.stress = resourceState.stress.slice();
-          window.characterData.armorBoxes = resourceState.armor_slots.slice();
-          window.characterData.gold = resourceState.gold.slice();
+          setWindowTrackValue('proficiency', resourceState.proficiency);
+          setWindowTrackValue('hp', resourceState.hp);
+          setWindowTrackValue('stress', resourceState.stress);
+          setWindowTrackValue('armor_slots', resourceState.armor_slots);
+          setWindowTrackValue('gold', resourceState.gold);
         }
 
         function init() {
@@ -733,9 +929,10 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
           }
 
           initialized = true;
-          collectResourceElements();
-          wireResourceClicks();
+          refreshResourceBindings();
           resourceState = cloneResourceState(readAllResources());
+          applyResources(resourceState);
+          startMutationObserver();
         }
 
         window.addEventListener('message', function (event) {

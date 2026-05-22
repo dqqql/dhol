@@ -156,17 +156,6 @@ export function GmPanelBoard() {
       if (!Array.isArray(message.value)) return
       const messageValue = message.value.map(Boolean)
 
-      if (message.resourceKey === 'armor_slots' && typeof message.index === 'number') {
-        const entry = panel.sheets.find((sheet) => sheet.id === message.sheetId)
-        const length = messageValue.length || entry?.parsed_sheet.resources.armor_slots.length || 0
-        if (entry && length > 0 && message.index >= 0 && message.index < length) {
-          const nextValue = Array.from({ length }, (_, index) => Boolean(entry.parsed_sheet.resources.armor_slots[index]))
-          nextValue[message.index] = !nextValue[message.index]
-          updateGmResource(message.sheetId, 'armor_slots', nextValue)
-          return
-        }
-      }
-
       updateGmResource(message.sheetId, message.resourceKey, messageValue)
     }
 
