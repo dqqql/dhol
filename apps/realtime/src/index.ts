@@ -1732,6 +1732,7 @@ export class RoomDurableObject {
       }
 
       if (sheet.source_html) {
+        applyHtmlResourceTracksToSheet(sheet.source_html, sheet.parsed_sheet)
         sheet.compiled_html = compileGmSheetHtml(sheet.source_html, sheet.parsed_sheet)
       }
     }))
@@ -2213,6 +2214,9 @@ function createGmSheetEntry(
     buildSheetFromImportedCharacterData(safeRaw, fileName),
     fileName,
   )
+  if (safeHtml) {
+    applyHtmlResourceTracksToSheet(safeHtml, parsedSheet)
+  }
   const htmlArmorSlots = safeHtml ? extractArmorSlotsFromHtml(safeHtml) : []
   if (htmlArmorSlots.length > 0) {
     parsedSheet.resources.armor_max = htmlArmorSlots.length
@@ -2333,6 +2337,25 @@ function sanitizeImportedHtml(html: string): string {
     .trim()
 }
 
+interface HtmlCheckboxSnapshot {
+  id: string
+  filled: boolean
+}
+
+function applyHtmlResourceTracksToSheet(html: string, sheet: ResourceTrackerSheet): void {
+  const hp = collectCheckboxSnapshotsAfterLabel(html, '生命点', 'w-4 h-4', 20, 8_000, ['压力点', '护甲槽', '金币'])
+  if (hp.length > 0) {
+    sheet.resources.hp_max = hp.length
+    sheet.resources.hp = hp.map((item) => item.filled)
+  }
+
+  const stress = collectCheckboxSnapshotsAfterLabel(html, '压力点', 'w-4 h-4', 20, 8_000, ['生命点', '护甲槽', '金币'])
+  if (stress.length > 0) {
+    sheet.resources.stress_max = stress.length
+    sheet.resources.stress = stress.map((item) => item.filled)
+  }
+}
+
 function compileGmSheetHtml(html: string, sheet: ResourceTrackerSheet): string {
   const resourceIds = collectGmResourceElementIds(html, sheet)
   let compiled = markHopeResourceElements(html, sheet.resources.hope_max)
@@ -2384,16 +2407,28 @@ function collectCheckboxIdsAfterLabel(
   scanLength: number,
   boundaryLabels: string[] = [],
 ): string[] {
+  return collectCheckboxSnapshotsAfterLabel(html, label, classToken, limit, scanLength, boundaryLabels)
+    .map((item) => item.id)
+}
+
+function collectCheckboxSnapshotsAfterLabel(
+  html: string,
+  label: string,
+  classToken: string,
+  limit: number,
+  scanLength: number,
+  boundaryLabels: string[] = [],
+): HtmlCheckboxSnapshot[] {
   if (limit <= 0) return []
 
   let labelIndex = -1
   while ((labelIndex = html.indexOf(label, labelIndex + 1)) >= 0) {
     const sectionEnd = findNearestFollowingLabelIndex(html, labelIndex + label.length, boundaryLabels)
     const scopedScanLength = Math.min(scanLength, Math.max(0, sectionEnd - labelIndex))
-    const ids = collectCheckboxIdsFromIndex(html, labelIndex, classToken, limit, scopedScanLength)
+    const snapshots = collectCheckboxSnapshotsFromIndex(html, labelIndex, classToken, limit, scopedScanLength)
 
-    if (ids.length > 0) {
-      return ids
+    if (snapshots.length > 0) {
+      return snapshots
     }
   }
 
@@ -2420,13 +2455,24 @@ function collectCheckboxIdsFromIndex(
   limit: number,
   scanLength: number,
 ): string[] {
+  return collectCheckboxSnapshotsFromIndex(html, startIndex, classToken, limit, scanLength)
+    .map((item) => item.id)
+}
+
+function collectCheckboxSnapshotsFromIndex(
+  html: string,
+  startIndex: number,
+  classToken: string,
+  limit: number,
+  scanLength: number,
+): HtmlCheckboxSnapshot[] {
   const segment = html.slice(startIndex, startIndex + scanLength)
-  const ids: string[] = []
+  const snapshots: HtmlCheckboxSnapshot[] = []
   const seen = new Set<string>()
   const elementPattern = /<(?:div|button)\b[^>]*>/gi
   let match: RegExpExecArray | null
 
-  while ((match = elementPattern.exec(segment)) && ids.length < limit) {
+  while ((match = elementPattern.exec(segment)) && snapshots.length < limit) {
     const tag = match[0]
     const idValue = getHtmlAttribute(tag, 'id')
     const className = getHtmlAttribute(tag, 'class') ?? ''
@@ -2438,10 +2484,13 @@ function collectCheckboxIdsFromIndex(
     if (!className.includes('cursor-pointer') || !className.includes('border-gray-800')) continue
 
     seen.add(idValue)
-    ids.push(idValue)
+    snapshots.push({
+      id: idValue,
+      filled: className.includes('bg-gray-800'),
+    })
   }
 
-  return ids
+  return snapshots
 }
 
 function markHopeResourceElements(html: string, hopeMax: number): string {

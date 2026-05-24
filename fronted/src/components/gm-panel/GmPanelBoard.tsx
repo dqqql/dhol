@@ -32,6 +32,14 @@ type ResourceReplayFailedMessage = {
 
 type ResourceMessage = ResourceChangeMessage | ResourceReplayFailedMessage
 
+type ImportPendingState = {
+  fileName: string
+  mode: 'import' | 'replace'
+  previousSheetCount: number
+  previousHtmlUpdatedAt?: string
+  targetSheetId?: string
+}
+
 export function GmPanelBoard() {
   const {
     room,
@@ -54,6 +62,7 @@ export function GmPanelBoard() {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
   const [deleteConfirmStep, setDeleteConfirmStep] = useState<1 | 2>(1)
   const [sheetDocs, setSheetDocs] = useState<Record<string, SheetDocState>>({})
+  const [pendingImport, setPendingImport] = useState<ImportPendingState | null>(null)
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const replaceInputRef = useRef<HTMLInputElement | null>(null)
   const iframeRefs = useRef<Record<string, HTMLIFrameElement | null>>({})
@@ -73,6 +82,7 @@ export function GmPanelBoard() {
   const deleteTargetEntry = deleteTargetId
     ? panel.sheets.find((sheet) => sheet.id === deleteTargetId) ?? null
     : null
+  const isImportPending = Boolean(pendingImport)
 
   useEffect(() => {
     if (panel.cards_per_page !== SHEETS_PER_PAGE) {
@@ -87,6 +97,32 @@ export function GmPanelBoard() {
   useEffect(() => {
     sheetDocsRef.current = sheetDocs
   }, [sheetDocs])
+
+  useEffect(() => {
+    if (!pendingImport) return
+
+    if (pendingImport.mode === 'import' && panel.sheets.length > pendingImport.previousSheetCount) {
+      setPendingImport(null)
+      return
+    }
+
+    if (pendingImport.mode === 'replace' && pendingImport.targetSheetId) {
+      const target = panel.sheets.find((sheet) => sheet.id === pendingImport.targetSheetId)
+      if (target && target.html_updated_at !== pendingImport.previousHtmlUpdatedAt) {
+        setPendingImport(null)
+      }
+    }
+  }, [panel.sheets, pendingImport])
+
+  useEffect(() => {
+    if (!pendingImport) return
+
+    const timer = window.setTimeout(() => {
+      setPendingImport(null)
+    }, 30_000)
+
+    return () => window.clearTimeout(timer)
+  }, [pendingImport])
 
   useEffect(() => {
     let disposed = false
@@ -212,6 +248,18 @@ export function GmPanelBoard() {
   }, [panel.sheets, inviteCode, updateGmResource])
 
   async function handleImport(file: File, targetSheetId?: string | null) {
+    const previousTarget = targetSheetId
+      ? panel.sheets.find((sheet) => sheet.id === targetSheetId) ?? null
+      : null
+
+    setPendingImport({
+      fileName: file.name,
+      mode: targetSheetId ? 'replace' : 'import',
+      previousSheetCount: panel.sheets.length,
+      previousHtmlUpdatedAt: previousTarget?.html_updated_at,
+      targetSheetId: targetSheetId ?? undefined,
+    })
+
     try {
       const html = await file.text()
       if (targetSheetId) {
@@ -220,6 +268,7 @@ export function GmPanelBoard() {
         importGmCharacter(file.name, html)
       }
     } catch (error) {
+      setPendingImport(null)
       addToast(error instanceof Error ? error.message : '角色卡导入失败。', 'error')
     }
   }
@@ -306,9 +355,25 @@ export function GmPanelBoard() {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <button className="btn btn-primary" onClick={() => importInputRef.current?.click()}>
+            <button className="btn btn-primary" disabled={isImportPending} onClick={() => importInputRef.current?.click()}>
               <FileUp size={14} /> 导入 HTML 角色卡
             </button>
+            {pendingImport && (
+              <div
+                role="status"
+                aria-live="polite"
+                style={{
+                  padding: '7px 10px',
+                  border: '1px solid rgba(184, 134, 11, 0.2)',
+                  background: 'rgba(255, 251, 235, 0.86)',
+                  color: '#7c4f31',
+                  fontSize: 12,
+                  fontWeight: 800,
+                }}
+              >
+                {pendingImport.mode === 'replace' ? '正在替换角色卡' : '正在导入角色卡'}：{pendingImport.fileName}
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -339,11 +404,13 @@ export function GmPanelBoard() {
                 entry={entry}
                 sheetState={sheetDocs[entry.id]}
                 canManage
+                actionsDisabled={isImportPending}
                 isFirst={index === 0 && currentPage === 0}
                 isLast={index === visibleSheets.length - 1 && currentPage === pageCount - 1}
                 onMoveLeft={() => moveGmSheet(entry.id, 'left')}
                 onMoveRight={() => moveGmSheet(entry.id, 'right')}
                 onReplace={() => {
+                  if (isImportPending) return
                   setReplaceTargetId(entry.id)
                   replaceInputRef.current?.click()
                 }}
@@ -360,7 +427,7 @@ export function GmPanelBoard() {
             ) : (
               <EmptySlotCard
                 key={`empty-${currentPage}-${index}`}
-                canImport
+                canImport={!isImportPending}
                 onImport={() => importInputRef.current?.click()}
               />
             )
@@ -372,6 +439,7 @@ export function GmPanelBoard() {
 
       <FloatingBattlePanel roomId={room.room_id} />
       <FloatingNotebook roomId={room.room_id} />
+      {pendingImport && <ImportPendingToast pendingImport={pendingImport} />}
 
       <input ref={importInputRef} type="file" accept=".html,text/html" style={{ display: 'none' }} onChange={handleImportChange} />
       <input ref={replaceInputRef} type="file" accept=".html,text/html" style={{ display: 'none' }} onChange={handleReplaceChange} />
@@ -421,10 +489,51 @@ export function GmPanelBoard() {
   )
 }
 
+function ImportPendingToast({ pendingImport }: { pendingImport: ImportPendingState }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      style={{
+        position: 'fixed',
+        right: 22,
+        bottom: 22,
+        zIndex: 50,
+        display: 'grid',
+        gap: 4,
+        minWidth: 260,
+        maxWidth: 360,
+        padding: '12px 14px',
+        border: '1px solid rgba(184, 134, 11, 0.24)',
+        background: 'linear-gradient(180deg, rgba(255,251,235,0.98), rgba(254,243,199,0.96))',
+        color: '#7c4f31',
+        boxShadow: '0 18px 44px rgba(60, 30, 0, 0.18)',
+      }}
+    >
+      <div style={{ fontSize: 13, fontWeight: 900 }}>
+        {pendingImport.mode === 'replace' ? '正在替换角色卡' : '正在导入角色卡'}
+      </div>
+      <div
+        style={{
+          fontSize: 12,
+          fontWeight: 700,
+          lineHeight: 1.5,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {pendingImport.fileName}
+      </div>
+    </div>
+  )
+}
+
 function HtmlSheetCard(props: {
   entry: GmPanelCharacterSheetEntry
   sheetState?: SheetDocState
   canManage: boolean
+  actionsDisabled?: boolean
   isFirst: boolean
   isLast: boolean
   onMoveLeft: () => void
@@ -433,7 +542,19 @@ function HtmlSheetCard(props: {
   onDelete: () => void
   onIframeReady: (iframe: HTMLIFrameElement) => void
 }) {
-  const { entry, sheetState, canManage, isFirst, isLast, onMoveLeft, onMoveRight, onReplace, onDelete, onIframeReady } = props
+  const {
+    entry,
+    sheetState,
+    canManage,
+    actionsDisabled = false,
+    isFirst,
+    isLast,
+    onMoveLeft,
+    onMoveRight,
+    onReplace,
+    onDelete,
+    onIframeReady,
+  } = props
 
   return (
     <article
@@ -489,7 +610,7 @@ function HtmlSheetCard(props: {
         {canManage && (
           <div style={{ display: 'grid', gap: 6 }}>
             <div style={{ display: 'flex', gap: 6 }}>
-              <button className="btn btn-secondary btn-sm" onClick={onReplace}>
+              <button className="btn btn-secondary btn-sm" disabled={actionsDisabled} onClick={onReplace}>
                 <RefreshCw size={13} /> 替换
               </button>
               <button
