@@ -68,6 +68,7 @@ const ROOM_TTL_MS = 3 * 24 * 60 * 60 * 1000
 const DRAW_TYPES: DeckCardType[] = ['Location', 'Feature', 'Hook']
 const STARTING_CARDS_PER_TYPE = 2
 const GM_SHEET_HTML_STORAGE_KEY_PREFIX = 'gm_sheet_html:'
+const GM_SHEET_COMPILED_HTML_STORAGE_KEY_PREFIX = 'gm_sheet_compiled_html:'
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -1199,6 +1200,7 @@ export class RoomDurableObject {
     entry.source_file_name = nextEntry.source_file_name
     entry.source_format = nextEntry.source_format
     entry.source_html = nextEntry.source_html
+    entry.compiled_html = nextEntry.compiled_html
     entry.raw_character_data = nextEntry.raw_character_data
     entry.parsed_sheet = nextEntry.parsed_sheet
     this.appendGmLog('sheet-replace', `${player.nickname} 替换了角色卡 ${entry.parsed_sheet.character_name || entry.source_file_name}`, player)
@@ -1615,11 +1617,13 @@ export class RoomDurableObject {
       return new Response('Sheet not found', { status: 404 })
     }
 
-    if (!entry.source_html) {
+    const html = entry.compiled_html || entry.source_html
+
+    if (!html) {
       return new Response('Sheet HTML unavailable', { status: 404 })
     }
 
-    return withCors(new Response(entry.source_html, {
+    return withCors(new Response(html, {
       status: 200,
       headers: {
         'content-type': 'text/html; charset=utf-8',
@@ -1663,6 +1667,8 @@ export class RoomDurableObject {
     const snapshot = structuredClone(this.room)
     const activeHtmlKeys = new Set<string>()
     const htmlEntries: Array<[string, string]> = []
+    const activeCompiledHtmlKeys = new Set<string>()
+    const compiledHtmlEntries: Array<[string, string]> = []
 
     if (snapshot.gm_panel) {
       snapshot.gm_panel.sheets = snapshot.gm_panel.sheets.map((sheet) => {
@@ -1671,8 +1677,13 @@ export class RoomDurableObject {
           activeHtmlKeys.add(storageKey)
           htmlEntries.push([storageKey, sheet.source_html])
         }
+        if (sheet.compiled_html) {
+          const storageKey = getGmSheetCompiledHtmlStorageKey(sheet.id)
+          activeCompiledHtmlKeys.add(storageKey)
+          compiledHtmlEntries.push([storageKey, sheet.compiled_html])
+        }
 
-        const { source_html: _sourceHtml, ...rest } = sheet
+        const { source_html: _sourceHtml, compiled_html: _compiledHtml, ...rest } = sheet
         return rest
       })
     }
@@ -1682,6 +1693,9 @@ export class RoomDurableObject {
     for (const [storageKey, html] of htmlEntries) {
       await this.ctx.storage.put(storageKey, html)
     }
+    for (const [storageKey, html] of compiledHtmlEntries) {
+      await this.ctx.storage.put(storageKey, html)
+    }
 
     const storedHtmlEntries = await this.ctx.storage.list<string>({ prefix: GM_SHEET_HTML_STORAGE_KEY_PREFIX })
     for (const storageKey of storedHtmlEntries.keys()) {
@@ -1689,20 +1703,35 @@ export class RoomDurableObject {
         await this.ctx.storage.delete(storageKey)
       }
     }
+    const storedCompiledHtmlEntries = await this.ctx.storage.list<string>({ prefix: GM_SHEET_COMPILED_HTML_STORAGE_KEY_PREFIX })
+    for (const storageKey of storedCompiledHtmlEntries.keys()) {
+      if (!activeCompiledHtmlKeys.has(storageKey)) {
+        await this.ctx.storage.delete(storageKey)
+      }
+    }
   }
 
   private async hydrateStoredGmSheetHtml(room: RoomState): Promise<void> {
     const sheets = room.gm_panel?.sheets ?? []
-    const pendingSheets = sheets.filter((sheet) => !sheet.source_html)
+    const pendingSheets = sheets.filter((sheet) => !sheet.source_html || !sheet.compiled_html)
 
     if (!pendingSheets.length) {
       return
     }
 
     await Promise.all(pendingSheets.map(async (sheet) => {
-      const html = await this.ctx.storage.get<string>(getGmSheetHtmlStorageKey(sheet.id))
-      if (typeof html === 'string' && html) {
+      const [html, compiledHtml] = await Promise.all([
+        this.ctx.storage.get<string>(getGmSheetHtmlStorageKey(sheet.id)),
+        this.ctx.storage.get<string>(getGmSheetCompiledHtmlStorageKey(sheet.id)),
+      ])
+      if (!sheet.source_html && typeof html === 'string' && html) {
         sheet.source_html = html
+      }
+      if (!sheet.compiled_html && typeof compiledHtml === 'string' && compiledHtml) {
+        sheet.compiled_html = compiledHtml
+      }
+      if (!sheet.compiled_html && sheet.source_html) {
+        sheet.compiled_html = compileGmSheetHtml(sheet.source_html, sheet.parsed_sheet)
       }
     }))
   }
@@ -1711,7 +1740,7 @@ export class RoomDurableObject {
     const snapshot = structuredClone(this.requireRoom())
     if (snapshot.gm_panel) {
       snapshot.gm_panel.sheets = snapshot.gm_panel.sheets.map((sheet) => {
-        const { source_html: _sourceHtml, ...rest } = sheet
+        const { source_html: _sourceHtml, compiled_html: _compiledHtml, ...rest } = sheet
         return rest
       })
     }
@@ -2188,6 +2217,7 @@ function createGmSheetEntry(
     parsedSheet.resources.armor_max = htmlArmorSlots.length
     parsedSheet.resources.armor_slots = htmlArmorSlots
   }
+  const compiledHtml = safeHtml ? compileGmSheetHtml(safeHtml, parsedSheet) : undefined
 
   return {
     id: existingId,
@@ -2197,6 +2227,7 @@ function createGmSheetEntry(
     source_file_name: cleanText(fileName, '角色卡.html', 120),
     source_format: 'mydhcharsheet-html',
     source_html: safeHtml,
+    compiled_html: compiledHtml,
     raw_character_data: safeRaw,
     parsed_sheet: parsedSheet,
   }
@@ -2291,10 +2322,138 @@ function getGmSheetHtmlStorageKey(sheetId: string): string {
   return `${GM_SHEET_HTML_STORAGE_KEY_PREFIX}${sheetId}`
 }
 
+function getGmSheetCompiledHtmlStorageKey(sheetId: string): string {
+  return `${GM_SHEET_COMPILED_HTML_STORAGE_KEY_PREFIX}${sheetId}`
+}
+
 function sanitizeImportedHtml(html: string): string {
   return html
     .replace(INLINE_IMAGE_DATA_URL_PATTERN, TRANSPARENT_IMAGE_DATA_URL)
     .trim()
+}
+
+function compileGmSheetHtml(html: string, sheet: ResourceTrackerSheet): string {
+  const resourceIds = collectGmResourceElementIds(html, sheet)
+  let compiled = markHopeResourceElements(html, sheet.resources.hope_max)
+
+  ;(['proficiency', 'hp', 'stress', 'armor_slots', 'gold'] as const).forEach((resourceKey) => {
+    resourceIds[resourceKey].forEach((elementId, index) => {
+      compiled = markElementById(compiled, elementId, resourceKey, index)
+    })
+  })
+
+  return compiled
+}
+
+function collectGmResourceElementIds(
+  html: string,
+  sheet: ResourceTrackerSheet,
+): Record<Exclude<ResourceTrackerResourceKey, 'hope'>, string[]> {
+  const resources = sheet.resources
+
+  return {
+    proficiency: collectCheckboxIdsAfterLabel(html, '熟练值', 'w-3 h-3', resources.proficiency.length, 4_000),
+    hp: collectCheckboxIdsAfterLabel(html, '生命点', 'w-4 h-4', resources.hp.length, 8_000),
+    stress: collectCheckboxIdsAfterLabel(html, '压力点', 'w-4 h-4', resources.stress.length, 8_000),
+    armor_slots: collectCheckboxIdsAfterLabel(html, '护甲槽', 'w-4 h-4', resources.armor_slots.length, 5_000),
+    gold: collectGoldCheckboxIds(html, resources.gold.length),
+  }
+}
+
+function collectGoldCheckboxIds(html: string, limit: number): string[] {
+  if (limit <= 0) return []
+
+  const goldIndex = html.indexOf('金币')
+  if (goldIndex < 0) return []
+
+  const coinIds = collectCheckboxIdsFromIndex(html, goldIndex, 'w-4 h-4', Math.min(20, limit), 12_000)
+  if (coinIds.length >= limit) {
+    return coinIds.slice(0, limit)
+  }
+
+  const chestIds = collectCheckboxIdsFromIndex(html, goldIndex, 'w-8 h-8', limit - coinIds.length, 12_000)
+  return [...coinIds, ...chestIds].slice(0, limit)
+}
+
+function collectCheckboxIdsAfterLabel(
+  html: string,
+  label: string,
+  classToken: string,
+  limit: number,
+  scanLength: number,
+): string[] {
+  if (limit <= 0) return []
+
+  const labelIndex = html.indexOf(label)
+  if (labelIndex < 0) return []
+
+  return collectCheckboxIdsFromIndex(html, labelIndex, classToken, limit, scanLength)
+}
+
+function collectCheckboxIdsFromIndex(
+  html: string,
+  startIndex: number,
+  classToken: string,
+  limit: number,
+  scanLength: number,
+): string[] {
+  const segment = html.slice(startIndex, startIndex + scanLength)
+  const ids: string[] = []
+  const seen = new Set<string>()
+  const elementPattern = /<(?:div|button)\b[^>]*>/gi
+  let match: RegExpExecArray | null
+
+  while ((match = elementPattern.exec(segment)) && ids.length < limit) {
+    const tag = match[0]
+    const idValue = getHtmlAttribute(tag, 'id')
+    const className = getHtmlAttribute(tag, 'class') ?? ''
+    const onclick = getHtmlAttribute(tag, 'onclick') ?? ''
+
+    if (!idValue || seen.has(idValue)) continue
+    if (!onclick.includes('toggleCustomCheckbox')) continue
+    if (!className.includes(classToken)) continue
+    if (!className.includes('cursor-pointer') || !className.includes('border-gray-800')) continue
+
+    seen.add(idValue)
+    ids.push(idValue)
+  }
+
+  return ids
+}
+
+function markHopeResourceElements(html: string, hopeMax: number): string {
+  const max = clamp(Math.round(finiteNumber(hopeMax, 6)), 0, 12)
+
+  return html.replace(/<([a-z][\w:-]*)\b(?=[^>]*\bdata-hope-index=(["']?)(\d+)\2)[^>]*>/gi, (tag, _tagName, _quote, rawIndex) => {
+    const index = Number(rawIndex)
+    if (!Number.isInteger(index) || index < 0 || index >= max) return tag
+    return markOpeningTag(tag, 'hope', index)
+  })
+}
+
+function markElementById(html: string, elementId: string, resourceKey: ResourceTrackerResourceKey, index: number): string {
+  const escapedId = escapeRegExp(elementId)
+  const elementPattern = new RegExp(`<(?:div|button)\\b(?=[^>]*\\bid=(["'])${escapedId}\\1)[^>]*>`, 'i')
+  return html.replace(elementPattern, (tag) => markOpeningTag(tag, resourceKey, index))
+}
+
+function markOpeningTag(tag: string, resourceKey: ResourceTrackerResourceKey, index: number): string {
+  const cleaned = tag
+    .replace(/\sdata-dhol-resource=(["']).*?\1/gi, '')
+    .replace(/\sdata-dhol-index=(["']).*?\1/gi, '')
+    .replace(/\sdata-gm-allow-click=(["']).*?\1/gi, '')
+
+  return cleaned.replace(/>$/, ` data-dhol-resource="${resourceKey}" data-dhol-index="${index}" data-gm-allow-click="true">`)
+}
+
+function getHtmlAttribute(tag: string, attributeName: string): string | undefined {
+  const escapedName = escapeRegExp(attributeName)
+  const pattern = new RegExp(`\\s${escapedName}\\s*=\\s*(["'])(.*?)\\1`, 'i')
+  return tag.match(pattern)?.[2]
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function extractCharacterDataFromHtml(html: string): ImportedCharacterData {

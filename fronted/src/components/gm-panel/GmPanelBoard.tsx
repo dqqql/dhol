@@ -17,13 +17,20 @@ type SheetDocState = {
   error?: string
 }
 
-type ResourceMessage = {
+type ResourceChangeMessage = {
   type: 'dhol-gm-resource-change'
   sheetId: string
   resourceKey: GmPanelResourceKey
   value: number | boolean[]
   index?: number | null
 }
+
+type ResourceReplayFailedMessage = {
+  type: 'dhol-gm-resource-replay-failed'
+  sheetId: string
+}
+
+type ResourceMessage = ResourceChangeMessage | ResourceReplayFailedMessage
 
 export function GmPanelBoard() {
   const {
@@ -55,6 +62,7 @@ export function GmPanelBoard() {
   if (!room || room.room_type !== 'gm-panel' || !room.gm_panel) return null
 
   const panel = room.gm_panel
+  const inviteCode = room.invite_code
   const orderedSheets = panel.sheet_order
     .map((sheetId) => panel.sheets.find((sheet) => sheet.id === sheetId) ?? null)
     .filter((sheet): sheet is GmPanelCharacterSheetEntry => Boolean(sheet))
@@ -97,7 +105,7 @@ export function GmPanelBoard() {
         },
       }))
 
-      fetchGmSheetHtml(room.invite_code, entry.id)
+      fetchGmSheetHtml(inviteCode, entry.id)
         .then((html) => {
           if (disposed) return
           setSheetDocs((current) => ({
@@ -126,7 +134,7 @@ export function GmPanelBoard() {
     return () => {
       disposed = true
     }
-  }, [room.invite_code, visibleSheetSignature])
+  }, [inviteCode, visibleSheetSignature])
 
   useEffect(() => {
     visibleSheets.forEach((entry) => {
@@ -144,7 +152,47 @@ export function GmPanelBoard() {
   useEffect(() => {
     function handleMessage(event: MessageEvent<ResourceMessage>) {
       const message = event.data
-      if (!message || message.type !== 'dhol-gm-resource-change') return
+      if (!message) return
+
+      if (message.type === 'dhol-gm-resource-replay-failed') {
+        const entry = panel.sheets.find((sheet) => sheet.id === message.sheetId)
+        if (!entry) return
+
+        setSheetDocs((current) => ({
+          ...current,
+          [entry.id]: {
+            htmlUpdatedAt: entry.html_updated_at,
+            srcDoc: current[entry.id]?.srcDoc ?? '',
+            loading: true,
+          },
+        }))
+
+        fetchGmSheetHtml(inviteCode, entry.id)
+          .then((html) => {
+            setSheetDocs((current) => ({
+              ...current,
+              [entry.id]: {
+                htmlUpdatedAt: entry.html_updated_at,
+                srcDoc: buildGmSheetSrcDoc(entry.id, html, getGmSheetResourceSnapshot(entry)),
+                loading: false,
+              },
+            }))
+          })
+          .catch((error) => {
+            setSheetDocs((current) => ({
+              ...current,
+              [entry.id]: {
+                htmlUpdatedAt: entry.html_updated_at,
+                srcDoc: current[entry.id]?.srcDoc ?? '',
+                loading: false,
+                error: error instanceof Error ? error.message : '角色卡 HTML 重新载入失败。',
+              },
+            }))
+          })
+        return
+      }
+
+      if (message.type !== 'dhol-gm-resource-change') return
 
       if (message.resourceKey === 'hope') {
         if (typeof message.value === 'number') {
@@ -161,7 +209,7 @@ export function GmPanelBoard() {
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [panel.sheets, updateGmResource])
+  }, [panel.sheets, inviteCode, updateGmResource])
 
   async function handleImport(file: File, targetSheetId?: string | null) {
     try {

@@ -239,6 +239,7 @@ export interface GmPanelCharacterSheetEntry {
   source_file_name: string
   source_format: 'mydhcharsheet-html'
   source_html?: string
+  compiled_html?: string
   raw_character_data: ImportedCharacterData
   parsed_sheet: ResourceTrackerSheet
 }
