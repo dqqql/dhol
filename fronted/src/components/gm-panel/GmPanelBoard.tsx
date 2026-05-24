@@ -67,6 +67,7 @@ export function GmPanelBoard() {
   const replaceInputRef = useRef<HTMLInputElement | null>(null)
   const iframeRefs = useRef<Record<string, HTMLIFrameElement | null>>({})
   const sheetDocsRef = useRef<Record<string, SheetDocState>>({})
+  const replayFailureReloadsRef = useRef<Record<string, string>>({})
 
   if (!room || room.room_type !== 'gm-panel' || !room.gm_panel) return null
 
@@ -193,6 +194,8 @@ export function GmPanelBoard() {
       if (message.type === 'dhol-gm-resource-replay-failed') {
         const entry = panel.sheets.find((sheet) => sheet.id === message.sheetId)
         if (!entry) return
+        if (replayFailureReloadsRef.current[entry.id] === entry.html_updated_at) return
+        replayFailureReloadsRef.current[entry.id] = entry.html_updated_at
 
         setSheetDocs((current) => ({
           ...current,

@@ -2319,7 +2319,6 @@ function normalizeBooleanTrack(value: unknown, maxLength: number): boolean[] {
   return Array.from({ length: normalizedLength }, (_, index) => Boolean(source[index]))
 }
 
-const CHARACTER_DATA_MARKER = 'window.characterData ='
 const TRANSPARENT_IMAGE_DATA_URL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
 const INLINE_IMAGE_DATA_URL_PATTERN = /data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g
 
@@ -2338,7 +2337,8 @@ function sanitizeImportedHtml(html: string): string {
 }
 
 interface HtmlCheckboxSnapshot {
-  id: string
+  id?: string
+  openingTag: string
   filled: boolean
 }
 
@@ -2357,46 +2357,46 @@ function applyHtmlResourceTracksToSheet(html: string, sheet: ResourceTrackerShee
 }
 
 function compileGmSheetHtml(html: string, sheet: ResourceTrackerSheet): string {
-  const resourceIds = collectGmResourceElementIds(html, sheet)
+  const resourceElements = collectGmResourceElements(html, sheet)
   let compiled = markHopeResourceElements(html, sheet.resources.hope_max)
 
   ;(['proficiency', 'hp', 'stress', 'armor_slots', 'gold'] as const).forEach((resourceKey) => {
-    resourceIds[resourceKey].forEach((elementId, index) => {
-      compiled = markElementById(compiled, elementId, resourceKey, index)
+    resourceElements[resourceKey].forEach((element, index) => {
+      compiled = markResourceElement(compiled, element, resourceKey, index)
     })
   })
 
   return compiled
 }
 
-function collectGmResourceElementIds(
+function collectGmResourceElements(
   html: string,
   sheet: ResourceTrackerSheet,
-): Record<Exclude<ResourceTrackerResourceKey, 'hope'>, string[]> {
+): Record<Exclude<ResourceTrackerResourceKey, 'hope'>, HtmlCheckboxSnapshot[]> {
   const resources = sheet.resources
 
   return {
-    proficiency: collectCheckboxIdsAfterLabel(html, '熟练值', 'w-3 h-3', resources.proficiency.length, 4_000),
-    hp: collectCheckboxIdsAfterLabel(html, '生命点', 'w-4 h-4', resources.hp.length, 8_000, ['压力点', '护甲槽', '金币']),
-    stress: collectCheckboxIdsAfterLabel(html, '压力点', 'w-4 h-4', resources.stress.length, 8_000, ['生命点', '护甲槽', '金币']),
-    armor_slots: collectCheckboxIdsAfterLabel(html, '护甲槽', 'w-4 h-4', resources.armor_slots.length, 5_000),
-    gold: collectGoldCheckboxIds(html, resources.gold.length),
+    proficiency: collectCheckboxSnapshotsAfterLabel(html, '熟练值', 'w-3 h-3', resources.proficiency.length, 4_000),
+    hp: collectCheckboxSnapshotsAfterLabel(html, '生命点', 'w-4 h-4', resources.hp.length, 8_000, ['压力点', '护甲槽', '金币']),
+    stress: collectCheckboxSnapshotsAfterLabel(html, '压力点', 'w-4 h-4', resources.stress.length, 8_000, ['生命点', '护甲槽', '金币']),
+    armor_slots: collectCheckboxSnapshotsAfterLabel(html, '护甲槽', 'w-4 h-4', resources.armor_slots.length, 5_000),
+    gold: collectGoldCheckboxes(html, resources.gold.length),
   }
 }
 
-function collectGoldCheckboxIds(html: string, limit: number): string[] {
+function collectGoldCheckboxes(html: string, limit: number): HtmlCheckboxSnapshot[] {
   if (limit <= 0) return []
 
   const goldIndex = html.indexOf('金币')
   if (goldIndex < 0) return []
 
-  const coinIds = collectCheckboxIdsFromIndex(html, goldIndex, 'w-4 h-4', Math.min(20, limit), 12_000)
-  if (coinIds.length >= limit) {
-    return coinIds.slice(0, limit)
+  const coinElements = collectCheckboxSnapshotsFromIndex(html, goldIndex, 'w-4 h-4', Math.min(20, limit), 12_000)
+  if (coinElements.length >= limit) {
+    return coinElements.slice(0, limit)
   }
 
-  const chestIds = collectCheckboxIdsFromIndex(html, goldIndex, 'w-8 h-8', limit - coinIds.length, 12_000)
-  return [...coinIds, ...chestIds].slice(0, limit)
+  const chestElements = collectCheckboxSnapshotsFromIndex(html, goldIndex, 'w-8 h-8', limit - coinElements.length, 12_000)
+  return [...coinElements, ...chestElements].slice(0, limit)
 }
 
 function collectCheckboxIdsAfterLabel(
@@ -2409,6 +2409,7 @@ function collectCheckboxIdsAfterLabel(
 ): string[] {
   return collectCheckboxSnapshotsAfterLabel(html, label, classToken, limit, scanLength, boundaryLabels)
     .map((item) => item.id)
+    .filter((item): item is string => Boolean(item))
 }
 
 function collectCheckboxSnapshotsAfterLabel(
@@ -2457,6 +2458,7 @@ function collectCheckboxIdsFromIndex(
 ): string[] {
   return collectCheckboxSnapshotsFromIndex(html, startIndex, classToken, limit, scanLength)
     .map((item) => item.id)
+    .filter((item): item is string => Boolean(item))
 }
 
 function collectCheckboxSnapshotsFromIndex(
@@ -2478,15 +2480,18 @@ function collectCheckboxSnapshotsFromIndex(
     const className = getHtmlAttribute(tag, 'class') ?? ''
     const onclick = getHtmlAttribute(tag, 'onclick') ?? ''
 
-    if (!idValue || seen.has(idValue)) continue
+    if (idValue && seen.has(idValue)) continue
     if (!onclick.includes('toggleCustomCheckbox')) continue
-    if (!className.includes(classToken)) continue
-    if (!className.includes('cursor-pointer') || !className.includes('border-gray-800')) continue
+    if (!hasClassTokens(className, classToken)) continue
+    if (!hasClassToken(className, 'cursor-pointer') || !hasDarkBorderClass(className)) continue
 
-    seen.add(idValue)
+    if (idValue) {
+      seen.add(idValue)
+    }
     snapshots.push({
-      id: idValue,
-      filled: className.includes('bg-gray-800'),
+      id: idValue || undefined,
+      openingTag: tag,
+      filled: hasFilledClass(className),
     })
   }
 
@@ -2503,10 +2508,58 @@ function markHopeResourceElements(html: string, hopeMax: number): string {
   })
 }
 
+function markResourceElement(html: string, element: HtmlCheckboxSnapshot, resourceKey: ResourceTrackerResourceKey, index: number): string {
+  if (!element.id) {
+    return html.replace(element.openingTag, (tag) => markOpeningTag(tag, resourceKey, index))
+  }
+
+  return markElementById(html, element.id, resourceKey, index)
+}
+
 function markElementById(html: string, elementId: string, resourceKey: ResourceTrackerResourceKey, index: number): string {
   const escapedId = escapeRegExp(elementId)
   const elementPattern = new RegExp(`<(?:div|button)\\b(?=[^>]*\\bid=(["'])${escapedId}\\1)[^>]*>`, 'i')
   return html.replace(elementPattern, (tag) => markOpeningTag(tag, resourceKey, index))
+}
+
+function hasClassToken(className: string, token: string): boolean {
+  return className.split(/\s+/).includes(token)
+}
+
+function hasClassTokens(className: string, tokens: string): boolean {
+  return tokens.split(/\s+/).every((token) => hasClassToken(className, token))
+}
+
+function hasDarkBorderClass(className: string): boolean {
+  return [
+    'border-gray-800',
+    'border-gray-900',
+    'border-slate-800',
+    'border-slate-900',
+    'border-zinc-800',
+    'border-zinc-900',
+    'border-neutral-800',
+    'border-neutral-900',
+    'border-stone-800',
+    'border-stone-900',
+    'border-black',
+  ].some((token) => hasClassToken(className, token))
+}
+
+function hasFilledClass(className: string): boolean {
+  return [
+    'bg-gray-800',
+    'bg-gray-900',
+    'bg-slate-800',
+    'bg-slate-900',
+    'bg-zinc-800',
+    'bg-zinc-900',
+    'bg-neutral-800',
+    'bg-neutral-900',
+    'bg-stone-800',
+    'bg-stone-900',
+    'bg-black',
+  ].some((token) => hasClassToken(className, token))
 }
 
 function markOpeningTag(tag: string, resourceKey: ResourceTrackerResourceKey, index: number): string {
@@ -2529,7 +2582,7 @@ function escapeRegExp(value: string): string {
 }
 
 function extractCharacterDataFromHtml(html: string): ImportedCharacterData {
-  const start = html.indexOf(CHARACTER_DATA_MARKER)
+  const start = findCharacterDataAssignmentIndex(html)
   if (start < 0) {
     throw new Error('Unsupported HTML export: window.characterData was not found.')
   }
@@ -2551,6 +2604,24 @@ function extractCharacterDataFromHtml(html: string): ImportedCharacterData {
       throw new Error(error instanceof Error ? `Character data parse failed: ${error.message}` : 'Character data parse failed.')
     }
   }
+}
+
+function findCharacterDataAssignmentIndex(html: string): number {
+  const patterns = [
+    /\bwindow\s*\.\s*characterData\s*=/g,
+    /\b(?:const|let|var)\s+characterData\s*=/g,
+    /\bcharacterData\s*=/g,
+  ]
+  let nearestIndex = -1
+
+  for (const pattern of patterns) {
+    const match = pattern.exec(html)
+    if (match && (nearestIndex < 0 || match.index < nearestIndex)) {
+      nearestIndex = match.index
+    }
+  }
+
+  return nearestIndex
 }
 
 function extractArmorSlotsFromHtml(html: string): boolean[] {

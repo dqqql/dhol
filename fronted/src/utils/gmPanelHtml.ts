@@ -158,12 +158,50 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
           };
         }
 
+        function hasClassToken(element, token) {
+          return Boolean(element && String(element.className || '').split(/\\s+/).indexOf(token) >= 0);
+        }
+
+        function hasFilledClass(element) {
+          return [
+            'bg-gray-800',
+            'bg-gray-900',
+            'bg-slate-800',
+            'bg-slate-900',
+            'bg-zinc-800',
+            'bg-zinc-900',
+            'bg-neutral-800',
+            'bg-neutral-900',
+            'bg-stone-800',
+            'bg-stone-900',
+            'bg-black',
+          ].some(function (token) {
+            return hasClassToken(element, token);
+          });
+        }
+
         function isFilled(element) {
-          return Boolean(element && (element.className || '').indexOf('bg-gray-800') >= 0);
+          return hasFilledClass(element);
         }
 
         function hasHopeFill(element) {
-          return Boolean(element && element.querySelector('[data-gm-hope-fill], .absolute'));
+          return Boolean(element && (
+            hasFilledClass(element) ||
+            element.querySelector([
+              '[data-gm-hope-fill]',
+              '.absolute .bg-gray-800',
+              '.absolute .bg-gray-900',
+              '.absolute .bg-slate-800',
+              '.absolute .bg-slate-900',
+              '.absolute .bg-zinc-800',
+              '.absolute .bg-zinc-900',
+              '.absolute .bg-neutral-800',
+              '.absolute .bg-neutral-900',
+              '.absolute .bg-stone-800',
+              '.absolute .bg-stone-900',
+              '.absolute .bg-black',
+            ].join(', '))
+          ));
         }
 
         function getTrackLength(resourceKey) {
