@@ -1730,7 +1730,8 @@ export class RoomDurableObject {
       if (!sheet.compiled_html && typeof compiledHtml === 'string' && compiledHtml) {
         sheet.compiled_html = compiledHtml
       }
-      if (!sheet.compiled_html && sheet.source_html) {
+
+      if (sheet.source_html) {
         sheet.compiled_html = compileGmSheetHtml(sheet.source_html, sheet.parsed_sheet)
       }
     }))
@@ -2353,8 +2354,8 @@ function collectGmResourceElementIds(
 
   return {
     proficiency: collectCheckboxIdsAfterLabel(html, '熟练值', 'w-3 h-3', resources.proficiency.length, 4_000),
-    hp: collectCheckboxIdsAfterLabel(html, '生命点', 'w-4 h-4', resources.hp.length, 8_000),
-    stress: collectCheckboxIdsAfterLabel(html, '压力点', 'w-4 h-4', resources.stress.length, 8_000),
+    hp: collectCheckboxIdsAfterLabel(html, '生命点', 'w-4 h-4', resources.hp.length, 8_000, ['压力点', '护甲槽', '金币']),
+    stress: collectCheckboxIdsAfterLabel(html, '压力点', 'w-4 h-4', resources.stress.length, 8_000, ['生命点', '护甲槽', '金币']),
     armor_slots: collectCheckboxIdsAfterLabel(html, '护甲槽', 'w-4 h-4', resources.armor_slots.length, 5_000),
     gold: collectGoldCheckboxIds(html, resources.gold.length),
   }
@@ -2381,13 +2382,35 @@ function collectCheckboxIdsAfterLabel(
   classToken: string,
   limit: number,
   scanLength: number,
+  boundaryLabels: string[] = [],
 ): string[] {
   if (limit <= 0) return []
 
-  const labelIndex = html.indexOf(label)
-  if (labelIndex < 0) return []
+  let labelIndex = -1
+  while ((labelIndex = html.indexOf(label, labelIndex + 1)) >= 0) {
+    const sectionEnd = findNearestFollowingLabelIndex(html, labelIndex + label.length, boundaryLabels)
+    const scopedScanLength = Math.min(scanLength, Math.max(0, sectionEnd - labelIndex))
+    const ids = collectCheckboxIdsFromIndex(html, labelIndex, classToken, limit, scopedScanLength)
 
-  return collectCheckboxIdsFromIndex(html, labelIndex, classToken, limit, scanLength)
+    if (ids.length > 0) {
+      return ids
+    }
+  }
+
+  return []
+}
+
+function findNearestFollowingLabelIndex(html: string, startIndex: number, labels: string[]): number {
+  let nearestIndex = html.length
+
+  for (const label of labels) {
+    const index = html.indexOf(label, startIndex)
+    if (index >= 0 && index < nearestIndex) {
+      nearestIndex = index
+    }
+  }
+
+  return nearestIndex
 }
 
 function collectCheckboxIdsFromIndex(
