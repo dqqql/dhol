@@ -2,29 +2,32 @@
 
 /* ── Design Tokens ─────────────────────────────────────────────── */
 :root {
-  /* Surface — warm parchment palette */
-  --bg-base:        #faf8f3;
-  --bg-surface:     #fefdf9;
-  --bg-elevated:    #fefdf9;
-  --bg-overlay:     #f6f2ea;
-  --bg-hover:       #ede4d6;
-  --grid-line:      rgba(139, 115, 85, 0.045);
+  /* Surface — Daggerheart-inspired table, parchment, and void tones */
+  --bg-base:        #f4ecdb;
+  --bg-surface:     #fffaf0;
+  --bg-elevated:    #fffdf7;
+  --bg-overlay:     #efe3c7;
+  --bg-hover:       #e5d2ab;
+  --bg-void:        #180f3b;
+  --bg-void-2:      #27185a;
+  --bg-ink:         #110b27;
+  --grid-line:      rgba(42, 27, 77, 0.055);
 
-  /* Borders — warm earth tones */
-  --border-subtle:  rgba(139,115,85,0.06);
-  --border-default: rgba(139,115,85,0.12);
-  --border-strong:  rgba(139,115,85,0.22);
+  /* Borders — fine gold foil over warm paper */
+  --border-subtle:  rgba(86,64,26,0.10);
+  --border-default: rgba(128,96,35,0.18);
+  --border-strong:  rgba(208,170,71,0.46);
 
-  /* Accent — golden / bronze / crimson */
-  --accent-violet:  #b8860b;
-  --accent-violet-hover: #9a6d0a;
-  --accent-indigo:  #d4a853;
-  --accent-cyan:    #22d3ee;
-  --accent-emerald: #16a34a;
-  --accent-rose:    #c2410c;
-  --accent-amber:   #d97706;
-  --accent-gold:    #b8860b;
-  --accent-crimson: #b91c1c;
+  /* Accent — Hope, Fear, and burnished gold */
+  --accent-violet:  #27185a;
+  --accent-violet-hover: #372073;
+  --accent-indigo:  #43308d;
+  --accent-cyan:    #8be0d5;
+  --accent-emerald: #0f9f83;
+  --accent-rose:    #b12d3f;
+  --accent-amber:   #c98f22;
+  --accent-gold:    #dfc852;
+  --accent-crimson: #8f1f34;
 
   /* Card type colors */
   --card-location:  #22c55e;
@@ -45,17 +48,18 @@
   --player-6: #0891b2;
 
   /* Text */
-  --text-primary:   #29211b;
-  --text-secondary: #5c4f41;
-  --text-muted:     #9c8b79;
+  --text-primary:   #251d18;
+  --text-secondary: #51422f;
+  --text-muted:     #8d7b61;
+  --text-on-void:   #fff7df;
 
-  /* Shadows — warm tinted */
-  --shadow-card:    0 2px 8px -1px rgba(80,40,10,0.07), 0 1px 3px -1px rgba(80,40,10,0.04);
-  --shadow-panel:   0 24px 48px -12px rgba(60,30,0,0.16), 0 8px 24px -4px rgba(60,30,0,0.08);
-  --shadow-elevated: 0 16px 40px rgba(60,30,0,0.09);
-  --shadow-glow-v:  0 0 0 3px rgba(184,134,11,0.25);
-  --shadow-glow-a:  0 0 0 3px rgba(217,119,6,0.3);
-  --shadow-glow-r:  0 0 0 3px rgba(185,28,28,0.2);
+  /* Shadows — violet depth with warm table light */
+  --shadow-card:    0 2px 8px -1px rgba(32,18,58,0.12), 0 1px 3px -1px rgba(32,18,58,0.08);
+  --shadow-panel:   0 28px 64px -18px rgba(22,12,45,0.36), 0 12px 30px -10px rgba(105,64,12,0.18);
+  --shadow-elevated: 0 18px 44px rgba(35,20,68,0.14);
+  --shadow-glow-v:  0 0 0 3px rgba(139,224,213,0.32);
+  --shadow-glow-a:  0 0 0 3px rgba(223,200,82,0.34);
+  --shadow-glow-r:  0 0 0 3px rgba(177,45,63,0.24);
 
   /* Transitions */
   --transition-fast:   150ms cubic-bezier(0.4,0,0.2,1);
@@ -71,7 +75,10 @@ html, body, #root {
   height: 100%;
   overflow: hidden;
   font-family: 'Inter', 'Noto Sans SC', -apple-system, sans-serif;
-  background: var(--bg-base);
+  background:
+    radial-gradient(circle at 18% 8%, rgba(139,224,213,0.18), transparent 24%),
+    radial-gradient(circle at 85% 14%, rgba(223,200,82,0.18), transparent 25%),
+    linear-gradient(180deg, #f8f0dd 0%, var(--bg-base) 46%, #e6d4ad 100%);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -80,7 +87,10 @@ html, body, #root {
 /* ── Canvas Dot Grid ───────────────────────────────────────────── */
 .canvas-dot-grid {
   background-color: var(--bg-base);
-  background-image: linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-image:
+    radial-gradient(circle at 12px 12px, rgba(223,200,82,0.14) 0 1px, transparent 1.5px),
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
@@ -117,25 +127,59 @@ html, body, #root {
 
 /* ── Glassmorphism panels ──────────────────────────────────────── */
 .glass-panel {
-  background: rgba(254,253,249,0.88);
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(255,250,240,0.94), rgba(246,234,205,0.88)),
+    rgba(255,250,240,0.88);
   backdrop-filter: blur(24px) saturate(1.5);
   -webkit-backdrop-filter: blur(24px) saturate(1.5);
-  border: 1px solid rgba(184,134,11,0.08);
-  box-shadow: var(--shadow-panel), inset 0 0 0 1px rgba(255,255,255,0.6);
+  border: 1px solid rgba(223,200,82,0.34);
+  box-shadow: var(--shadow-panel), inset 0 0 0 1px rgba(255,255,255,0.62);
+}
+
+.glass-panel::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border: 1px solid rgba(128,96,35,0.13);
+  pointer-events: none;
 }
 
 .glass-panel-sm {
-  background: rgba(254,253,249,0.92);
+  background: rgba(255,250,240,0.92);
   backdrop-filter: blur(16px) saturate(1.5);
   -webkit-backdrop-filter: blur(16px) saturate(1.5);
-  border: 1px solid rgba(184,134,11,0.06);
-  box-shadow: 0 8px 32px -8px rgba(60,30,0,0.08), inset 0 0 0 1px rgba(255,255,255,0.6);
+  border: 1px solid rgba(223,200,82,0.22);
+  box-shadow: 0 8px 32px -8px rgba(35,20,68,0.14), inset 0 0 0 1px rgba(255,255,255,0.6);
+}
+
+.dh-cut-corners {
+  clip-path: polygon(14px 0, calc(100% - 14px) 0, 100% 14px, 100% calc(100% - 14px), calc(100% - 14px) 100%, 14px 100%, 0 calc(100% - 14px), 0 14px);
+}
+
+.dh-ornate-panel {
+  position: relative;
+  border: 1px solid rgba(223,200,82,0.34);
+  background:
+    linear-gradient(180deg, rgba(255,250,240,0.96), rgba(246,234,205,0.88)),
+    var(--bg-elevated);
+  box-shadow: var(--shadow-elevated), inset 0 1px 0 rgba(255,255,255,0.74);
+}
+
+.dh-ornate-panel::after {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border: 1px solid rgba(128,96,35,0.12);
+  pointer-events: none;
 }
 
 /* ── Card styles ───────────────────────────────────────────────── */
 .dh-card {
   position: relative;
-  background: var(--bg-elevated);
+  background:
+    linear-gradient(180deg, rgba(255,253,247,0.98), rgba(246,234,205,0.92)),
+    var(--bg-elevated);
   border: 1px solid var(--border-default);
   box-shadow: var(--shadow-card);
   transition: transform var(--transition-fast), box-shadow var(--transition-normal), border-color var(--transition-normal);
@@ -148,7 +192,7 @@ html, body, #root {
 
 .dh-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 14px 28px -8px rgba(60,30,0,0.14), 0 0 0 1px var(--border-strong);
+  box-shadow: 0 14px 28px -8px rgba(35,20,68,0.18), 0 0 0 1px var(--border-strong);
 }
 
 .dh-card--location { --card-color: var(--card-location); }
@@ -250,7 +294,7 @@ html, body, #root {
   gap: 8px;
   padding: 8px 10px;
   border: 1px solid var(--border-subtle);
-  background: rgba(255,255,255,0.72);
+  background: rgba(255,250,240,0.78);
   font-size: 12px;
   font-weight: 700;
   color: var(--text-primary);
@@ -258,8 +302,8 @@ html, body, #root {
 }
 
 .hand-column__header--role {
-  border-color: rgba(217,119,6,0.24);
-  background: linear-gradient(135deg, rgba(217,119,6,0.1), rgba(251,191,36,0.06));
+  border-color: rgba(223,200,82,0.42);
+  background: linear-gradient(135deg, rgba(39,24,90,0.08), rgba(223,200,82,0.12));
 }
 
 .hand-column__count {
@@ -299,7 +343,7 @@ html, body, #root {
   gap: 8px;
   padding: 18px 16px;
   border: 1px dashed var(--border-default);
-  background: rgba(255,255,255,0.68);
+  background: rgba(255,250,240,0.72);
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.5;
@@ -308,8 +352,8 @@ html, body, #root {
 .hand-empty-card--role {
   width: 100%;
   flex: 1 1 auto;
-  border-color: rgba(217,119,6,0.28);
-  background: linear-gradient(180deg, rgba(255,247,237,0.92), rgba(255,255,255,0.82));
+  border-color: rgba(223,200,82,0.42);
+  background: linear-gradient(180deg, rgba(255,248,220,0.92), rgba(255,250,240,0.82));
 }
 
 .hand-empty-card--main {
@@ -322,8 +366,8 @@ html, body, #root {
   height: 30px;
   align-items: center;
   justify-content: center;
-  background: rgba(217,119,6,0.12);
-  color: var(--accent-amber);
+  background: rgba(139,224,213,0.18);
+  color: #117768;
 }
 
 .hand-empty-card__hint {
@@ -333,7 +377,9 @@ html, body, #root {
 
 .hand-card {
   position: relative;
-  background: var(--bg-elevated);
+  background:
+    linear-gradient(180deg, rgba(255,253,247,0.98), rgba(247,237,211,0.96)),
+    var(--bg-elevated);
   border: 1px solid var(--border-default);
   padding: 12px 14px;
   cursor: grab;
@@ -344,17 +390,17 @@ html, body, #root {
   overflow: hidden;
   display: flex;
   align-items: stretch;
-  box-shadow: 0 6px 18px rgba(60,30,0,0.07);
+  box-shadow: 0 8px 20px rgba(35,20,68,0.10);
 }
 .hand-card--role {
   background:
-    linear-gradient(180deg, rgba(255,248,235,0.98), rgba(255,255,255,0.96)),
+    linear-gradient(180deg, rgba(255,249,226,0.98), rgba(255,250,240,0.96)),
     var(--bg-elevated);
-  box-shadow: 0 0 0 1px rgba(184,134,11,0.08), 0 10px 24px rgba(184,134,11,0.08);
+  box-shadow: 0 0 0 1px rgba(223,200,82,0.18), 0 10px 24px rgba(35,20,68,0.10);
 }
 .hand-card:hover {
   transform: translateY(-10px) rotate(-1deg);
-  box-shadow: 0 20px 34px rgba(60,30,0,0.18);
+  box-shadow: 0 20px 34px rgba(35,20,68,0.20);
   border-color: var(--border-strong);
   z-index: 10;
 }
@@ -434,9 +480,9 @@ html, body, #root {
   right: 8px;
   font-size: 10px;
   font-weight: 700;
-  color: var(--accent-amber);
-  background: rgba(217,119,6,0.12);
-  border: 1px solid rgba(217,119,6,0.24);
+  color: #117768;
+  background: rgba(139,224,213,0.16);
+  border: 1px solid rgba(139,224,213,0.34);
   padding: 2px 6px;
   z-index: 2;
 }
@@ -447,9 +493,9 @@ html, body, #root {
   left: 8px;
   font-size: 10px;
   font-weight: 700;
-  color: #92400e;
-  background: rgba(251,191,36,0.18);
-  border: 1px solid rgba(217,119,6,0.32);
+  color: #65470b;
+  background: rgba(223,200,82,0.20);
+  border: 1px solid rgba(223,200,82,0.42);
   padding: 2px 6px;
   z-index: 2;
 }
@@ -555,14 +601,14 @@ html, body, #root {
   letter-spacing: 0.3px;
 }
 .mode-badge--free {
-  background: rgba(22, 163, 74, 0.1);
-  color: var(--accent-emerald);
-  border: 1px solid rgba(22, 163, 74, 0.2);
+  background: rgba(139,224,213,0.14);
+  color: #0f7569;
+  border: 1px solid rgba(139,224,213,0.34);
 }
 .mode-badge--cocreation {
-  background: rgba(184, 134, 11, 0.1);
+  background: rgba(223,200,82,0.14);
   color: var(--accent-violet);
-  border: 1px solid rgba(184, 134, 11, 0.22);
+  border: 1px solid rgba(223,200,82,0.34);
 }
 
 /* ── Buttons ───────────────────────────────────────────────────── */
@@ -583,16 +629,22 @@ html, body, #root {
   outline: none;
 }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn:focus-visible,
+.context-menu__item:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+}
 
 .btn-primary {
-  background: linear-gradient(180deg, #b8860b, #92400e);
-  color: #fff;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 1px 2px rgba(60,30,0,0.12);
-  text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  background: linear-gradient(180deg, #f1dc62, #c99b20);
+  color: #171027;
+  border: 1px solid rgba(82,59,10,0.28);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.45), 0 8px 18px rgba(39,24,90,0.18);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.35);
 }
 .btn-primary:hover:not(:disabled) {
-  background: linear-gradient(180deg, #caa03d, #a0520f);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 4px 14px rgba(184,134,11,0.3);
+  background: linear-gradient(180deg, #ffeb77, #d8aa2b);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.55), 0 10px 24px rgba(39,24,90,0.24);
   transform: translateY(-1px);
 }
 .btn-primary:active:not(:disabled) {
@@ -601,9 +653,9 @@ html, body, #root {
 }
 
 .btn-secondary {
-  background: var(--bg-overlay);
-  color: var(--text-primary);
-  border: 1px solid var(--border-default);
+  background: rgba(255,250,240,0.78);
+  color: #2b2146;
+  border: 1px solid rgba(128,96,35,0.22);
 }
 .btn-secondary:hover:not(:disabled) {
   background: var(--bg-hover);
@@ -636,7 +688,7 @@ html, body, #root {
 /* ── Inputs ────────────────────────────────────────────────────── */
 .input {
   width: 100%;
-  background: var(--bg-surface);
+  background: rgba(255,253,247,0.92);
   border: 1px solid var(--border-default);
   padding: 10px 14px;
   color: var(--text-primary);
@@ -647,7 +699,7 @@ html, body, #root {
 }
 .input::placeholder { color: var(--text-muted); }
 .input:focus {
-  border-color: var(--accent-gold);
+  border-color: var(--accent-cyan);
   box-shadow: var(--shadow-glow-v);
 }
 
@@ -741,7 +793,7 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(40,18,5,0.25);
+  background: rgba(17, 11, 39, 0.46);
   backdrop-filter: blur(6px);
   z-index: 1000;
   display: flex;
@@ -751,8 +803,10 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   animation: fadeIn var(--transition-fast);
 }
 .modal-content {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-default);
+  background:
+    linear-gradient(180deg, rgba(255,253,247,0.98), rgba(246,234,205,0.96)),
+    var(--bg-elevated);
+  border: 1px solid var(--border-strong);
   box-shadow: var(--shadow-panel);
   padding: 32px;
   width: 100%;
@@ -775,8 +829,8 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 .player-pill:hover { background: var(--bg-hover); }
 .player-pill--offline { opacity: 0.45; }
 .player-pill--active-turn {
-  background: rgba(184,134,11,0.08);
-  border: 1px solid rgba(184,134,11,0.2);
+  background: rgba(139,224,213,0.12);
+  border: 1px solid rgba(139,224,213,0.34);
 }
 
 .player-dot {
@@ -804,8 +858,8 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   align-items: center;
 }
 .toast {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-default);
+  background: linear-gradient(180deg, rgba(255,253,247,0.98), rgba(246,234,205,0.96));
+  border: 1px solid var(--border-strong);
   padding: 10px 16px;
   font-size: 13px;
   box-shadow: var(--shadow-elevated);

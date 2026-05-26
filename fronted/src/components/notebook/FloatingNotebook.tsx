@@ -205,10 +205,10 @@ export function FloatingNotebook({ roomId }: { roomId: string }) {
           alignItems: 'center',
           gap: 8,
           padding: '10px 14px',
-          border: '1px solid rgba(184, 134, 11, 0.2)',
-          background: 'linear-gradient(135deg, #fff7ed, #ffedd5)',
-          color: '#7c4f31',
-          boxShadow: '0 10px 24px rgba(122, 79, 49, 0.12)',
+          border: '1px solid rgba(223, 200, 82, 0.36)',
+          background: 'linear-gradient(135deg, #fffdf7, #ead8b3)',
+          color: '#27185a',
+          boxShadow: '0 14px 28px rgba(35, 20, 68, 0.14)',
           cursor: 'pointer',
           fontWeight: 700,
         }}
@@ -231,17 +231,17 @@ export function FloatingNotebook({ roomId }: { roomId: string }) {
       <div
         className="relative overflow-hidden"
         style={{
-          border: '4px solid #5d4037',
-          background: 'linear-gradient(135deg, #6d4c41 0%, #4e342e 100%)',
-          boxShadow: '0 18px 36px rgba(0, 0, 0, 0.24)',
+          border: '4px solid #27185a',
+          background: 'linear-gradient(135deg, #27185a 0%, #180f3b 100%)',
+          boxShadow: '0 20px 42px rgba(17, 11, 39, 0.30)',
         }}
       >
         <div
           className="flex cursor-move select-none items-center justify-between px-3 py-2"
           onMouseDown={handleMouseDown}
           style={{
-            background: 'linear-gradient(180deg, #5d4037 0%, #4e342e 100%)',
-            borderBottom: '2px solid #3e2723',
+            background: 'linear-gradient(180deg, #27185a 0%, #180f3b 100%)',
+            borderBottom: '2px solid rgba(223,200,82,0.34)',
           }}
         >
           <div className="flex items-center gap-2">
@@ -261,7 +261,7 @@ export function FloatingNotebook({ roomId }: { roomId: string }) {
           className="notebook-content relative flex flex-col"
           style={{
             height: 400,
-            background: '#fdf6e3',
+            background: '#fff7df',
           }}
         >
           <div

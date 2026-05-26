@@ -270,10 +270,10 @@ export function FloatingBattlePanel({ roomId }: { roomId: string }) {
           alignItems: 'center',
           gap: 8,
           padding: '10px 14px',
-          border: '1px solid rgba(15, 23, 42, 0.12)',
-          background: 'linear-gradient(135deg, #eff6ff, #dbeafe)',
-          color: '#1d4ed8',
-          boxShadow: '0 10px 24px rgba(29, 78, 216, 0.12)',
+          border: '1px solid rgba(139, 224, 213, 0.38)',
+          background: 'linear-gradient(135deg, #27185a, #180f3b)',
+          color: '#8be0d5',
+          boxShadow: '0 14px 28px rgba(24, 15, 59, 0.24)',
           cursor: 'pointer',
           fontWeight: 700,
         }}
@@ -372,16 +372,16 @@ function BattleMonsterCard(props: {
       style={{
         display: 'grid',
         gap: 10,
-        border: '2px solid rgba(30, 64, 175, 0.18)',
-        background: 'linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.96))',
-        boxShadow: '0 16px 36px rgba(15, 23, 42, 0.08)',
+        border: '2px solid rgba(223, 200, 82, 0.30)',
+        background: 'linear-gradient(180deg, rgba(255,253,247,0.98), rgba(246,234,205,0.96))',
+        boxShadow: '0 18px 42px rgba(35, 20, 68, 0.14)',
         overflow: 'hidden',
       }}
     >
       <div style={{ padding: '14px 14px 0 14px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 17, fontWeight: 900, color: '#1f3b62', lineHeight: 1.2 }}>{monster.name}</div>
+            <div style={{ fontSize: 17, fontWeight: 900, color: '#27185a', lineHeight: 1.2 }}>{monster.name}</div>
             {monster.originalName && (
               <div style={{ marginTop: 3, fontSize: 11, color: '#94a3b8', letterSpacing: '0.08em' }}>{monster.originalName}</div>
             )}
@@ -403,7 +403,7 @@ function BattleMonsterCard(props: {
         )}
       </div>
 
-      <div style={{ margin: '0 14px', padding: 12, background: 'rgba(148, 163, 184, 0.09)' }}>
+      <div style={{ margin: '0 14px', padding: 12, background: 'rgba(39, 24, 90, 0.07)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12, fontWeight: 800, color: '#1f2937' }}>
           <span>{'\u96be\u5ea6'} {monster.difficulty}</span>
           <span>{'\u9608\u503c'} {monster.majorThreshold} / {monster.severeThreshold}</span>
@@ -424,9 +424,9 @@ function BattleMonsterCard(props: {
           style={{
             margin: '0 14px',
             padding: '10px 12px',
-            borderLeft: '3px solid #14b8a6',
-            background: 'linear-gradient(90deg, rgba(20,184,166,0.12), rgba(236,253,245,0.7))',
-            color: '#0f766e',
+            borderLeft: '3px solid #8be0d5',
+            background: 'linear-gradient(90deg, rgba(139,224,213,0.20), rgba(255,250,240,0.74))',
+            color: '#117768',
             fontSize: 13,
             fontWeight: 800,
           }}
@@ -437,7 +437,7 @@ function BattleMonsterCard(props: {
 
       <div style={{ display: 'grid', gap: 8, padding: '0 14px 14px 14px' }}>
         {monster.traits.map((trait) => (
-          <div key={`${monster.id}-${trait.name}`} style={{ border: '1px solid rgba(148, 163, 184, 0.22)', background: 'rgba(255,255,255,0.84)' }}>
+          <div key={`${monster.id}-${trait.name}`} style={{ border: '1px solid rgba(128, 96, 35, 0.18)', background: 'rgba(255,250,240,0.84)' }}>
             <div
               style={{
                 display: 'flex',

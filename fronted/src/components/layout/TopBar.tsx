@@ -58,12 +58,12 @@ export function TopBar({ onLeaveRoom }: { onLeaveRoom: () => void }) {
         alignItems: 'center',
         gap: 10,
         padding: '8px 14px',
-        background: 'rgba(254, 253, 249, 0.94)',
-        backdropFilter: 'blur(12px) saturate(1.2)',
-        WebkitBackdropFilter: 'blur(12px) saturate(1.2)',
-        borderBottom: '1px solid var(--border-default)',
+        background: 'linear-gradient(90deg, rgba(24,15,59,0.96), rgba(39,24,90,0.92))',
+        backdropFilter: 'blur(16px) saturate(1.25)',
+        WebkitBackdropFilter: 'blur(16px) saturate(1.25)',
+        borderBottom: '1px solid rgba(223,200,82,0.36)',
         height: 52,
-        boxShadow: '0 1px 3px rgba(60, 30, 0, 0.04)',
+        boxShadow: '0 8px 22px rgba(17, 11, 39, 0.18)',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -74,17 +74,18 @@ export function TopBar({ onLeaveRoom }: { onLeaveRoom: () => void }) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-                       background: 'linear-gradient(135deg, #d4a853, #b8860b)',
-            color: 'white',
+            background: 'linear-gradient(135deg, #f1dc62, #c99b20)',
+            color: '#171027',
             fontSize: 13,
             fontWeight: 900,
+            border: '1px solid rgba(255,247,223,0.38)',
           }}
         >
           GM
         </div>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{currentRoom.room_name}</div>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '1px', fontFamily: 'monospace' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-on-void)' }}>{currentRoom.room_name}</div>
+          <div style={{ fontSize: 10, color: 'rgba(255,247,223,0.64)', letterSpacing: '1px', fontFamily: 'monospace' }}>
             {currentRoom.invite_code}
           </div>
         </div>
@@ -101,10 +102,10 @@ export function TopBar({ onLeaveRoom }: { onLeaveRoom: () => void }) {
           alignItems: 'center',
           gap: 4,
           padding: '3px 8px',
-                   background: daysLeft < 1 ? 'rgba(244,63,94,0.1)' : 'rgba(245,158,11,0.08)',
-          border: `1px solid ${daysLeft < 1 ? 'rgba(244,63,94,0.2)' : 'rgba(245,158,11,0.15)'}`,
+          background: daysLeft < 1 ? 'rgba(177,45,63,0.18)' : 'rgba(223,200,82,0.14)',
+          border: `1px solid ${daysLeft < 1 ? 'rgba(177,45,63,0.34)' : 'rgba(223,200,82,0.30)'}`,
           fontSize: 11,
-          color: daysLeft < 1 ? 'var(--accent-rose)' : 'var(--accent-amber)',
+          color: daysLeft < 1 ? '#ffd9df' : '#fff0a6',
         }}
       >
         <Clock size={10} />
@@ -120,10 +121,10 @@ export function TopBar({ onLeaveRoom }: { onLeaveRoom: () => void }) {
             alignItems: 'center',
             gap: 4,
             padding: '3px 8px',
-                       background: 'rgba(245,158,11,0.1)',
-            border: '1px solid rgba(245,158,11,0.2)',
+            background: 'rgba(223,200,82,0.14)',
+            border: '1px solid rgba(223,200,82,0.30)',
             fontSize: 11,
-            color: 'var(--accent-amber)',
+            color: '#fff0a6',
           }}
         >
           <Wifi size={11} />
@@ -140,9 +141,9 @@ export function TopBar({ onLeaveRoom }: { onLeaveRoom: () => void }) {
             alignItems: 'center',
             gap: 6,
             padding: '6px 10px',
-                       border: '1px solid rgba(244,63,94,0.2)',
-            background: 'rgba(244,63,94,0.1)',
-            color: 'var(--accent-rose)',
+            border: '1px solid rgba(255,217,223,0.36)',
+            background: 'rgba(177,45,63,0.22)',
+            color: '#ffd9df',
             cursor: 'pointer',
             fontSize: 11,
             fontWeight: 700,
