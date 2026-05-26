@@ -25,8 +25,8 @@ export function NotebookPagination({
     <div
       className="flex items-center justify-between px-3 py-2"
       style={{
-        background: 'linear-gradient(180deg, #4E342E 0%, #3E2723 100%)',
-        borderTop: '2px solid #3E2723',
+        background: 'linear-gradient(180deg, #27185a 0%, #180f3b 100%)',
+        borderTop: '2px solid rgba(139,224,213,0.34)',
       }}
     >
       <div className="w-20">
@@ -34,7 +34,7 @@ export function NotebookPagination({
           <button
             type="button"
             onClick={onDeletePage}
-            className="p-1.5 text-amber-300/60 transition-colors hover:text-red-400"
+            className="p-1.5 text-teal-200/70 transition-colors hover:text-red-400"
             title="删除当前页"
           >
             <Trash2 className="h-4 w-4" />
@@ -47,7 +47,7 @@ export function NotebookPagination({
           type="button"
           onClick={() => onGoToPage(currentPage - 1)}
           disabled={currentPage <= 0}
-          className="p-1 text-amber-200 transition-colors hover:text-amber-100 disabled:cursor-not-allowed disabled:text-amber-900"
+          className="p-1 text-teal-200 transition-colors hover:text-teal-100 disabled:cursor-not-allowed disabled:text-violet-900"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
@@ -60,8 +60,8 @@ export function NotebookPagination({
               onClick={() => onGoToPage(index)}
               className={`h-2 w-2 transition-all ${
                 index === currentPage
-                  ? 'bg-amber-200 scale-125'
-                  : 'bg-amber-800 hover:bg-amber-600'
+                  ? 'bg-teal-200 scale-125'
+                  : 'bg-violet-800 hover:bg-teal-500'
               }`}
               title={`第 ${index + 1} 页`}
             />
@@ -72,7 +72,7 @@ export function NotebookPagination({
           type="button"
           onClick={() => onGoToPage(currentPage + 1)}
           disabled={currentPage >= totalPages - 1}
-          className="p-1 text-amber-200 transition-colors hover:text-amber-100 disabled:cursor-not-allowed disabled:text-amber-900"
+          className="p-1 text-teal-200 transition-colors hover:text-teal-100 disabled:cursor-not-allowed disabled:text-violet-900"
         >
           <ChevronRight className="h-4 w-4" />
         </button>
@@ -83,7 +83,7 @@ export function NotebookPagination({
           <button
             type="button"
             onClick={onAddPage}
-            className="p-1.5 text-amber-300/60 transition-colors hover:text-amber-100"
+            className="p-1.5 text-teal-200/70 transition-colors hover:text-teal-100"
             title={`添加新页 (${totalPages}/${maxPages})`}
           >
             <Plus className="h-4 w-4" />

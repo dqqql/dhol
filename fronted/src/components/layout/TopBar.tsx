@@ -61,7 +61,7 @@ export function TopBar({ onLeaveRoom }: { onLeaveRoom: () => void }) {
         background: 'linear-gradient(90deg, rgba(24,15,59,0.96), rgba(39,24,90,0.92))',
         backdropFilter: 'blur(16px) saturate(1.25)',
         WebkitBackdropFilter: 'blur(16px) saturate(1.25)',
-        borderBottom: '1px solid rgba(223,200,82,0.36)',
+        borderBottom: '1px solid rgba(139,224,213,0.32)',
         height: 52,
         boxShadow: '0 8px 22px rgba(17, 11, 39, 0.18)',
       }}
@@ -74,18 +74,18 @@ export function TopBar({ onLeaveRoom }: { onLeaveRoom: () => void }) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'linear-gradient(135deg, #f1dc62, #c99b20)',
+            background: 'linear-gradient(135deg, #8be0d5, #38a89c)',
             color: '#171027',
             fontSize: 13,
             fontWeight: 900,
-            border: '1px solid rgba(255,247,223,0.38)',
+            border: '1px solid rgba(247,242,255,0.34)',
           }}
         >
           GM
         </div>
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-on-void)' }}>{currentRoom.room_name}</div>
-          <div style={{ fontSize: 10, color: 'rgba(255,247,223,0.64)', letterSpacing: '1px', fontFamily: 'monospace' }}>
+          <div style={{ fontSize: 10, color: 'rgba(247,242,255,0.64)', letterSpacing: '1px', fontFamily: 'monospace' }}>
             {currentRoom.invite_code}
           </div>
         </div>
@@ -102,10 +102,10 @@ export function TopBar({ onLeaveRoom }: { onLeaveRoom: () => void }) {
           alignItems: 'center',
           gap: 4,
           padding: '3px 8px',
-          background: daysLeft < 1 ? 'rgba(177,45,63,0.18)' : 'rgba(223,200,82,0.14)',
-          border: `1px solid ${daysLeft < 1 ? 'rgba(177,45,63,0.34)' : 'rgba(223,200,82,0.30)'}`,
+          background: daysLeft < 1 ? 'rgba(177,45,63,0.18)' : 'rgba(139,224,213,0.12)',
+          border: `1px solid ${daysLeft < 1 ? 'rgba(177,45,63,0.34)' : 'rgba(139,224,213,0.30)'}`,
           fontSize: 11,
-          color: daysLeft < 1 ? '#ffd9df' : '#fff0a6',
+          color: daysLeft < 1 ? '#ffd9df' : '#bff7f1',
         }}
       >
         <Clock size={10} />
@@ -121,10 +121,10 @@ export function TopBar({ onLeaveRoom }: { onLeaveRoom: () => void }) {
             alignItems: 'center',
             gap: 4,
             padding: '3px 8px',
-            background: 'rgba(223,200,82,0.14)',
-            border: '1px solid rgba(223,200,82,0.30)',
+            background: 'rgba(139,224,213,0.12)',
+            border: '1px solid rgba(139,224,213,0.30)',
             fontSize: 11,
-            color: '#fff0a6',
+            color: '#bff7f1',
           }}
         >
           <Wifi size={11} />

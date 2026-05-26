@@ -59,7 +59,7 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
         padding: 24,
         boxSizing: 'border-box',
         overflowY: 'auto',
-        background: 'radial-gradient(circle at 18% 18%, rgba(139,224,213,0.24), transparent 26%), radial-gradient(circle at 82% 20%, rgba(223,200,82,0.18), transparent 28%), linear-gradient(135deg, #170e38 0%, #27185a 44%, #f1dfb5 44.2%, #f7ecd3 100%)',
+        background: 'radial-gradient(circle at 18% 18%, rgba(139,224,213,0.24), transparent 26%), radial-gradient(circle at 82% 20%, rgba(109,91,208,0.20), transparent 28%), linear-gradient(135deg, #170e38 0%, #27185a 44%, #d9d4eb 44.2%, #f6f4fb 100%)',
       }}
     >
       <div
@@ -79,7 +79,7 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
             minHeight: 420,
             padding: 36,
             overflow: 'hidden',
-            border: '1px solid rgba(223,200,82,0.46)',
+            border: '1px solid rgba(139,224,213,0.40)',
             background: 'linear-gradient(145deg, rgba(24,15,59,0.94), rgba(39,24,90,0.88)), radial-gradient(circle at 78% 24%, rgba(139,224,213,0.28), transparent 28%)',
             color: 'var(--text-on-void)',
             boxShadow: '0 30px 70px rgba(17,11,39,0.34)',
@@ -90,7 +90,7 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
             style={{
               position: 'absolute',
               inset: 12,
-              border: '1px solid rgba(223,200,82,0.30)',
+              border: '1px solid rgba(139,224,213,0.26)',
               pointerEvents: 'none',
             }}
           />
@@ -104,7 +104,7 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
                 匕首之心
                 <span style={{ display: 'block', color: 'var(--accent-cyan)' }}>在线面板</span>
               </h1>
-              <p style={{ maxWidth: 460, marginTop: 20, color: 'rgba(255,247,223,0.82)', fontSize: 15, lineHeight: 1.8 }}>
+              <p style={{ maxWidth: 460, marginTop: 20, color: 'rgba(247,242,255,0.82)', fontSize: 15, lineHeight: 1.8 }}>
                 在线追踪希望、护甲、压力、生命以及恐惧点、进度钟。查看所有队友的角色卡。
               </p>
             </div>
@@ -119,8 +119,8 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
                   style={{
                     minHeight: 98,
                     padding: 14,
-                    border: '1px solid rgba(223,200,82,0.28)',
-                    background: 'rgba(255,247,223,0.08)',
+                    border: '1px solid rgba(139,224,213,0.28)',
+                    background: 'rgba(247,242,255,0.08)',
                     display: 'grid',
                     alignContent: 'space-between',
                   }}
@@ -128,7 +128,7 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
                   <Dices size={22} color={color} />
                   <div>
                     <div style={{ fontSize: 19, fontWeight: 900, color }}>{label}</div>
-                    <div style={{ marginTop: 3, fontSize: 12, color: 'rgba(255,247,223,0.68)' }}>{text}</div>
+                    <div style={{ marginTop: 3, fontSize: 12, color: 'rgba(247,242,255,0.68)' }}>{text}</div>
                   </div>
                 </div>
               ))}
@@ -152,8 +152,8 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
                 style={{
                   flex: 1,
                   padding: '10px 0',
-                  border: tab === value ? '1px solid rgba(223,200,82,0.42)' : '1px solid transparent',
-                  background: tab === value ? 'linear-gradient(180deg, #fffdf7, #f2e2bd)' : 'transparent',
+                  border: tab === value ? '1px solid rgba(139,224,213,0.42)' : '1px solid transparent',
+                  background: tab === value ? 'linear-gradient(180deg, #ffffff, #e7f8f6)' : 'transparent',
                   color: tab === value ? 'var(--accent-violet)' : 'var(--text-muted)',
                   fontWeight: 700,
                   cursor: 'pointer',

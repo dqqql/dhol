@@ -48,7 +48,7 @@ export function InviteCodeModal({
       >
         <div
           style={{
-            background: 'linear-gradient(135deg, #b8860b, #7c4f31)',
+            background: 'linear-gradient(135deg, #27185a, #38a89c)',
             padding: '24px 24px 20px',
             position: 'relative',
             overflow: 'hidden',

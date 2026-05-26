@@ -20,7 +20,7 @@ export function CounterLine({ line, lineHeight, onUpdate, onDelete, dragHandlePr
     <div className="relative">
       <div
         {...dragHandleProps}
-        className="absolute -left-8 bottom-0 top-0 w-6 cursor-grab hover:bg-amber-100/40"
+        className="absolute -left-8 bottom-0 top-0 w-6 cursor-grab hover:bg-teal-100/40"
         title="拖拽排序"
       />
 
@@ -33,13 +33,13 @@ export function CounterLine({ line, lineHeight, onUpdate, onDelete, dragHandlePr
               onUpdate({ label: editLabel || '计数器' })
               setIsEditingLabel(false)
             }}
-            className="border border-amber-300 bg-white px-1 py-0.5 text-xs outline-none"
+            className="border border-teal-300 bg-white px-1 py-0.5 text-xs outline-none"
           />
         ) : (
           <button
             type="button"
             onClick={() => setIsEditingLabel(true)}
-            style={{ border: 'none', background: 'transparent', color: '#7c4f31', fontSize: 12, fontWeight: 700 }}
+            style={{ border: 'none', background: 'transparent', color: '#27185a', fontSize: 12, fontWeight: 700 }}
           >
             {line.label || '计数器'}
           </button>
@@ -56,7 +56,7 @@ export function CounterLine({ line, lineHeight, onUpdate, onDelete, dragHandlePr
                 onUpdate({ max: nextMax, current: Math.min(line.current, nextMax) })
                 setIsEditingMax(false)
               }}
-              className="ml-1 w-10 border border-amber-300 bg-white px-1 py-0.5 text-xs outline-none"
+              className="ml-1 w-10 border border-teal-300 bg-white px-1 py-0.5 text-xs outline-none"
             />
           ) : (
             <button
@@ -92,8 +92,8 @@ export function CounterLine({ line, lineHeight, onUpdate, onDelete, dragHandlePr
               style={{
                 width: 16,
                 height: 16,
-                border: '2px solid #7c4f31',
-                background: index < line.current ? '#7c4f31' : 'white',
+                border: '2px solid #27185a',
+                background: index < line.current ? '#8be0d5' : 'white',
                 cursor: 'pointer',
               }}
             />

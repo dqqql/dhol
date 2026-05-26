@@ -66,8 +66,8 @@ export function NotebookPage({ page, onUpdateLine, onDeleteLine, onReorderLines 
         <div className="relative space-y-0">
           {draggedIndex !== null && dragOverIndex === 0 && (
             <div
-              className="-mx-8 h-px bg-amber-500"
-              style={{ boxShadow: '0 0 4px rgba(245, 158, 11, 0.8)' }}
+              className="-mx-8 h-px bg-teal-400"
+              style={{ boxShadow: '0 0 4px rgba(139, 224, 213, 0.85)' }}
             />
           )}
 
@@ -75,9 +75,9 @@ export function NotebookPage({ page, onUpdateLine, onDeleteLine, onReorderLines 
             <div
               key={line.id}
               className={`group relative transition-all duration-150 ${
-                draggedIndex === index ? 'bg-amber-100/50 opacity-50' : ''
+                draggedIndex === index ? 'bg-teal-100/50 opacity-50' : ''
               } ${
-                draggedIndex !== null && draggedIndex !== index ? 'border-t border-amber-200/60 bg-amber-50/30' : ''
+                draggedIndex !== null && draggedIndex !== index ? 'border-t border-teal-200/60 bg-teal-50/30' : ''
               }`}
               style={{
                 minHeight: lineHeight,
@@ -94,15 +94,15 @@ export function NotebookPage({ page, onUpdateLine, onDeleteLine, onReorderLines 
             >
               {draggedIndex !== null && dragOverIndex === index && draggedIndex !== index && (
                 <div
-                  className="absolute -top-px left-0 right-0 z-10 -mx-8 h-px bg-amber-500"
-                  style={{ boxShadow: '0 0 4px rgba(245, 158, 11, 0.8)' }}
+                  className="absolute -top-px left-0 right-0 z-10 -mx-8 h-px bg-teal-400"
+                  style={{ boxShadow: '0 0 4px rgba(139, 224, 213, 0.85)' }}
                 />
               )}
 
               {draggedIndex !== null && dragOverIndex === index + 1 && draggedIndex !== index && (
                 <div
-                  className="absolute -bottom-px left-0 right-0 z-10 -mx-8 h-px bg-amber-500"
-                  style={{ boxShadow: '0 0 4px rgba(245, 158, 11, 0.8)' }}
+                  className="absolute -bottom-px left-0 right-0 z-10 -mx-8 h-px bg-teal-400"
+                  style={{ boxShadow: '0 0 4px rgba(139, 224, 213, 0.85)' }}
                 />
               )}
 
@@ -139,8 +139,8 @@ export function NotebookPage({ page, onUpdateLine, onDeleteLine, onReorderLines 
             >
               {dragOverIndex === page.lines.length && (
                 <div
-                  className="h-px bg-amber-500"
-                  style={{ boxShadow: '0 0 4px rgba(245, 158, 11, 0.8)' }}
+                  className="h-px bg-teal-400"
+                  style={{ boxShadow: '0 0 4px rgba(139, 224, 213, 0.85)' }}
                 />
               )}
             </div>

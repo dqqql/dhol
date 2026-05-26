@@ -205,8 +205,8 @@ export function FloatingNotebook({ roomId }: { roomId: string }) {
           alignItems: 'center',
           gap: 8,
           padding: '10px 14px',
-          border: '1px solid rgba(223, 200, 82, 0.36)',
-          background: 'linear-gradient(135deg, #fffdf7, #ead8b3)',
+          border: '1px solid rgba(139, 224, 213, 0.34)',
+          background: 'linear-gradient(135deg, #ffffff, #d9d4eb)',
           color: '#27185a',
           boxShadow: '0 14px 28px rgba(35, 20, 68, 0.14)',
           cursor: 'pointer',
@@ -241,19 +241,19 @@ export function FloatingNotebook({ roomId }: { roomId: string }) {
           onMouseDown={handleMouseDown}
           style={{
             background: 'linear-gradient(180deg, #27185a 0%, #180f3b 100%)',
-            borderBottom: '2px solid rgba(223,200,82,0.34)',
+            borderBottom: '2px solid rgba(139,224,213,0.34)',
           }}
         >
           <div className="flex items-center gap-2">
-            <BookOpen className="h-4 w-4 text-amber-200" />
-            <span className="text-sm font-medium text-amber-100">本地笔记</span>
+            <BookOpen className="h-4 w-4 text-teal-200" />
+            <span className="text-sm font-medium text-teal-100">本地笔记</span>
           </div>
           <button
             type="button"
             onClick={toggleOpen}
-            className="p-1 transition-colors hover:bg-amber-900/50"
+            className="p-1 transition-colors hover:bg-teal-900/30"
           >
-            <X className="h-4 w-4 text-amber-200" />
+            <X className="h-4 w-4 text-teal-200" />
           </button>
         </div>
 
@@ -261,7 +261,7 @@ export function FloatingNotebook({ roomId }: { roomId: string }) {
           className="notebook-content relative flex flex-col"
           style={{
             height: 400,
-            background: '#fff7df',
+            background: '#f7f2ff',
           }}
         >
           <div

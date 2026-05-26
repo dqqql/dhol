@@ -325,7 +325,7 @@ export function GmPanelBoard() {
         width: '100%',
         height: '100%',
         overflow: 'auto',
-        background: 'radial-gradient(circle at 12% 4%, rgba(139,224,213,0.16), transparent 22%), radial-gradient(circle at 88% 10%, rgba(223,200,82,0.18), transparent 24%), linear-gradient(180deg, #f7ecd3 0%, #ead8b3 100%)',
+        background: 'radial-gradient(circle at 12% 4%, rgba(139,224,213,0.14), transparent 22%), radial-gradient(circle at 88% 10%, rgba(109,91,208,0.14), transparent 24%), linear-gradient(180deg, #f6f4fb 0%, #d9d4eb 100%)',
       }}
     >
       <div style={{ minWidth: 1320, padding: 20, display: 'grid', gap: 18 }}>
@@ -352,8 +352,8 @@ export function GmPanelBoard() {
             gap: 12,
             flexWrap: 'wrap',
             padding: 16,
-            border: '1px solid rgba(223, 200, 82, 0.30)',
-            background: 'linear-gradient(180deg, rgba(255,253,247,0.94), rgba(246,234,205,0.88))',
+            border: '1px solid rgba(139, 224, 213, 0.26)',
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.94), rgba(232,228,242,0.88))',
             boxShadow: '0 18px 44px rgba(35, 20, 68, 0.10)',
           }}
         >
@@ -367,8 +367,8 @@ export function GmPanelBoard() {
                 aria-live="polite"
                 style={{
                   padding: '7px 10px',
-                  border: '1px solid rgba(223, 200, 82, 0.34)',
-                  background: 'rgba(255, 250, 229, 0.88)',
+                  border: '1px solid rgba(139, 224, 213, 0.32)',
+                  background: 'rgba(239, 252, 250, 0.88)',
                   color: '#4a357e',
                   fontSize: 12,
                   fontWeight: 800,
@@ -464,8 +464,8 @@ export function GmPanelBoard() {
                   className="btn"
                   onClick={confirmDeleteStepOne}
                   style={{
-                    background: 'linear-gradient(180deg, #f97316, #ea580c)',
-                    borderColor: '#ea580c',
+                    background: 'linear-gradient(180deg, #b12d3f, #8f1f34)',
+                    borderColor: '#8f1f34',
                     color: 'white',
                   }}
                 >
@@ -507,8 +507,8 @@ function ImportPendingToast({ pendingImport }: { pendingImport: ImportPendingSta
         minWidth: 260,
         maxWidth: 360,
         padding: '12px 14px',
-        border: '1px solid rgba(223, 200, 82, 0.36)',
-        background: 'linear-gradient(180deg, rgba(255,253,247,0.98), rgba(246,234,205,0.96))',
+        border: '1px solid rgba(139, 224, 213, 0.34)',
+        background: 'linear-gradient(180deg, rgba(255,255,255,0.98), rgba(232,228,242,0.96))',
         color: '#4a357e',
         boxShadow: '0 18px 44px rgba(35, 20, 68, 0.18)',
       }}
@@ -563,8 +563,8 @@ function HtmlSheetCard(props: {
     <article
       style={{
         minWidth: 0,
-        border: '1px solid rgba(223, 200, 82, 0.32)',
-        background: 'linear-gradient(180deg, rgba(255,253,247,0.98), rgba(246,234,205,0.94))',
+        border: '1px solid rgba(139, 224, 213, 0.28)',
+        background: 'linear-gradient(180deg, rgba(255,255,255,0.98), rgba(232,228,242,0.94))',
         boxShadow: '0 18px 42px rgba(35, 20, 68, 0.12)',
         overflow: 'hidden',
       }}
@@ -581,7 +581,7 @@ function HtmlSheetCard(props: {
         }}
       >
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 18, fontWeight: 900, color: '#fff7df', marginBottom: 4 }}>
+          <div style={{ fontSize: 18, fontWeight: 900, color: '#f7f2ff', marginBottom: 4 }}>
             {entry.parsed_sheet.character_name || '未命名角色'}
           </div>
           <div
@@ -600,7 +600,7 @@ function HtmlSheetCard(props: {
             style={{
               marginTop: 4,
               fontSize: 11,
-              color: 'rgba(255,247,223,0.58)',
+              color: 'rgba(247,242,255,0.58)',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -620,8 +620,8 @@ function HtmlSheetCard(props: {
                 className="btn btn-sm"
                 onClick={onDelete}
                 style={{
-                  background: 'linear-gradient(180deg, #fee2e2, #fecaca)',
-                  borderColor: '#fca5a5',
+                  background: 'linear-gradient(180deg, #fde7eb, #f7c8d0)',
+                  borderColor: '#eaa3ae',
                   color: '#b91c1c',
                 }}
                 title={'\u6c38\u4e45\u5220\u9664\u8fd9\u5f20\u89d2\u8272\u5361'}
@@ -641,7 +641,7 @@ function HtmlSheetCard(props: {
         )}
       </div>
 
-      <div style={{ position: 'relative', height: 'calc(100vh - 280px)', minHeight: 680, background: '#f5ecd7' }}>
+      <div style={{ position: 'relative', height: 'calc(100vh - 280px)', minHeight: 680, background: '#f0edf8' }}>
         {sheetState?.srcDoc ? (
           <iframe
             title={`${entry.parsed_sheet.character_name}-sheet`}
@@ -652,7 +652,7 @@ function HtmlSheetCard(props: {
               height: '100%',
               border: 'none',
               display: 'block',
-              background: '#f5ecd7',
+              background: '#f0edf8',
             }}
           />
         ) : (
@@ -691,7 +691,7 @@ function EmptySlotCard({ canImport, onImport }: { canImport: boolean; onImport: 
         style={{
           minHeight: 680,
                    border: '2px dashed rgba(184, 134, 11, 0.14)',
-          background: 'rgba(255, 250, 240, 0.56)',
+          background: 'rgba(251, 251, 255, 0.56)',
           color: '#a8a29e',
           display: 'grid',
           placeItems: 'center',
@@ -711,7 +711,7 @@ function EmptySlotCard({ canImport, onImport }: { canImport: boolean; onImport: 
       style={{
         minHeight: 680,
                border: '2px dashed rgba(184, 134, 11, 0.2)',
-        background: 'rgba(255, 250, 240, 0.62)',
+        background: 'rgba(251, 251, 255, 0.62)',
         color: '#4a357e',
         cursor: 'pointer',
         fontSize: 15,
@@ -728,8 +728,8 @@ function ActivityLogPanel({ logs }: { logs: Array<{ id: string; created_at: stri
     <section
       style={{
         padding: 18,
-        border: '1px solid rgba(223, 200, 82, 0.26)',
-        background: 'linear-gradient(180deg, rgba(255,253,247,0.94), rgba(246,234,205,0.90))',
+        border: '1px solid rgba(139, 224, 213, 0.24)',
+        background: 'linear-gradient(180deg, rgba(255,255,255,0.94), rgba(232,228,242,0.90))',
         boxShadow: '0 16px 40px rgba(35, 20, 68, 0.10)',
       }}
     >
@@ -739,9 +739,9 @@ function ActivityLogPanel({ logs }: { logs: Array<{ id: string; created_at: stri
           <div style={{ fontSize: 13, color: '#9ca3af' }}>还没有记录。</div>
         ) : (
           [...logs].reverse().map((log) => (
-              <div key={log.id} style={{ padding: 12, background: 'rgba(255,250,240,0.78)', border: '1px solid rgba(128, 96, 35, 0.16)' }}>
+              <div key={log.id} style={{ padding: 12, background: 'rgba(251,251,255,0.82)', border: '1px solid rgba(39, 24, 90, 0.14)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 6 }}>
-                <span style={{ fontSize: 12, fontWeight: 800, color: '#7c4f31' }}>{log.actor_name}</span>
+                <span style={{ fontSize: 12, fontWeight: 800, color: '#4a357e' }}>{log.actor_name}</span>
                 <span style={{ fontSize: 11, color: '#94a3b8' }}>{formatTime(log.created_at)}</span>
               </div>
               <div style={{ fontSize: 13, lineHeight: 1.6, color: '#1f2937' }}>{log.message}</div>
@@ -810,8 +810,8 @@ function TrackerFearBar(props: {
         style={{
           padding: 20,
           border: '1px solid rgba(177, 45, 63, 0.22)',
-          background: 'linear-gradient(135deg, rgba(24,15,59,0.96), rgba(39,24,90,0.90) 42%, rgba(255,253,247,0.96) 42.2%, rgba(246,234,205,0.94))',
-          boxShadow: '0 22px 54px rgba(35, 20, 68, 0.18), inset 0 1px 0 rgba(255,255,255,0.50)',
+          background: 'linear-gradient(180deg, rgba(24,15,59,0.97), rgba(39,24,90,0.93))',
+          boxShadow: '0 22px 54px rgba(35, 20, 68, 0.22), inset 0 1px 0 rgba(255,255,255,0.10)',
         }}
       >
         <div
@@ -848,7 +848,7 @@ function TrackerFearBar(props: {
                     alignItems: 'center',
                     padding: '5px 12px',
                     background: 'linear-gradient(135deg, #b12d3f, #8f1f34)',
-                    color: '#fff7df',
+                    color: '#f7f2ff',
                     fontSize: 12,
                     fontWeight: 800,
                     letterSpacing: '0.02em',
@@ -859,11 +859,11 @@ function TrackerFearBar(props: {
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 6 }}>
-                <span style={{ fontSize: 64, lineHeight: 0.9, fontWeight: 900, color: '#fff7df', letterSpacing: 0 }}>{value}</span>
+                <span style={{ fontSize: 64, lineHeight: 0.9, fontWeight: 900, color: '#f7f2ff', letterSpacing: 0 }}>{value}</span>
                 <span style={{ fontSize: 20, fontWeight: 800, color: '#ffccd4' }}>/ {max}</span>
               </div>
               {editable && (
-                <div style={{ marginTop: 8, fontSize: 11, lineHeight: 1.5, color: 'rgba(255,247,223,0.72)' }}>
+                <div style={{ marginTop: 8, fontSize: 11, lineHeight: 1.5, color: 'rgba(247,242,255,0.72)' }}>
                   {'\u70b9\u51fb\u4e0b\u65b9\u523b\u5ea6\u5373\u53ef\u628a\u6050\u60e7\u70b9\u8bbe\u7f6e\u5230\u5bf9\u5e94\u6570\u503c\u3002'}
                 </div>
               )}
@@ -887,7 +887,7 @@ function TrackerFearBar(props: {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: '#251d18', letterSpacing: '0.01em' }}>{'\u8fdb\u5ea6\u949f'}</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: '#8be0d5', letterSpacing: '0.01em' }}>{'\u8fdb\u5ea6\u949f'}</div>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minHeight: 20 }}>
@@ -932,8 +932,8 @@ function TrackerFearBar(props: {
                         maxWidth: '100%',
                         flex: '0 0 auto',
                         padding: 14,
-                        border: '1px solid rgba(223, 200, 82, 0.32)',
-                        background: 'linear-gradient(180deg, rgba(255,253,247,0.97), rgba(246,234,205,0.94))',
+                        border: '1px solid rgba(139, 224, 213, 0.26)',
+                        background: 'linear-gradient(180deg, rgba(255,255,255,0.98), rgba(232,228,242,0.96))',
                         boxShadow: '0 6px 18px rgba(35, 20, 68, 0.10), inset 0 1px 0 rgba(255,255,255,0.8)',
                       }}
                     >
@@ -950,7 +950,7 @@ function TrackerFearBar(props: {
                           style={{
                             fontSize: 13,
                             fontWeight: 800,
-                            color: '#92400e',
+                            color: '#27185a',
                             whiteSpace: 'nowrap',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
@@ -958,7 +958,7 @@ function TrackerFearBar(props: {
                         >
                           {countdown.name}
                         </div>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#b45309' }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#6d5bd0' }}>
                           {countdown.value} / {countdown.max}
                         </div>
                         {editable && (
@@ -968,7 +968,7 @@ function TrackerFearBar(props: {
                             style={{
                               border: 'none',
                               background: 'transparent',
-                              color: '#f97316',
+                              color: '#b12d3f',
                               cursor: 'pointer',
                               padding: 0,
                               marginLeft: 'auto',
@@ -992,8 +992,8 @@ function TrackerFearBar(props: {
                               style={{
                                 width: 28,
                                 height: 28,
-                                border: active ? '1px solid rgba(139, 224, 213, 0.58)' : '1px solid rgba(128, 96, 35, 0.18)',
-                                background: active ? 'linear-gradient(135deg, #8be0d5, #2f9d91)' : 'rgba(255,255,255,0.85)',
+                                border: active ? '1px solid rgba(139, 224, 213, 0.58)' : '1px solid rgba(39, 24, 90, 0.16)',
+                                background: active ? 'linear-gradient(135deg, #8be0d5, #2f9d91)' : 'rgba(255,255,255,0.92)',
                                 color: active ? '#171027' : '#4a357e',
                                 fontSize: 12,
                                 fontWeight: 800,
@@ -1043,7 +1043,7 @@ function TrackerFearBar(props: {
                 style={{
                   background: 'linear-gradient(180deg, #b12d3f, #8f1f34)',
                   borderColor: '#8f1f34',
-                  color: '#fff7df',
+                  color: '#f7f2ff',
                 }}
               >
                 {'+ \u6050\u60e7\u6ecb\u751f'}
@@ -1079,8 +1079,8 @@ function TrackerFearBar(props: {
                 style={{
                   height: 44,
                                    border: active ? '1px solid rgba(185,28,28,0.4)' : '1px solid rgba(185,28,28,0.14)',
-                  background: active ? `rgba(185, 28, 28, ${opacity})` : 'rgba(255,255,255,0.5)',
-                  color: active ? 'white' : '#991b1b',
+                  background: active ? `rgba(177, 45, 63, ${opacity})` : 'rgba(255,255,255,0.10)',
+                  color: active ? '#f7f2ff' : '#ffccd4',
                   fontSize: 13,
                   fontWeight: 800,
                   cursor: editable ? 'pointer' : 'default',

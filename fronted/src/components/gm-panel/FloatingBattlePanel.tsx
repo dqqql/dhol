@@ -311,7 +311,7 @@ export function FloatingBattlePanel({ roomId }: { roomId: string }) {
               )}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#7c4f31', fontWeight: 700 }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#4a357e', fontWeight: 700 }}>
                 <Shield size={14} />
                 {cards.length} {'\u4e2a\u602a\u7269\u5361'}
               </div>
@@ -372,8 +372,8 @@ function BattleMonsterCard(props: {
       style={{
         display: 'grid',
         gap: 10,
-        border: '2px solid rgba(223, 200, 82, 0.30)',
-        background: 'linear-gradient(180deg, rgba(255,253,247,0.98), rgba(246,234,205,0.96))',
+        border: '2px solid rgba(139, 224, 213, 0.26)',
+        background: 'linear-gradient(180deg, rgba(255,255,255,0.98), rgba(232,228,242,0.96))',
         boxShadow: '0 18px 42px rgba(35, 20, 68, 0.14)',
         overflow: 'hidden',
       }}
@@ -387,7 +387,7 @@ function BattleMonsterCard(props: {
             )}
           </div>
           <div style={{ textAlign: 'right', flexShrink: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: '#7c4f31' }}>{'\u4f4d\u9636'} {monster.tier} {monster.kind}</div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: '#4a357e' }}>{'\u4f4d\u9636'} {monster.tier} {monster.kind}</div>
             <div style={{ marginTop: 3, fontSize: 11, color: '#94a3b8' }}>{monster.type}</div>
           </div>
         </div>
@@ -425,7 +425,7 @@ function BattleMonsterCard(props: {
             margin: '0 14px',
             padding: '10px 12px',
             borderLeft: '3px solid #8be0d5',
-            background: 'linear-gradient(90deg, rgba(139,224,213,0.20), rgba(255,250,240,0.74))',
+            background: 'linear-gradient(90deg, rgba(139,224,213,0.20), rgba(251,251,255,0.78))',
             color: '#117768',
             fontSize: 13,
             fontWeight: 800,
@@ -437,7 +437,7 @@ function BattleMonsterCard(props: {
 
       <div style={{ display: 'grid', gap: 8, padding: '0 14px 14px 14px' }}>
         {monster.traits.map((trait) => (
-          <div key={`${monster.id}-${trait.name}`} style={{ border: '1px solid rgba(128, 96, 35, 0.18)', background: 'rgba(255,250,240,0.84)' }}>
+          <div key={`${monster.id}-${trait.name}`} style={{ border: '1px solid rgba(39, 24, 90, 0.14)', background: 'rgba(251,251,255,0.86)' }}>
             <div
               style={{
                 display: 'flex',
