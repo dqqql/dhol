@@ -40,6 +40,15 @@ type ImportPendingState = {
   targetSheetId?: string
 }
 
+const SRD_CHARACTER_SHEET_ERROR = '请使用srd车卡器导出的角色卡'
+
+function isSrdCharacterSheetHtml(html: string) {
+  const head = html.slice(0, 20_000)
+  return /<html\b[^>]*\bdata-version=["']1\.0["'][^>]*\bdata-exporter=["']daggerheart-character-sheet["']/i.test(head)
+    && /<meta\b[^>]*\bname=["']generator["'][^>]*\bcontent=["']Daggerheart Character Sheet Exporter v1\.0["']/i.test(head)
+    && /\b(?:window\s*\.\s*)?characterData\s*=/.test(html)
+}
+
 export function GmPanelBoard() {
   const {
     room,
@@ -265,6 +274,10 @@ export function GmPanelBoard() {
 
     try {
       const html = await file.text()
+      if (!isSrdCharacterSheetHtml(html)) {
+        throw new Error(SRD_CHARACTER_SHEET_ERROR)
+      }
+
       if (targetSheetId) {
         replaceGmCharacter(targetSheetId, file.name, html)
       } else {

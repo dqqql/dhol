@@ -1,6 +1,7 @@
 import React from 'react'
 import { GmPanelBoard } from '@/components/gm-panel/GmPanelBoard'
 import { TopBar } from '@/components/layout/TopBar'
+import { ImportModal } from '@/components/ui/ImportModal'
 import { RoomSettingsModal } from '@/components/ui/RoomSettingsModal'
 import { ToastContainer } from '@/components/ui/Toast'
 import { useStore } from '@/store/useStore'
@@ -85,6 +86,7 @@ export function RoomPage({ onLeaveRoom }: RoomPageProps) {
         <GmPanelBoard />
       </div>
 
+      <ImportModal />
       <RoomSettingsModal />
       <ToastContainer />
     </div>

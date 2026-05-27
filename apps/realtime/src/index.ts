@@ -69,6 +69,7 @@ const DRAW_TYPES: DeckCardType[] = ['Location', 'Feature', 'Hook']
 const STARTING_CARDS_PER_TYPE = 2
 const GM_SHEET_HTML_STORAGE_KEY_PREFIX = 'gm_sheet_html:'
 const GM_SHEET_COMPILED_HTML_STORAGE_KEY_PREFIX = 'gm_sheet_compiled_html:'
+const SRD_CHARACTER_SHEET_ERROR = '请使用srd车卡器导出的角色卡'
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -903,6 +904,14 @@ export class RoomDurableObject {
     const activePlayers = room.players
     const hostPlayerId = room.host_player_id
     const nicknameToPlayer = new Map(activePlayers.map((player) => [player.nickname, player]))
+    const oldPlayerIdToCurrentId = new Map(
+      backup.players
+        .map((player) => [player.id, nicknameToPlayer.get(player.nickname)?.id] as const)
+        .filter((entry): entry is readonly [string, string] => Boolean(entry[1])),
+    )
+    const remapPlayerId = (playerId?: string): string | undefined => (
+      playerId ? oldPlayerIdToCurrentId.get(playerId) : undefined
+    )
     const hands: Record<string, DhCard[]> = Object.fromEntries(activePlayers.map((player) => [player.id, []]))
     const fallbackDeck: DhCard[] = []
 
@@ -928,16 +937,20 @@ export class RoomDurableObject {
       .map((nickname) => nicknameToPlayer.get(nickname)?.id)
       .filter((playerId): playerId is string => Boolean(playerId))
 
+    const turnOrderIds = new Set(turnOrder)
     for (const player of activePlayers) {
-      if (!turnOrder.includes(player.id)) {
+      if (!turnOrderIds.has(player.id)) {
         turnOrder.push(player.id)
+        turnOrderIds.add(player.id)
       }
     }
 
     const currentTurnPlayerId = backup.session.current_turn_player
       ? nicknameToPlayer.get(backup.session.current_turn_player)?.id ?? null
       : null
+    const importedRoomType = normalizeRoomType(backup.room.room_type)
 
+    room.room_type = importedRoomType
     room.room_name = backup.room.name || room.room_name
     room.mode = backup.session.mode
     room.current_turn_player_id = currentTurnPlayerId
@@ -952,6 +965,42 @@ export class RoomDurableObject {
     room.settings = {
       ...room.settings,
       imports_enabled: backup.settings?.imports_enabled ?? true,
+      resource_change_requires_approval: backup.settings?.resource_change_requires_approval ?? room.settings.resource_change_requires_approval,
+      battle_panel_visibility: backup.settings?.battle_panel_visibility ?? room.settings.battle_panel_visibility,
+    }
+
+    if (importedRoomType === 'resource-tracker') {
+      const tracker = normalizeResourceTrackerState(structuredClone(backup.resource_tracker))
+      room.resource_tracker = {
+        ...tracker,
+        columns: tracker.columns.map((column) => ({
+          ...column,
+          owner_player_id: remapPlayerId(column.owner_player_id) ?? hostPlayerId,
+        })),
+        pending_resource_requests: tracker.pending_resource_requests.map((request) => ({
+          ...request,
+          owner_player_id: remapPlayerId(request.owner_player_id) ?? hostPlayerId,
+          requested_by_player_id: remapPlayerId(request.requested_by_player_id) ?? hostPlayerId,
+        })),
+        activity_log: tracker.activity_log.map((item) => ({
+          ...item,
+          actor_player_id: remapPlayerId(item.actor_player_id),
+        })),
+      }
+      room.gm_panel = undefined
+    } else if (importedRoomType === 'gm-panel') {
+      const panel = normalizeGmPanelStateWithHtml(structuredClone(backup.gm_panel))
+      room.resource_tracker = undefined
+      room.gm_panel = {
+        ...panel,
+        activity_log: panel.activity_log.map((item) => ({
+          ...item,
+          actor_player_id: remapPlayerId(item.actor_player_id),
+        })),
+      }
+    } else {
+      room.resource_tracker = undefined
+      room.gm_panel = undefined
     }
     room.host_player_id = hostPlayerId
     room.players = activePlayers.map((player) => ({
@@ -1827,7 +1876,7 @@ export class RoomDurableObject {
         ? normalizeResourceTrackerState(migrated.resource_tracker)
         : undefined,
       gm_panel: (migrated.room_type ?? 'co-creation') === 'gm-panel'
-        ? normalizeGmPanelStateWithHtml(migrated.gm_panel)
+        ? normalizeGmPanelState(migrated.gm_panel)
         : undefined,
       imported_pack_library: importedPackLibrary.map((pack) => ({
         ...pack,
@@ -2140,35 +2189,15 @@ function normalizeGmPanelStateWithHtml(value: GmPanelState | undefined): GmPanel
     const sourceHtml = cleanText(sheet.source_html, '', 2_000_000)
 
     if (sourceHtml) {
-      return createGmSheetEntry(fileName, sourceHtml, entryId, importedAt, updatedAt, htmlUpdatedAt)
-    }
-
-    const fallback = normalized.sheets[index]
-    if (fallback) {
-      return {
-        ...fallback,
-        id: entryId,
-        imported_at: importedAt,
-        updated_at: updatedAt,
-        html_updated_at: htmlUpdatedAt,
-        source_file_name: fileName,
+      const entry = createGmSheetEntry(fileName, sourceHtml, entryId, importedAt, updatedAt, htmlUpdatedAt)
+      if (sheet.parsed_sheet) {
+        entry.parsed_sheet = normalizeResourceTrackerSheet(sheet.parsed_sheet, fileName)
+        entry.compiled_html = compileGmSheetHtml(entry.source_html ?? sourceHtml, entry.parsed_sheet)
       }
+      return entry
     }
 
-    const safeRaw = normalizeImportedCharacterData(sheet.raw_character_data)
-    return {
-      id: entryId,
-      imported_at: importedAt,
-      updated_at: updatedAt,
-      html_updated_at: htmlUpdatedAt,
-      source_file_name: fileName,
-      source_format: 'mydhcharsheet-html',
-      raw_character_data: safeRaw,
-      parsed_sheet: normalizeResourceTrackerSheet(
-        sheet.parsed_sheet ?? buildSheetFromImportedCharacterData(safeRaw, fileName),
-        fileName,
-      ),
-    }
+    throw new Error(SRD_CHARACTER_SHEET_ERROR)
   })
 
   return normalized
@@ -2208,6 +2237,12 @@ function createGmSheetEntry(
   const safeHtml = typeof source === 'string'
     ? cleanText(sanitizeImportedHtml(source), '', 2_000_000)
     : undefined
+  if (typeof source === 'string') {
+    if (!safeHtml) {
+      throw new Error(SRD_CHARACTER_SHEET_ERROR)
+    }
+    assertSrdCharacterSheetHtml(safeHtml)
+  }
   const parsedSource = typeof source === 'string' ? extractCharacterDataFromHtml(safeHtml ?? '') : source
   const safeRaw = normalizeImportedCharacterData(parsedSource)
   const parsedSheet = normalizeResourceTrackerSheet(
@@ -2334,6 +2369,15 @@ function sanitizeImportedHtml(html: string): string {
   return html
     .replace(INLINE_IMAGE_DATA_URL_PATTERN, TRANSPARENT_IMAGE_DATA_URL)
     .trim()
+}
+
+function assertSrdCharacterSheetHtml(html: string): void {
+  const head = html.slice(0, 20_000)
+  const hasExporter = /<html\b[^>]*\bdata-version=["']1\.0["'][^>]*\bdata-exporter=["']daggerheart-character-sheet["']/i.test(head)
+  const hasGenerator = /<meta\b[^>]*\bname=["']generator["'][^>]*\bcontent=["']Daggerheart Character Sheet Exporter v1\.0["']/i.test(head)
+  if (!hasExporter || !hasGenerator || findCharacterDataAssignmentIndex(html) < 0) {
+    throw new Error(SRD_CHARACTER_SHEET_ERROR)
+  }
 }
 
 interface HtmlCheckboxSnapshot {

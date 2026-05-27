@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { ChevronDown, Clock, Download, FileJson, Layers, LogOut, Settings, Share2, Wifi, WifiOff } from 'lucide-react'
+import { ChevronDown, Clock, Download, FileJson, FileUp, Layers, LogOut, Settings, Share2, Wifi, WifiOff } from 'lucide-react'
 import { InviteCodeModal } from '@/components/ui/InviteCodeModal'
 import { fetchDhRoomBackup } from '@/lib/realtime'
 import { useStore } from '@/store/useStore'
@@ -17,6 +17,7 @@ export function TopBar({ onLeaveRoom }: { onLeaveRoom: () => void }) {
     connectionStatus,
     isExportMenuOpen,
     toggleExportMenu,
+    openImportModal,
     openRoomSettings,
     manualReconnect,
     leaveRoom,
@@ -156,6 +157,10 @@ export function TopBar({ onLeaveRoom }: { onLeaveRoom: () => void }) {
 
       <button className="btn btn-secondary btn-sm" onClick={() => setShowInviteModal(true)}>
         <Share2 size={13} /> 邀请码
+      </button>
+
+      <button className="btn btn-secondary btn-sm" onClick={openImportModal}>
+        <FileUp size={13} /> 导入
       </button>
 
       <div style={{ position: 'relative' }}>
