@@ -53,14 +53,19 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
   return (
     <div
       style={{
-        width: '100vw',
-        minHeight: '100vh',
+        width: '100%',
+        height: '100%',
         display: 'flex',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         justifyContent: 'center',
-        padding: 24,
+        paddingTop: 'calc(18px + env(safe-area-inset-top, 0px))',
+        paddingRight: 16,
+        paddingBottom: 'calc(24px + env(safe-area-inset-bottom, 0px))',
+        paddingLeft: 16,
         boxSizing: 'border-box',
         overflowY: 'auto',
+        WebkitOverflowScrolling: 'touch',
+        touchAction: 'pan-y',
         background: 'radial-gradient(circle at 18% 18%, rgba(139,224,213,0.24), transparent 26%), radial-gradient(circle at 82% 20%, rgba(109,91,208,0.20), transparent 28%), linear-gradient(135deg, #170e38 0%, #27185a 44%, #d9d4eb 44.2%, #f6f4fb 100%)',
       }}
     >
@@ -68,6 +73,7 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
         style={{
           width: '100%',
           maxWidth: 980,
+          margin: '0 auto',
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))',
           gap: 24,
@@ -78,8 +84,8 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
           className="dh-cut-corners"
           style={{
             position: 'relative',
-            minHeight: 420,
-            padding: 36,
+            minHeight: 360,
+            padding: 'clamp(20px, 5vw, 36px)',
             overflow: 'hidden',
             border: '1px solid rgba(139,224,213,0.40)',
             background: 'linear-gradient(145deg, rgba(24,15,59,0.94), rgba(39,24,90,0.88)), radial-gradient(circle at 78% 24%, rgba(139,224,213,0.28), transparent 28%)',
@@ -102,7 +108,7 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
                 <Sparkles size={16} />
                 HOPE / FEAR 
               </div>
-              <h1 style={{ maxWidth: 420, fontSize: 58, lineHeight: 0.96, fontWeight: 950, letterSpacing: 0, margin: 0 }}>
+              <h1 style={{ maxWidth: 420, fontSize: 'clamp(36px, 9vw, 58px)', lineHeight: 0.96, fontWeight: 950, letterSpacing: 0, margin: 0 }}>
                 匕首之心
                 <span style={{ display: 'block', color: 'var(--accent-cyan)' }}>在线面板</span>
               </h1>
@@ -141,7 +147,7 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
         <section
           className="glass-panel dh-cut-corners"
           style={{
-            padding: 30,
+            padding: 'clamp(18px, 4.5vw, 30px)',
             boxShadow: '0 28px 64px rgba(17, 11, 39, 0.22), inset 0 1px 0 rgba(255,255,255,0.8)',
           }}
         >

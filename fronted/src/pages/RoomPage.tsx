@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { GmPanelBoard } from '@/components/gm-panel/GmPanelBoard'
 import { TopBar } from '@/components/layout/TopBar'
 import { MobilePanelRoom } from '@/components/mobile-panel/MobilePanelRoom'
@@ -13,6 +13,7 @@ interface RoomPageProps {
 
 export function RoomPage({ onLeaveRoom }: RoomPageProps) {
   const { room, connectionStatus, manualReconnect } = useStore()
+  const [topBarHeight, setTopBarHeight] = useState(52)
 
   if (!room) {
     return (
@@ -35,17 +36,18 @@ export function RoomPage({ onLeaveRoom }: RoomPageProps) {
   }
 
   const showReconnectBanner = connectionStatus === 'reconnecting' || connectionStatus === 'error'
+  const reconnectBannerHeight = showReconnectBanner ? 40 : 0
   const content = room.room_type === 'mobile-panel' ? <MobilePanelRoom /> : <GmPanelBoard />
 
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden' }}>
-      <TopBar onLeaveRoom={onLeaveRoom} />
+      <TopBar onLeaveRoom={onLeaveRoom} onHeightChange={setTopBarHeight} />
 
       {showReconnectBanner && (
         <div
           style={{
             position: 'absolute',
-            top: 52,
+            top: topBarHeight,
             left: 0,
             right: 0,
             zIndex: 400,
@@ -54,6 +56,7 @@ export function RoomPage({ onLeaveRoom }: RoomPageProps) {
             justifyContent: 'center',
             gap: 10,
             padding: '8px 14px',
+            minHeight: reconnectBannerHeight,
             background: connectionStatus === 'error' ? 'rgba(177,45,63,0.14)' : 'rgba(139,224,213,0.14)',
             borderBottom: `1px solid ${connectionStatus === 'error' ? 'rgba(177,45,63,0.26)' : 'rgba(139,224,213,0.28)'}`,
             fontSize: 13,
@@ -84,7 +87,7 @@ export function RoomPage({ onLeaveRoom }: RoomPageProps) {
         </div>
       )}
 
-      <div style={{ position: 'absolute', inset: 0, top: showReconnectBanner ? 92 : 52 }}>
+      <div style={{ position: 'absolute', inset: 0, top: topBarHeight + reconnectBannerHeight }}>
         {content}
       </div>
 
