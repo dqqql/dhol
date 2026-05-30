@@ -293,6 +293,7 @@ export class RoomDurableObject {
         imports_enabled: true,
         resource_change_requires_approval: false,
         battle_panel_visibility: 'shared',
+        gm_panel_theme: 'violet-mint',
       },
       selected_built_in_pack_ids: selectedPackIds,
       drawn_this_turn: {},
@@ -967,6 +968,7 @@ export class RoomDurableObject {
       imports_enabled: backup.settings?.imports_enabled ?? true,
       resource_change_requires_approval: backup.settings?.resource_change_requires_approval ?? room.settings.resource_change_requires_approval,
       battle_panel_visibility: backup.settings?.battle_panel_visibility ?? room.settings.battle_panel_visibility,
+      gm_panel_theme: backup.settings?.gm_panel_theme ?? room.settings.gm_panel_theme,
     }
 
     if (importedRoomType === 'resource-tracker') {
@@ -1026,7 +1028,11 @@ export class RoomDurableObject {
     this.rebuildDeckFromSelectedPacks(selectedBuiltInPackIds)
   }
 
-  private updateSettings(updates: { importsEnabled?: boolean; resourceChangeRequiresApproval?: boolean }): void {
+  private updateSettings(updates: {
+    importsEnabled?: boolean
+    resourceChangeRequiresApproval?: boolean
+    gmPanelTheme?: 'violet-mint' | 'solar-abyss' | 'frost-ember'
+  }): void {
     const room = this.requireRoom()
     room.settings = {
       ...room.settings,
@@ -1034,6 +1040,7 @@ export class RoomDurableObject {
       ...(updates.resourceChangeRequiresApproval !== undefined
         ? { resource_change_requires_approval: updates.resourceChangeRequiresApproval }
         : {}),
+      ...(updates.gmPanelTheme !== undefined ? { gm_panel_theme: updates.gmPanelTheme } : {}),
     }
   }
 
@@ -1841,7 +1848,11 @@ export class RoomDurableObject {
       imported_pack_library?: RoomPackLibraryItem[]
       selected_built_in_pack_ids?: string[]
       pack_library?: RoomPackLibraryItem[]
-      settings?: { imports_enabled?: boolean; resource_change_requires_approval?: boolean }
+      settings?: {
+        imports_enabled?: boolean
+        resource_change_requires_approval?: boolean
+        gm_panel_theme?: 'violet-mint' | 'solar-abyss' | 'frost-ember'
+      }
       selected_pack_ids?: string[]
     }
     const importedPackLibrary = normalizeImportedPackLibrary(
@@ -1870,6 +1881,7 @@ export class RoomDurableObject {
         imports_enabled: migrated.settings?.imports_enabled ?? true,
         resource_change_requires_approval: migrated.settings?.resource_change_requires_approval ?? false,
         battle_panel_visibility: 'shared',
+        gm_panel_theme: migrated.settings?.gm_panel_theme ?? 'violet-mint',
       },
       room_type: migrated.room_type ?? 'co-creation',
       resource_tracker: (migrated.room_type ?? 'co-creation') === 'resource-tracker'

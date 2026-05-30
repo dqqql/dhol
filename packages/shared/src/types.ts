@@ -6,6 +6,7 @@ export type ConnectionColor = 'red' | 'green' | 'gray'
 export type RoomPackSource = 'built-in' | 'imported'
 export type ResourceTrackerResourceKey = 'hope' | 'proficiency' | 'hp' | 'stress' | 'armor_slots' | 'gold'
 export type GmPanelResourceKey = ResourceTrackerResourceKey
+export type GmPanelTheme = 'violet-mint' | 'solar-abyss' | 'frost-ember'
 
 export interface RoleCardDetails {
   player_name: string
@@ -98,6 +99,7 @@ export interface RoomSettings {
   imports_enabled: boolean
   resource_change_requires_approval: boolean
   battle_panel_visibility: 'host-only' | 'shared'
+  gm_panel_theme: GmPanelTheme
 }
 
 export interface ResourceTrackerExperience {

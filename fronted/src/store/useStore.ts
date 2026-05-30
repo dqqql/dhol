@@ -5,6 +5,7 @@ import {
   assertDhRoomBackup,
   type ClientMessage,
   type DhCard,
+  type GmPanelTheme,
   type GmPanelResourceKey,
   type MapCard,
   type ResourceTrackerResourceKey,
@@ -92,6 +93,7 @@ interface AppStore extends UIState {
   updateSelectedPacks: (packIds: string[]) => void
   updateImportsEnabled: (enabled: boolean) => void
   updateResourceChangeRequiresApproval: (enabled: boolean) => void
+  updateGmPanelTheme: (theme: GmPanelTheme) => void
 
   importTrackerCharacter: (fileName: string, sheet: ResourceTrackerSheet) => void
   updateTrackerSheet: (columnId: string, sheet: ResourceTrackerSheet) => void
@@ -598,6 +600,17 @@ export const useStore = create<AppStore>((set, get) => {
 
       if (sent) {
         get().addToast(enabled ? '已开启资源审批' : '已关闭资源审批', 'success')
+      }
+    },
+
+    updateGmPanelTheme: (theme) => {
+      const sent = sendMessage({
+        type: 'room.updateSettings',
+        payload: { gmPanelTheme: theme },
+      })
+
+      if (sent) {
+        get().addToast('GM 面板主题已更新', 'success')
       }
     },
 

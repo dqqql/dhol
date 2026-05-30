@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Check, Clock, Copy } from 'lucide-react'
+import { GM_PANEL_THEMES } from '@/components/gm-panel/gmPanelThemes'
 import { Modal } from './Modal'
 import { useStore } from '@/store/useStore'
 
@@ -10,7 +11,13 @@ function roomTypeLabel(roomType: string) {
 }
 
 export function RoomSettingsModal() {
-  const { room, isRoomSettingsOpen, closeRoomSettings, addToast } = useStore()
+  const {
+    room,
+    isRoomSettingsOpen,
+    closeRoomSettings,
+    addToast,
+    updateGmPanelTheme,
+  } = useStore()
   const [copied, setCopied] = useState(false)
 
   if (!room) return null
@@ -34,7 +41,7 @@ export function RoomSettingsModal() {
         <section
           style={{
             padding: 16,
-                       background: 'var(--bg-overlay)',
+            background: 'var(--bg-overlay)',
             border: '1px solid var(--border-subtle)',
           }}
         >
@@ -62,7 +69,7 @@ export function RoomSettingsModal() {
         <section
           style={{
             padding: 16,
-                       background: 'var(--bg-overlay)',
+            background: 'var(--bg-overlay)',
             border: '1px solid var(--border-subtle)',
           }}
         >
@@ -77,7 +84,7 @@ export function RoomSettingsModal() {
                   justifyContent: 'space-between',
                   gap: 12,
                   padding: 12,
-                                   background: 'white',
+                  background: 'white',
                   border: '1px solid var(--border-subtle)',
                 }}
               >
@@ -105,6 +112,65 @@ export function RoomSettingsModal() {
             ))}
           </div>
         </section>
+
+        {currentRoom.room_type === 'gm-panel' && (
+          <section
+            style={{
+              padding: 16,
+              background: 'var(--bg-overlay)',
+              border: '1px solid var(--border-subtle)',
+            }}
+          >
+            <div style={{ marginBottom: 6, fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>切换主题色</div>
+            <div style={{ marginBottom: 14, fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+              仅调整 GM 面板配色，不改动布局、按钮位置和功能逻辑。
+            </div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {GM_PANEL_THEMES.map((theme) => {
+                const selected = currentRoom.settings.gm_panel_theme === theme.id
+                return (
+                  <button
+                    key={theme.id}
+                    type="button"
+                    onClick={() => updateGmPanelTheme(theme.id)}
+                    style={{
+                      display: 'grid',
+                      gap: 10,
+                      padding: 14,
+                      textAlign: 'left',
+                      border: selected ? '1px solid var(--accent-violet)' : '1px solid var(--border-subtle)',
+                      background: selected ? 'rgba(255,255,255,0.96)' : 'rgba(255,255,255,0.84)',
+                      boxShadow: selected ? '0 0 0 3px rgba(67, 48, 141, 0.12)' : 'none',
+                      cursor: 'pointer',
+                      transition: 'border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>{theme.label}</div>
+                        <div style={{ marginTop: 4, fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)' }}>{theme.summary}</div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={previewSwatch(theme.preview.base)} />
+                        <span style={previewSwatch(theme.preview.hope)} />
+                        <span style={previewSwatch(theme.preview.fear)} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>
+                        {selected ? '当前主题' : '点击切换'}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={miniPreviewStyle(`linear-gradient(135deg, ${theme.preview.hope}, ${theme.preview.base})`)} />
+                        <span style={miniPreviewStyle(`linear-gradient(135deg, ${theme.preview.fear}, ${theme.preview.base})`)} />
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </section>
+        )}
       </div>
     </Modal>
   )
@@ -130,4 +196,26 @@ const valueStyle: React.CSSProperties = {
   fontSize: 12,
   fontWeight: 700,
   color: 'var(--text-primary)',
+}
+
+function previewSwatch(background: string): React.CSSProperties {
+  return {
+    width: 18,
+    height: 18,
+    borderRadius: '50%',
+    background,
+    border: '1px solid rgba(15, 23, 42, 0.08)',
+    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.45)',
+    flexShrink: 0,
+  }
+}
+
+function miniPreviewStyle(background: string): React.CSSProperties {
+  return {
+    width: 42,
+    height: 12,
+    background,
+    border: '1px solid rgba(15, 23, 42, 0.06)',
+    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.38)',
+  }
 }

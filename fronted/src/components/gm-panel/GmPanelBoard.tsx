@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import type { GmPanelCharacterSheetEntry, GmPanelResourceKey, ResourceTrackerCountdown } from '@dhgc/shared'
 import { ChevronLeft, ChevronRight, FileUp, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { FloatingBattlePanel } from '@/components/gm-panel/FloatingBattlePanel'
+import { getGmPanelTheme, type GmPanelThemeDefinition } from '@/components/gm-panel/gmPanelThemes'
 import { FloatingNotebook } from '@/components/notebook/FloatingNotebook'
 import { Modal } from '@/components/ui/Modal'
 import { fetchGmSheetHtml } from '@/lib/realtime'
@@ -81,6 +82,7 @@ export function GmPanelBoard() {
   if (!room || room.room_type !== 'gm-panel' || !room.gm_panel) return null
 
   const panel = room.gm_panel
+  const theme = getGmPanelTheme(room.settings.gm_panel_theme)
   const inviteCode = room.invite_code
   const orderedSheets = panel.sheet_order
     .map((sheetId) => panel.sheets.find((sheet) => sheet.id === sheetId) ?? null)
@@ -338,7 +340,7 @@ export function GmPanelBoard() {
         width: '100%',
         height: '100%',
         overflow: 'auto',
-        background: 'radial-gradient(circle at 12% 4%, rgba(139,224,213,0.14), transparent 22%), radial-gradient(circle at 88% 10%, rgba(109,91,208,0.14), transparent 24%), linear-gradient(180deg, #f6f4fb 0%, #d9d4eb 100%)',
+        background: theme.colors.pageBackground,
       }}
     >
       <div style={{ minWidth: 1320, padding: 20, display: 'grid', gap: 18 }}>
@@ -355,6 +357,7 @@ export function GmPanelBoard() {
           onCreateCountdown={submitCountdown}
           onUpdateCountdown={updateGmCountdown}
           onDeleteCountdown={deleteGmCountdown}
+          theme={theme}
         />
 
         <section
@@ -365,9 +368,9 @@ export function GmPanelBoard() {
             gap: 12,
             flexWrap: 'wrap',
             padding: 16,
-            border: '1px solid rgba(139, 224, 213, 0.26)',
-            background: 'linear-gradient(180deg, rgba(255,255,255,0.94), rgba(232,228,242,0.88))',
-            boxShadow: '0 18px 44px rgba(35, 20, 68, 0.10)',
+            border: `1px solid ${theme.colors.surfaceBorder}`,
+            background: theme.colors.surfaceBackground,
+            boxShadow: theme.colors.surfaceShadow,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -380,9 +383,9 @@ export function GmPanelBoard() {
                 aria-live="polite"
                 style={{
                   padding: '7px 10px',
-                  border: '1px solid rgba(139, 224, 213, 0.32)',
-                  background: 'rgba(239, 252, 250, 0.88)',
-                  color: '#4a357e',
+                  border: `1px solid ${theme.colors.statusBorder}`,
+                  background: theme.colors.statusBackground,
+                  color: theme.colors.statusText,
                   fontSize: 12,
                   fontWeight: 800,
                 }}
@@ -396,7 +399,7 @@ export function GmPanelBoard() {
             <button className="btn btn-secondary btn-sm" onClick={() => setCurrentPage((page) => Math.max(0, page - 1))}>
               <ChevronLeft size={14} /> 上一页
             </button>
-            <div style={{ minWidth: 84, textAlign: 'center', fontSize: 13, fontWeight: 800, color: '#4a357e' }}>
+            <div style={{ minWidth: 84, textAlign: 'center', fontSize: 13, fontWeight: 800, color: theme.colors.pageIndicator }}>
               {currentPage + 1} / {pageCount}
             </div>
             <button className="btn btn-secondary btn-sm" onClick={() => setCurrentPage((page) => Math.min(pageCount - 1, page + 1))}>
@@ -439,23 +442,25 @@ export function GmPanelBoard() {
                     resources: getGmSheetResourceSnapshot(entry),
                   }, '*')
                 }}
+                theme={theme}
               />
             ) : (
               <EmptySlotCard
                 key={`empty-${currentPage}-${index}`}
                 canImport={!isImportPending}
                 onImport={() => importInputRef.current?.click()}
+                theme={theme}
               />
             )
           ))}
         </section>
 
-        <ActivityLogPanel logs={panel.activity_log} />
+        <ActivityLogPanel logs={panel.activity_log} theme={theme} />
       </div>
 
       <FloatingBattlePanel roomId={room.room_id} />
       <FloatingNotebook roomId={room.room_id} />
-      {pendingImport && <ImportPendingToast pendingImport={pendingImport} />}
+      {pendingImport && <ImportPendingToast pendingImport={pendingImport} theme={theme} />}
 
       <input ref={importInputRef} type="file" accept=".html,text/html" style={{ display: 'none' }} onChange={handleImportChange} />
       <input ref={replaceInputRef} type="file" accept=".html,text/html" style={{ display: 'none' }} onChange={handleReplaceChange} />
@@ -463,7 +468,7 @@ export function GmPanelBoard() {
       <Modal open={Boolean(deleteTargetEntry)} onClose={closeDeleteConfirm} title={'\u5220\u9664\u89d2\u8272\u5361'} maxWidth={460}>
         {deleteTargetEntry && (
           <div style={{ display: 'grid', gap: 14 }}>
-            <div style={{ fontSize: 13, lineHeight: 1.7, color: '#4b5563' }}>
+            <div style={{ fontSize: 13, lineHeight: 1.7, color: theme.colors.dialogText }}>
               {deleteConfirmStep === 1
                 ? `\u8fd9\u5c06\u6c38\u4e45\u5220\u9664\u300c${deleteTargetEntry.parsed_sheet.character_name || deleteTargetEntry.source_file_name}\u300d\u3002\u5220\u9664\u540e\u65e0\u6cd5\u6062\u590d\u3002`
                 : `\u8bf7\u518d\u6b21\u786e\u8ba4\uff1a\u89d2\u8272\u5361\u300c${deleteTargetEntry.parsed_sheet.character_name || deleteTargetEntry.source_file_name}\u300d\u4f1a\u7acb\u523b\u4ece\u5f53\u524d\u623f\u95f4\u72b6\u6001\u4e2d\u79fb\u9664\u3002`}
@@ -477,9 +482,9 @@ export function GmPanelBoard() {
                   className="btn"
                   onClick={confirmDeleteStepOne}
                   style={{
-                    background: 'linear-gradient(180deg, #b12d3f, #8f1f34)',
-                    borderColor: '#8f1f34',
-                    color: 'white',
+                    background: theme.colors.fearActionBackground,
+                    borderColor: theme.colors.fearActionBorder,
+                    color: theme.colors.fearActionText,
                   }}
                 >
                   {'\u6211\u77e5\u9053\u4e86\uff0c\u7ee7\u7eed'}
@@ -489,9 +494,9 @@ export function GmPanelBoard() {
                   className="btn"
                   onClick={handleDeleteSheet}
                   style={{
-                    background: 'linear-gradient(180deg, #b91c1c, #991b1b)',
-                    borderColor: '#991b1b',
-                    color: 'white',
+                    background: theme.colors.fearActionBackground,
+                    borderColor: theme.colors.fearActionBorder,
+                    color: theme.colors.fearActionText,
                   }}
                 >
                   <Trash2 size={14} /> {'\u786e\u8ba4\u6c38\u4e45\u5220\u9664'}
@@ -505,7 +510,7 @@ export function GmPanelBoard() {
   )
 }
 
-function ImportPendingToast({ pendingImport }: { pendingImport: ImportPendingState }) {
+function ImportPendingToast({ pendingImport, theme }: { pendingImport: ImportPendingState; theme: GmPanelThemeDefinition }) {
   return (
     <div
       role="status"
@@ -520,10 +525,10 @@ function ImportPendingToast({ pendingImport }: { pendingImport: ImportPendingSta
         minWidth: 260,
         maxWidth: 360,
         padding: '12px 14px',
-        border: '1px solid rgba(139, 224, 213, 0.34)',
-        background: 'linear-gradient(180deg, rgba(255,255,255,0.98), rgba(232,228,242,0.96))',
-        color: '#4a357e',
-        boxShadow: '0 18px 44px rgba(35, 20, 68, 0.18)',
+        border: `1px solid ${theme.colors.statusBorder}`,
+        background: theme.colors.surfaceBackground,
+        color: theme.colors.statusText,
+        boxShadow: theme.colors.surfaceShadow,
       }}
     >
       <div style={{ fontSize: 13, fontWeight: 900 }}>
@@ -557,6 +562,7 @@ function HtmlSheetCard(props: {
   onReplace: () => void
   onDelete: () => void
   onIframeReady: (iframe: HTMLIFrameElement) => void
+  theme: GmPanelThemeDefinition
 }) {
   const {
     entry,
@@ -570,15 +576,16 @@ function HtmlSheetCard(props: {
     onReplace,
     onDelete,
     onIframeReady,
+    theme,
   } = props
 
   return (
     <article
       style={{
         minWidth: 0,
-        border: '1px solid rgba(139, 224, 213, 0.28)',
-        background: 'linear-gradient(180deg, rgba(255,255,255,0.98), rgba(232,228,242,0.94))',
-        boxShadow: '0 18px 42px rgba(35, 20, 68, 0.12)',
+        border: `1px solid ${theme.colors.sheetCardBorder}`,
+        background: theme.colors.sheetCardBackground,
+        boxShadow: theme.colors.sheetCardShadow,
         overflow: 'hidden',
       }}
     >
@@ -589,19 +596,19 @@ function HtmlSheetCard(props: {
           justifyContent: 'space-between',
           gap: 12,
           padding: 14,
-          borderBottom: '1px solid rgba(128, 96, 35, 0.18)',
-          background: 'linear-gradient(90deg, rgba(24,15,59,0.94), rgba(39,24,90,0.86))',
+          borderBottom: `1px solid ${theme.colors.sheetHeaderBorder}`,
+          background: theme.colors.sheetHeaderBackground,
         }}
       >
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 18, fontWeight: 900, color: '#f7f2ff', marginBottom: 4 }}>
+          <div style={{ fontSize: 18, fontWeight: 900, color: theme.colors.sheetTitle, marginBottom: 4 }}>
             {entry.parsed_sheet.character_name || '未命名角色'}
           </div>
           <div
             style={{
               fontSize: 12,
               fontWeight: 700,
-              color: '#8be0d5',
+              color: theme.colors.sheetAccent,
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -613,7 +620,7 @@ function HtmlSheetCard(props: {
             style={{
               marginTop: 4,
               fontSize: 11,
-              color: 'rgba(247,242,255,0.58)',
+              color: theme.colors.sheetMeta,
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -633,9 +640,9 @@ function HtmlSheetCard(props: {
                 className="btn btn-sm"
                 onClick={onDelete}
                 style={{
-                  background: 'linear-gradient(180deg, #fde7eb, #f7c8d0)',
-                  borderColor: '#eaa3ae',
-                  color: '#b91c1c',
+                  background: theme.colors.dangerSoftBackground,
+                  borderColor: theme.colors.dangerSoftBorder,
+                  color: theme.colors.dangerSoftText,
                 }}
                 title={'\u6c38\u4e45\u5220\u9664\u8fd9\u5f20\u89d2\u8272\u5361'}
               >
@@ -654,7 +661,7 @@ function HtmlSheetCard(props: {
         )}
       </div>
 
-      <div style={{ position: 'relative', height: 'calc(100vh - 280px)', minHeight: 680, background: '#f0edf8' }}>
+      <div style={{ position: 'relative', height: 'calc(100vh - 280px)', minHeight: 680, background: theme.colors.sheetViewport }}>
         {sheetState?.srcDoc ? (
           <iframe
             title={`${entry.parsed_sheet.character_name}-sheet`}
@@ -665,11 +672,11 @@ function HtmlSheetCard(props: {
               height: '100%',
               border: 'none',
               display: 'block',
-              background: '#f0edf8',
+              background: theme.colors.sheetViewport,
             }}
           />
         ) : (
-          <div style={{ display: 'grid', placeItems: 'center', width: '100%', height: '100%', color: '#9ca3af', fontSize: 13 }}>
+          <div style={{ display: 'grid', placeItems: 'center', width: '100%', height: '100%', color: theme.colors.logEmpty, fontSize: 13 }}>
             {sheetState?.loading ? '正在加载角色卡…' : '等待角色卡内容…'}
           </div>
         )}
@@ -682,11 +689,11 @@ function HtmlSheetCard(props: {
               bottom: 12,
               maxWidth: '70%',
               padding: '8px 10px',
-                           background: sheetState.error ? 'rgba(127,29,29,0.9)' : 'rgba(124,79,49,0.85)',
-              color: 'white',
+              background: sheetState.error ? theme.colors.syncErrorBackground : theme.colors.syncBackground,
+              color: theme.colors.syncText,
               fontSize: 12,
               lineHeight: 1.5,
-              boxShadow: '0 10px 24px rgba(15, 23, 42, 0.18)',
+              boxShadow: theme.colors.syncShadow,
             }}
           >
             {sheetState.error ?? '正在同步最新 HTML…'}
@@ -697,15 +704,15 @@ function HtmlSheetCard(props: {
   )
 }
 
-function EmptySlotCard({ canImport, onImport }: { canImport: boolean; onImport: () => void }) {
+function EmptySlotCard({ canImport, onImport, theme }: { canImport: boolean; onImport: () => void; theme: GmPanelThemeDefinition }) {
   if (!canImport) {
     return (
       <div
         style={{
           minHeight: 680,
-                   border: '2px dashed rgba(184, 134, 11, 0.14)',
-          background: 'rgba(251, 251, 255, 0.56)',
-          color: '#a8a29e',
+          border: `2px dashed ${theme.colors.emptySlotBorder}`,
+          background: theme.colors.emptySlotBackground,
+          color: theme.colors.emptySlotText,
           display: 'grid',
           placeItems: 'center',
           fontSize: 14,
@@ -723,9 +730,9 @@ function EmptySlotCard({ canImport, onImport }: { canImport: boolean; onImport: 
       onClick={onImport}
       style={{
         minHeight: 680,
-               border: '2px dashed rgba(184, 134, 11, 0.2)',
-        background: 'rgba(251, 251, 255, 0.62)',
-        color: '#4a357e',
+        border: `2px dashed ${theme.colors.emptySlotBorder}`,
+        background: theme.colors.emptySlotBackground,
+        color: theme.colors.statusText,
         cursor: 'pointer',
         fontSize: 15,
         fontWeight: 800,
@@ -736,28 +743,34 @@ function EmptySlotCard({ canImport, onImport }: { canImport: boolean; onImport: 
   )
 }
 
-function ActivityLogPanel({ logs }: { logs: Array<{ id: string; created_at: string; actor_name: string; message: string }> }) {
+function ActivityLogPanel({
+  logs,
+  theme,
+}: {
+  logs: Array<{ id: string; created_at: string; actor_name: string; message: string }>
+  theme: GmPanelThemeDefinition
+}) {
   return (
     <section
       style={{
         padding: 18,
-        border: '1px solid rgba(139, 224, 213, 0.24)',
-        background: 'linear-gradient(180deg, rgba(255,255,255,0.94), rgba(232,228,242,0.90))',
-        boxShadow: '0 16px 40px rgba(35, 20, 68, 0.10)',
+        border: `1px solid ${theme.colors.logBorder}`,
+        background: theme.colors.logBackground,
+        boxShadow: theme.colors.logShadow,
       }}
     >
-      <div style={{ marginBottom: 12, fontSize: 15, fontWeight: 800, color: '#29211b', letterSpacing: '0.01em' }}>活动记录</div>
+      <div style={{ marginBottom: 12, fontSize: 15, fontWeight: 800, color: theme.colors.logTitle, letterSpacing: '0.01em' }}>活动记录</div>
       <div style={{ display: 'grid', gap: 10, maxHeight: 260, overflowY: 'auto' }}>
         {logs.length === 0 ? (
-          <div style={{ fontSize: 13, color: '#9ca3af' }}>还没有记录。</div>
+          <div style={{ fontSize: 13, color: theme.colors.logEmpty }}>还没有记录。</div>
         ) : (
           [...logs].reverse().map((log) => (
-              <div key={log.id} style={{ padding: 12, background: 'rgba(251,251,255,0.82)', border: '1px solid rgba(39, 24, 90, 0.14)' }}>
+              <div key={log.id} style={{ padding: 12, background: theme.colors.logItemBackground, border: `1px solid ${theme.colors.logItemBorder}` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 6 }}>
-                <span style={{ fontSize: 12, fontWeight: 800, color: '#4a357e' }}>{log.actor_name}</span>
-                <span style={{ fontSize: 11, color: '#94a3b8' }}>{formatTime(log.created_at)}</span>
+                <span style={{ fontSize: 12, fontWeight: 800, color: theme.colors.logActor }}>{log.actor_name}</span>
+                <span style={{ fontSize: 11, color: theme.colors.logTime }}>{formatTime(log.created_at)}</span>
               </div>
-              <div style={{ fontSize: 13, lineHeight: 1.6, color: '#1f2937' }}>{repairKnownGmLogMessage(log.message)}</div>
+              <div style={{ fontSize: 13, lineHeight: 1.6, color: theme.colors.logText }}>{repairKnownGmLogMessage(log.message)}</div>
             </div>
           ))
         )}
@@ -783,6 +796,7 @@ function TrackerFearBar(props: {
   onCreateCountdown: () => void
   onUpdateCountdown: (countdownId: string, value: number) => void
   onDeleteCountdown: (countdownId: string) => void
+  theme: GmPanelThemeDefinition
 }) {
   const {
     value,
@@ -797,6 +811,7 @@ function TrackerFearBar(props: {
     onCreateCountdown,
     onUpdateCountdown,
     onDeleteCountdown,
+    theme,
   } = props
 
   const [showCreator, setShowCreator] = useState(false)
@@ -826,9 +841,9 @@ function TrackerFearBar(props: {
       <section
         style={{
           padding: 20,
-          border: '1px solid rgba(177, 45, 63, 0.22)',
-          background: 'linear-gradient(180deg, rgba(24,15,59,0.97), rgba(39,24,90,0.93))',
-          boxShadow: '0 22px 54px rgba(35, 20, 68, 0.22), inset 0 1px 0 rgba(255,255,255,0.10)',
+          border: `1px solid ${theme.colors.fearPanelBorder}`,
+          background: theme.colors.fearPanelBackground,
+          boxShadow: theme.colors.fearPanelShadow,
         }}
       >
         <div
@@ -864,23 +879,23 @@ function TrackerFearBar(props: {
                     display: 'inline-flex',
                     alignItems: 'center',
                     padding: '5px 12px',
-                    background: 'linear-gradient(135deg, #b12d3f, #8f1f34)',
-                    color: '#f7f2ff',
+                    background: theme.colors.fearBadgeBackground,
+                    color: theme.colors.fearBadgeText,
                     fontSize: 12,
                     fontWeight: 800,
                     letterSpacing: '0.02em',
-                    boxShadow: '0 4px 12px rgba(185, 28, 28, 0.15)',
+                    boxShadow: theme.colors.fearBadgeShadow,
                   }}
                 >
                   {'\u6050\u60e7\u70b9'}
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 6 }}>
-                <span style={{ fontSize: 64, lineHeight: 0.9, fontWeight: 900, color: '#f7f2ff', letterSpacing: 0 }}>{value}</span>
-                <span style={{ fontSize: 20, fontWeight: 800, color: '#ffccd4' }}>/ {max}</span>
+                <span style={{ fontSize: 64, lineHeight: 0.9, fontWeight: 900, color: theme.colors.fearValue, letterSpacing: 0 }}>{value}</span>
+                <span style={{ fontSize: 20, fontWeight: 800, color: theme.colors.fearValueMuted }}>/ {max}</span>
               </div>
               {editable && (
-                <div style={{ marginTop: 8, fontSize: 11, lineHeight: 1.5, color: 'rgba(247,242,255,0.72)' }}>
+                <div style={{ marginTop: 8, fontSize: 11, lineHeight: 1.5, color: theme.colors.fearHint }}>
                   {'\u70b9\u51fb\u4e0b\u65b9\u523b\u5ea6\u5373\u53ef\u628a\u6050\u60e7\u70b9\u8bbe\u7f6e\u5230\u5bf9\u5e94\u6570\u503c\u3002'}
                 </div>
               )}
@@ -904,16 +919,17 @@ function TrackerFearBar(props: {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: '#8be0d5', letterSpacing: '0.01em' }}>{'\u8fdb\u5ea6\u949f'}</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: theme.colors.countdownTitle, letterSpacing: '0.01em' }}>{'\u8fdb\u5ea6\u949f'}</div>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minHeight: 20 }}>
                   {hasOverflow && (
                     <>
-                      <IconButton title={'\u4e0a\u4e00\u4e2a\u8fdb\u5ea6\u949f'} onClick={() => setVisibleStart((current) => Math.max(0, current - 1))} disabled={visibleStart === 0}>
+                      <IconButton theme={theme} title={'\u4e0a\u4e00\u4e2a\u8fdb\u5ea6\u949f'} onClick={() => setVisibleStart((current) => Math.max(0, current - 1))} disabled={visibleStart === 0}>
                         <ChevronLeft size={14} />
                       </IconButton>
                       <IconButton
+                        theme={theme}
                         title={'\u4e0b\u4e00\u4e2a\u8fdb\u5ea6\u949f'}
                         onClick={() => setVisibleStart((current) => Math.min(maxStart, current + 1))}
                         disabled={visibleStart >= maxStart}
@@ -923,7 +939,7 @@ function TrackerFearBar(props: {
                     </>
                   )}
                   {countdowns.length > visibleCount && (
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#9ca3af' }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: theme.colors.countdownOverflow }}>
                       {visibleStart + 1}-{Math.min(visibleStart + visibleCount, countdowns.length)} / {countdowns.length}
                     </div>
                   )}
@@ -949,9 +965,9 @@ function TrackerFearBar(props: {
                         maxWidth: '100%',
                         flex: '0 0 auto',
                         padding: 14,
-                        border: '1px solid rgba(139, 224, 213, 0.26)',
-                        background: 'linear-gradient(180deg, rgba(255,255,255,0.98), rgba(232,228,242,0.96))',
-                        boxShadow: '0 6px 18px rgba(35, 20, 68, 0.10), inset 0 1px 0 rgba(255,255,255,0.8)',
+                        border: `1px solid ${theme.colors.countdownCardBorder}`,
+                        background: theme.colors.countdownCardBackground,
+                        boxShadow: theme.colors.countdownCardShadow,
                       }}
                     >
                       <div
@@ -967,7 +983,7 @@ function TrackerFearBar(props: {
                           style={{
                             fontSize: 13,
                             fontWeight: 800,
-                            color: '#27185a',
+                            color: theme.colors.countdownName,
                             whiteSpace: 'nowrap',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
@@ -975,7 +991,7 @@ function TrackerFearBar(props: {
                         >
                           {countdown.name}
                         </div>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#6d5bd0' }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: theme.colors.countdownValue }}>
                           {countdown.value} / {countdown.max}
                         </div>
                         {editable && (
@@ -985,7 +1001,7 @@ function TrackerFearBar(props: {
                             style={{
                               border: 'none',
                               background: 'transparent',
-                              color: '#b12d3f',
+                              color: theme.colors.countdownDelete,
                               cursor: 'pointer',
                               padding: 0,
                               marginLeft: 'auto',
@@ -1009,13 +1025,13 @@ function TrackerFearBar(props: {
                               style={{
                                 width: 28,
                                 height: 28,
-                                border: active ? '1px solid rgba(139, 224, 213, 0.58)' : '1px solid rgba(39, 24, 90, 0.16)',
-                                background: active ? 'linear-gradient(135deg, #8be0d5, #2f9d91)' : 'rgba(255,255,255,0.92)',
-                                color: active ? '#171027' : '#4a357e',
+                                border: active ? `1px solid ${theme.colors.countdownStepActiveBorder}` : `1px solid ${theme.colors.countdownStepInactiveBorder}`,
+                                background: active ? theme.colors.countdownStepActiveBackground : theme.colors.countdownStepInactiveBackground,
+                                color: active ? theme.colors.countdownStepActiveText : theme.colors.countdownStepInactiveText,
                                 fontSize: 12,
                                 fontWeight: 800,
                                 cursor: editable ? 'pointer' : 'default',
-                                boxShadow: active ? '0 2px 10px rgba(47, 157, 145, 0.24)' : 'none',
+                                boxShadow: active ? theme.colors.countdownStepActiveShadow : 'none',
                                 transition: 'all var(--transition-fast)',
                               }}
                             >
@@ -1028,7 +1044,7 @@ function TrackerFearBar(props: {
                   ))}
                 </div>
               ) : (
-                <div style={{ fontSize: 13, color: '#9ca3af' }}>{'\u8fd8\u6ca1\u6709\u8fdb\u5ea6\u949f\u3002'}</div>
+                <div style={{ fontSize: 13, color: theme.colors.countdownOverflow }}>{'\u8fd8\u6ca1\u6709\u8fdb\u5ea6\u949f\u3002'}</div>
               )}
             </div>
           </div>
@@ -1047,9 +1063,9 @@ function TrackerFearBar(props: {
                 className="btn btn-sm"
                 onClick={() => onChange(Math.max(0, value - 1))}
                 style={{
-                  background: 'linear-gradient(180deg, #8be0d5, #2f9d91)',
-                  borderColor: '#16a34a',
-                  color: '#171027',
+                  background: theme.colors.hopeActionBackground,
+                  borderColor: theme.colors.hopeActionBorder,
+                  color: theme.colors.hopeActionText,
                 }}
               >
                 {'- \u6697\u5f71\u6d88\u6563'}
@@ -1058,9 +1074,9 @@ function TrackerFearBar(props: {
                 className="btn btn-sm"
                 onClick={() => onChange(Math.min(max, value + 1))}
                 style={{
-                  background: 'linear-gradient(180deg, #b12d3f, #8f1f34)',
-                  borderColor: '#8f1f34',
-                  color: '#f7f2ff',
+                  background: theme.colors.fearActionBackground,
+                  borderColor: theme.colors.fearActionBorder,
+                  color: theme.colors.fearActionText,
                 }}
               >
                 {'+ \u6050\u60e7\u6ecb\u751f'}
@@ -1095,13 +1111,13 @@ function TrackerFearBar(props: {
                 onClick={() => editable && onChange(step)}
                 style={{
                   height: 44,
-                                   border: active ? '1px solid rgba(185,28,28,0.4)' : '1px solid rgba(185,28,28,0.14)',
-                  background: active ? `rgba(177, 45, 63, ${opacity})` : 'rgba(255,255,255,0.10)',
-                  color: active ? '#f7f2ff' : '#ffccd4',
+                  border: active ? `1px solid ${theme.colors.fearTrackActiveBorder}` : `1px solid ${theme.colors.fearTrackInactiveBorder}`,
+                  background: active ? `rgba(${theme.colors.fearTrackActiveRgb}, ${opacity})` : theme.colors.fearTrackInactiveBackground,
+                  color: active ? theme.colors.fearTrackActiveText : theme.colors.fearTrackInactiveText,
                   fontSize: 13,
                   fontWeight: 800,
                   cursor: editable ? 'pointer' : 'default',
-                  boxShadow: active ? `0 2px 8px rgba(185,28,28,${opacity * 0.3})` : 'none',
+                  boxShadow: active ? `0 2px 8px rgba(${theme.colors.fearTrackActiveRgb}, ${opacity * 0.3})` : 'none',
                   transition: 'all var(--transition-fast)',
                 }}
               >
@@ -1144,8 +1160,9 @@ function IconButton(props: {
   title: string
   onClick: () => void
   disabled?: boolean
+  theme: GmPanelThemeDefinition
 }) {
-  const { children, title, onClick, disabled = false } = props
+  const { children, title, onClick, disabled = false, theme } = props
 
   return (
     <button
@@ -1159,9 +1176,9 @@ function IconButton(props: {
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-               border: '1px solid rgba(15, 23, 42, 0.1)',
-        background: disabled ? 'rgba(248,250,252,0.9)' : 'white',
-        color: disabled ? '#cbd5e1' : '#64748b',
+        border: `1px solid ${theme.colors.iconBorder}`,
+        background: disabled ? theme.colors.iconBackgroundDisabled : theme.colors.iconBackground,
+        color: disabled ? theme.colors.iconTextDisabled : theme.colors.iconText,
         cursor: disabled ? 'not-allowed' : 'pointer',
       }}
     >

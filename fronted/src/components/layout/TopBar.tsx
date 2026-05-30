@@ -185,15 +185,20 @@ export function TopBar({ onLeaveRoom }: { onLeaveRoom: () => void }) {
         )}
       </div>
 
-      <button className="btn btn-ghost btn-icon" onClick={openRoomSettings} title="房间设置">
-        <Settings size={15} />
+      <button className="btn btn-secondary btn-sm" onClick={openRoomSettings} title="房间设置">
+        <Settings size={13} /> 设置
       </button>
 
       <button
-        className="btn btn-ghost btn-sm"
+        className="btn btn-sm"
         onClick={() => {
           leaveRoom()
           onLeaveRoom()
+        }}
+        style={{
+          background: 'linear-gradient(180deg, #b12d3f, #8f1f34)',
+          borderColor: '#8f1f34',
+          color: '#f7f2ff',
         }}
       >
         <LogOut size={13} /> 退出
