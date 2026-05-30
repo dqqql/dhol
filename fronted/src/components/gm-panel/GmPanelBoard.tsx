@@ -757,13 +757,17 @@ function ActivityLogPanel({ logs }: { logs: Array<{ id: string; created_at: stri
                 <span style={{ fontSize: 12, fontWeight: 800, color: '#4a357e' }}>{log.actor_name}</span>
                 <span style={{ fontSize: 11, color: '#94a3b8' }}>{formatTime(log.created_at)}</span>
               </div>
-              <div style={{ fontSize: 13, lineHeight: 1.6, color: '#1f2937' }}>{log.message}</div>
+              <div style={{ fontSize: 13, lineHeight: 1.6, color: '#1f2937' }}>{repairKnownGmLogMessage(log.message)}</div>
             </div>
           ))
         )}
       </div>
     </section>
   )
+}
+
+function repairKnownGmLogMessage(message: string) {
+  return message.replaceAll('鍒犻櫎浜嗚鑹插崱', '删除了角色卡')
 }
 
 function TrackerFearBar(props: {

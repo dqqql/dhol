@@ -1262,7 +1262,7 @@ export class RoomDurableObject {
 
     const [entry] = panel.sheets.splice(sheetIndex, 1)
     panel.sheet_order = panel.sheet_order.filter((id) => id !== sheetId)
-    this.appendGmLog('sheet-delete', `${player.nickname} 鍒犻櫎浜嗚鑹插崱 ${entry.parsed_sheet.character_name || entry.source_file_name}`, player)
+    this.appendGmLog('sheet-delete', `${player.nickname} 删除了角色卡 ${entry.parsed_sheet.character_name || entry.source_file_name}`, player)
   }
 
   private updateGmSheet(player: Player, sheetId: string, sheet: ResourceTrackerSheet): void {
@@ -1387,7 +1387,7 @@ export class RoomDurableObject {
       actor_player_id: actor?.id,
       actor_name: actor?.nickname ?? '系统',
       kind,
-      message,
+      message: repairKnownGmLogMessage(message),
     })
 
     if (panel.activity_log.length > 200) {
@@ -2170,8 +2170,19 @@ function normalizeGmPanelState(value: GmPanelState | undefined): GmPanelState {
       ))
       : [],
     sheet_order: Array.isArray(value.sheet_order) ? value.sheet_order.filter((item) => typeof item === 'string') : [],
-    activity_log: Array.isArray(value.activity_log) ? value.activity_log.slice(-200) : [],
+    activity_log: Array.isArray(value.activity_log)
+      ? value.activity_log.slice(-200).map((item) => ({
+        ...item,
+        message: repairKnownGmLogMessage(item.message),
+      }))
+      : [],
   }
+}
+
+function repairKnownGmLogMessage(message: string): string {
+  return typeof message === 'string'
+    ? message.replaceAll('鍒犻櫎浜嗚鑹插崱', '删除了角色卡')
+    : message
 }
 
 function normalizeGmPanelStateWithHtml(value: GmPanelState | undefined): GmPanelState {
