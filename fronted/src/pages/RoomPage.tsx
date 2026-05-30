@@ -1,6 +1,7 @@
 import React from 'react'
 import { GmPanelBoard } from '@/components/gm-panel/GmPanelBoard'
 import { TopBar } from '@/components/layout/TopBar'
+import { MobilePanelRoom } from '@/components/mobile-panel/MobilePanelRoom'
 import { ImportModal } from '@/components/ui/ImportModal'
 import { RoomSettingsModal } from '@/components/ui/RoomSettingsModal'
 import { ToastContainer } from '@/components/ui/Toast'
@@ -34,6 +35,7 @@ export function RoomPage({ onLeaveRoom }: RoomPageProps) {
   }
 
   const showReconnectBanner = connectionStatus === 'reconnecting' || connectionStatus === 'error'
+  const content = room.room_type === 'mobile-panel' ? <MobilePanelRoom /> : <GmPanelBoard />
 
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden' }}>
@@ -83,7 +85,7 @@ export function RoomPage({ onLeaveRoom }: RoomPageProps) {
       )}
 
       <div style={{ position: 'absolute', inset: 0, top: showReconnectBanner ? 92 : 52 }}>
-        <GmPanelBoard />
+        {content}
       </div>
 
       <ImportModal />

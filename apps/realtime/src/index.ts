@@ -4,6 +4,7 @@ import {
   createPackLibrary,
   createDeckFromBuiltInPackIds,
   createRoomPackLibraryItemFromPack,
+  decodeMobilePanelCharacterCode,
   getCardGridSize,
   isBuiltInPackId,
   normalizeCardType,
@@ -25,6 +26,11 @@ import {
   type GmPanelState,
   type ImportedCharacterData,
   type MapCard,
+  type MobilePanelActivityLogItem,
+  type MobilePanelCharacterEntry,
+  type MobilePanelExperience,
+  type MobilePanelResourceKey,
+  type MobilePanelState,
   type Player,
   type ResourceTrackerActivityLogItem,
   type ResourceTrackerCharacterColumn,
@@ -299,6 +305,7 @@ export class RoomDurableObject {
       drawn_this_turn: {},
       resource_tracker: roomType === 'resource-tracker' ? createEmptyResourceTrackerState() : undefined,
       gm_panel: roomType === 'gm-panel' ? createEmptyGmPanelState() : undefined,
+      mobile_panel: roomType === 'mobile-panel' ? createEmptyMobilePanelState() : undefined,
       snapshot_version: 0,
       updated_at: now.toISOString(),
     }
@@ -559,6 +566,60 @@ export class RoomDurableObject {
         this.requireGmPanelRoom()
         this.updateGmCardsPerPage(player, message.payload.cardsPerPage)
         await this.commit('gm.updateCardsPerPage')
+        return
+
+      case 'mobile.importCharacterCode':
+        this.requireMobilePanelRoom()
+        this.importMobileCharacter(player, message.payload.code, message.payload.displayName, message.payload.experiences)
+        await this.commit('mobile.importCharacterCode')
+        return
+
+      case 'mobile.replaceCharacterCode':
+        this.requireMobilePanelRoom()
+        this.replaceMobileCharacter(player, message.payload.characterId, message.payload.code)
+        await this.commit('mobile.replaceCharacterCode')
+        return
+
+      case 'mobile.deleteCharacter':
+        this.requireMobilePanelRoom()
+        this.deleteMobileCharacter(player, message.payload.characterId)
+        await this.commit('mobile.deleteCharacter')
+        return
+
+      case 'mobile.updateCharacterCustom':
+        this.requireMobilePanelRoom()
+        this.updateMobileCharacterCustom(player, message.payload.characterId, message.payload.displayName, message.payload.experiences)
+        await this.commit('mobile.updateCharacterCustom')
+        return
+
+      case 'mobile.updateResource':
+        this.requireMobilePanelRoom()
+        this.updateMobileResource(player, message.payload.characterId, message.payload.resourceKey, message.payload.nextValue)
+        await this.commit('mobile.updateResource')
+        return
+
+      case 'mobile.updateFear':
+        this.requireMobilePanelRoom()
+        this.updateMobileFear(player, message.payload.value)
+        await this.commit('mobile.updateFear')
+        return
+
+      case 'mobile.createCountdown':
+        this.requireMobilePanelRoom()
+        this.createMobileCountdown(player, message.payload.name, message.payload.max)
+        await this.commit('mobile.createCountdown')
+        return
+
+      case 'mobile.updateCountdown':
+        this.requireMobilePanelRoom()
+        this.updateMobileCountdown(player, message.payload.countdownId, message.payload.value)
+        await this.commit('mobile.updateCountdown')
+        return
+
+      case 'mobile.deleteCountdown':
+        this.requireMobilePanelRoom()
+        this.deleteMobileCountdown(player, message.payload.countdownId)
+        await this.commit('mobile.deleteCountdown')
         return
 
       case 'turn.end':
@@ -990,6 +1051,7 @@ export class RoomDurableObject {
         })),
       }
       room.gm_panel = undefined
+      room.mobile_panel = undefined
     } else if (importedRoomType === 'gm-panel') {
       const panel = normalizeGmPanelStateWithHtml(structuredClone(backup.gm_panel))
       room.resource_tracker = undefined
@@ -1000,9 +1062,22 @@ export class RoomDurableObject {
           actor_player_id: remapPlayerId(item.actor_player_id),
         })),
       }
+      room.mobile_panel = undefined
+    } else if (importedRoomType === 'mobile-panel') {
+      const panel = normalizeMobilePanelState(structuredClone(backup.mobile_panel))
+      room.resource_tracker = undefined
+      room.gm_panel = undefined
+      room.mobile_panel = {
+        ...panel,
+        activity_log: panel.activity_log.map((item) => ({
+          ...item,
+          actor_player_id: remapPlayerId(item.actor_player_id),
+        })),
+      }
     } else {
       room.resource_tracker = undefined
       room.gm_panel = undefined
+      room.mobile_panel = undefined
     }
     room.host_player_id = hostPlayerId
     room.players = activePlayers.map((player) => ({
@@ -1402,6 +1477,146 @@ export class RoomDurableObject {
     }
   }
 
+  private importMobileCharacter(
+    player: Player,
+    code: string,
+    displayName: string,
+    experiences: MobilePanelExperience[],
+  ): void {
+    const panel = this.requireMobilePanelState()
+    const now = new Date().toISOString()
+    const entry = createMobilePanelCharacterEntry(code, displayName, experiences, now)
+    panel.characters.push(entry)
+    panel.character_order.push(entry.id)
+    this.appendMobileLog('character-import', `${player.nickname} 导入了角色 ${getMobilePanelCharacterLabel(entry)}`, player)
+  }
+
+  private replaceMobileCharacter(player: Player, characterId: string, code: string): void {
+    const entry = this.requireMobileCharacter(characterId)
+    const nextDecoded = decodeMobilePanelCharacterCode(cleanText(code, '', 20_000))
+    const previousLabel = getMobilePanelCharacterLabel(entry)
+    entry.source.code = cleanText(code, '', 20_000)
+    entry.source.updated_at = new Date().toISOString()
+    entry.decoded = nextDecoded
+    entry.tracker = normalizeMobilePanelTracker(entry.tracker, nextDecoded)
+    this.appendMobileLog('character-replace', `${player.nickname} 替换了角色码 ${previousLabel}`, player)
+  }
+
+  private deleteMobileCharacter(player: Player, characterId: string): void {
+    const panel = this.requireMobilePanelState()
+    const characterIndex = panel.characters.findIndex((item) => item.id === characterId)
+    if (characterIndex < 0) throw new Error('Unknown mobile character')
+
+    const [entry] = panel.characters.splice(characterIndex, 1)
+    panel.character_order = panel.character_order.filter((idValue) => idValue !== characterId)
+    this.appendMobileLog('character-delete', `${player.nickname} 删除了角色 ${getMobilePanelCharacterLabel(entry)}`, player)
+  }
+
+  private updateMobileCharacterCustom(
+    player: Player,
+    characterId: string,
+    displayName: string,
+    experiences: MobilePanelExperience[],
+  ): void {
+    const entry = this.requireMobileCharacter(characterId)
+    entry.custom = normalizeMobilePanelCustom(displayName, experiences)
+    this.appendMobileLog('character-update', `${player.nickname} 更新了角色 ${getMobilePanelCharacterLabel(entry)} 的自定义信息`, player)
+  }
+
+  private updateMobileResource(
+    player: Player,
+    characterId: string,
+    resourceKey: MobilePanelResourceKey,
+    nextValue: number | boolean[],
+  ): void {
+    const entry = this.requireMobileCharacter(characterId)
+    const currentValue = cloneMobilePanelResourceValue(getMobilePanelResourceValue(entry, resourceKey))
+    const normalizedValue = normalizeMobilePanelResourceValue(entry, resourceKey, nextValue)
+
+    if (isMobilePanelResourceValueEqual(currentValue, normalizedValue)) {
+      return
+    }
+
+    setMobilePanelResourceValue(entry, resourceKey, normalizedValue)
+    this.appendMobileLog(
+      'resource-change',
+      `${player.nickname} 将 ${getMobilePanelCharacterLabel(entry)} 的${getMobilePanelResourceLabel(resourceKey)}从 ${formatMobilePanelResourceValue(currentValue)} 调整为 ${formatMobilePanelResourceValue(normalizedValue)}`,
+      player,
+    )
+  }
+
+  private updateMobileFear(player: Player, value: number): void {
+    const panel = this.requireMobilePanelState()
+    const previous = panel.fear.value
+    panel.fear.value = clamp(Math.round(finiteNumber(value, previous)), 0, panel.fear.max)
+    if (previous !== panel.fear.value) {
+      this.appendMobileLog('fear-change', `${player.nickname} 将恐惧点从 ${previous} 调整为 ${panel.fear.value}`, player)
+    }
+  }
+
+  private createMobileCountdown(player: Player, name: string, max: number): void {
+    const panel = this.requireMobilePanelState()
+    const normalizedMax = clamp(Math.round(finiteNumber(max, 4)), 2, 12)
+    const normalizedName = cleanText(name, `进度钟 ${panel.countdowns.length + 1}`, 40)
+    const now = new Date().toISOString()
+
+    panel.countdowns.push({
+      id: id('mobile_clock'),
+      name: normalizedName,
+      value: 0,
+      max: normalizedMax,
+      created_at: now,
+      updated_at: now,
+    })
+
+    this.appendMobileLog('countdown-create', `${player.nickname} 新增了进度钟“${normalizedName}” (0/${normalizedMax})`, player)
+  }
+
+  private updateMobileCountdown(player: Player, countdownId: string, value: number): void {
+    const countdown = this.requireMobileCountdown(countdownId)
+    const previous = countdown.value
+    countdown.value = clamp(Math.round(finiteNumber(value, previous)), 0, countdown.max)
+    if (previous === countdown.value) {
+      return
+    }
+
+    countdown.updated_at = new Date().toISOString()
+    this.appendMobileLog(
+      'countdown-update',
+      `${player.nickname} 将进度钟“${countdown.name}”从 ${previous}/${countdown.max} 调整为 ${countdown.value}/${countdown.max}`,
+      player,
+    )
+  }
+
+  private deleteMobileCountdown(player: Player, countdownId: string): void {
+    const panel = this.requireMobilePanelState()
+    const countdownIndex = panel.countdowns.findIndex((item) => item.id === countdownId)
+    if (countdownIndex < 0) throw new Error('Unknown countdown')
+
+    const [countdown] = panel.countdowns.splice(countdownIndex, 1)
+    this.appendMobileLog('countdown-delete', `${player.nickname} 删除了进度钟“${countdown.name}”`, player)
+  }
+
+  private appendMobileLog(
+    kind: MobilePanelActivityLogItem['kind'],
+    message: string,
+    actor?: Player,
+  ): void {
+    const panel = this.requireMobilePanelState()
+    panel.activity_log.push({
+      id: id('mobile_log'),
+      created_at: new Date().toISOString(),
+      actor_player_id: actor?.id,
+      actor_name: actor?.nickname ?? '系统',
+      kind,
+      message,
+    })
+
+    if (panel.activity_log.length > 200) {
+      panel.activity_log = panel.activity_log.slice(-200)
+    }
+  }
+
   private rebuildDeckFromSelectedPacks(selectedBuiltInPackIds: string[]): void {
     const room = this.requireRoom()
     const reservedBuiltInCardIds = new Set<string>()
@@ -1651,6 +1866,7 @@ export class RoomDurableObject {
       settings: room.settings,
       resource_tracker: room.resource_tracker,
       gm_panel: room.gm_panel,
+      mobile_panel: room.mobile_panel,
       players: room.players.map(player => ({
         id: player.id,
         nickname: player.nickname,
@@ -1845,6 +2061,7 @@ export class RoomDurableObject {
       room_type?: RoomType
       resource_tracker?: ResourceTrackerState
       gm_panel?: GmPanelState
+      mobile_panel?: MobilePanelState
       imported_pack_library?: RoomPackLibraryItem[]
       selected_built_in_pack_ids?: string[]
       pack_library?: RoomPackLibraryItem[]
@@ -1889,6 +2106,9 @@ export class RoomDurableObject {
         : undefined,
       gm_panel: (migrated.room_type ?? 'co-creation') === 'gm-panel'
         ? normalizeGmPanelState(migrated.gm_panel)
+        : undefined,
+      mobile_panel: (migrated.room_type ?? 'co-creation') === 'mobile-panel'
+        ? normalizeMobilePanelState(migrated.mobile_panel)
         : undefined,
       imported_pack_library: importedPackLibrary.map((pack) => ({
         ...pack,
@@ -1947,6 +2167,21 @@ export class RoomDurableObject {
     return room.gm_panel
   }
 
+  private requireMobilePanelRoom(): void {
+    if (this.requireRoom().room_type !== 'mobile-panel') {
+      throw new Error('Mobile panel room required')
+    }
+  }
+
+  private requireMobilePanelState(): MobilePanelState {
+    const room = this.requireRoom()
+    if (room.room_type !== 'mobile-panel') {
+      throw new Error('Mobile panel room required')
+    }
+    room.mobile_panel ??= createEmptyMobilePanelState()
+    return room.mobile_panel
+  }
+
   private requireGmSheet(sheetId: string): GmPanelCharacterSheetEntry {
     const panel = this.requireGmPanelState()
     const entry = panel.sheets.find((item) => item.id === sheetId)
@@ -1954,8 +2189,22 @@ export class RoomDurableObject {
     return entry
   }
 
+  private requireMobileCharacter(characterId: string): MobilePanelCharacterEntry {
+    const panel = this.requireMobilePanelState()
+    const entry = panel.characters.find((item) => item.id === characterId)
+    if (!entry) throw new Error('Unknown mobile character')
+    return entry
+  }
+
   private requireGmCountdown(countdownId: string): ResourceTrackerCountdown {
     const panel = this.requireGmPanelState()
+    const countdown = panel.countdowns.find((item) => item.id === countdownId)
+    if (!countdown) throw new Error('Unknown countdown')
+    return countdown
+  }
+
+  private requireMobileCountdown(countdownId: string): ResourceTrackerCountdown {
+    const panel = this.requireMobilePanelState()
     const countdown = panel.countdowns.find((item) => item.id === countdownId)
     if (!countdown) throw new Error('Unknown countdown')
     return countdown
@@ -2105,7 +2354,7 @@ function makePlayer(idValue: string, nickname: string, color: string, isHost: bo
 }
 
 function normalizeRoomType(value: RoomType | undefined): RoomType {
-  if (value === 'resource-tracker' || value === 'gm-panel') return value
+  if (value === 'resource-tracker' || value === 'gm-panel' || value === 'mobile-panel') return value
   return 'co-creation'
 }
 
@@ -2133,6 +2382,19 @@ function createEmptyGmPanelState(): GmPanelState {
     countdowns: [],
     sheets: [],
     sheet_order: [],
+    activity_log: [],
+  }
+}
+
+function createEmptyMobilePanelState(): MobilePanelState {
+  return {
+    fear: {
+      value: 0,
+      max: 12,
+    },
+    countdowns: [],
+    characters: [],
+    character_order: [],
     activity_log: [],
   }
 }
@@ -2224,6 +2486,140 @@ function normalizeGmPanelStateWithHtml(value: GmPanelState | undefined): GmPanel
   })
 
   return normalized
+}
+
+function normalizeMobilePanelCharacterEntry(
+  character: Partial<MobilePanelCharacterEntry> | undefined,
+): MobilePanelCharacterEntry {
+  const now = new Date().toISOString()
+  const code = cleanText(character?.source?.code, '', 20_000)
+  if (!code) {
+    throw new Error('Mobile character code is required')
+  }
+
+  const decoded = decodeMobilePanelCharacterCode(code)
+
+  return {
+    id: cleanText(character?.id, id('mobile_char'), 120),
+    source: {
+      code,
+      version: decoded.version,
+      imported_at: cleanText(character?.source?.imported_at, now, 80),
+      updated_at: cleanText(character?.source?.updated_at, character?.source?.imported_at || now, 80),
+    },
+    decoded,
+    custom: normalizeMobilePanelCustom(character?.custom?.display_name, character?.custom?.experiences),
+    tracker: normalizeMobilePanelTracker(character?.tracker, decoded),
+  }
+}
+
+function normalizeMobilePanelCustom(
+  displayName: unknown,
+  experiences: MobilePanelExperience[] | undefined,
+) {
+  return {
+    display_name: cleanText(displayName, '', 60),
+    experiences: normalizeMobilePanelExperiences(experiences),
+  }
+}
+
+function normalizeMobilePanelExperiences(experiences: MobilePanelExperience[] | undefined): MobilePanelExperience[] {
+  if (!Array.isArray(experiences)) {
+    return []
+  }
+
+  return experiences
+    .slice(0, 6)
+    .map((experience) => ({
+      id: cleanText(experience?.id, id('mobile_exp'), 120),
+      name: cleanText(experience?.name, '', 40),
+      value: cleanText(experience?.value, '', 10),
+    }))
+    .filter((experience) => experience.name || experience.value)
+}
+
+function createMobilePanelCharacterEntry(
+  code: string,
+  displayName: string,
+  experiences: MobilePanelExperience[],
+  now = new Date().toISOString(),
+): MobilePanelCharacterEntry {
+  const cleanedCode = cleanText(code, '', 20_000)
+  const decoded = decodeMobilePanelCharacterCode(cleanedCode)
+
+  return {
+    id: id('mobile_char'),
+    source: {
+      code: cleanedCode,
+      version: decoded.version,
+      imported_at: now,
+      updated_at: now,
+    },
+    decoded,
+    custom: normalizeMobilePanelCustom(displayName, experiences),
+    tracker: createEmptyMobilePanelTracker(decoded),
+  }
+}
+
+function createEmptyMobilePanelTracker(decoded: MobilePanelCharacterEntry['decoded']): MobilePanelCharacterEntry['tracker'] {
+  return {
+    hopeCurrent: 0,
+    stress: normalizeBooleanTrack([], decoded.resources.stressMax),
+    hp: normalizeBooleanTrack([], decoded.resources.hpMax),
+    armor_slots: normalizeBooleanTrack([], decoded.resources.armorMax),
+    goldCurrent: decoded.resources.goldCurrent,
+  }
+}
+
+function normalizeMobilePanelTracker(
+  tracker: Partial<MobilePanelCharacterEntry['tracker']> | undefined,
+  decoded: MobilePanelCharacterEntry['decoded'],
+): MobilePanelCharacterEntry['tracker'] {
+  const fallback = createEmptyMobilePanelTracker(decoded)
+  return {
+    hopeCurrent: clamp(Math.round(finiteNumber(tracker?.hopeCurrent, fallback.hopeCurrent)), 0, decoded.resources.hopeMax),
+    stress: normalizeBooleanTrack(tracker?.stress, decoded.resources.stressMax),
+    hp: normalizeBooleanTrack(tracker?.hp, decoded.resources.hpMax),
+    armor_slots: normalizeBooleanTrack(tracker?.armor_slots, decoded.resources.armorMax),
+    goldCurrent: clamp(Math.round(finiteNumber(tracker?.goldCurrent, fallback.goldCurrent)), 0, 255),
+  }
+}
+
+function getMobilePanelCharacterLabel(entry: MobilePanelCharacterEntry): string {
+  if (entry.custom.display_name) {
+    return entry.custom.display_name
+  }
+
+  const parts = [
+    entry.decoded.specialCards.profession?.title,
+    entry.decoded.specialCards.subclass?.title,
+    entry.decoded.specialCards.ancestry1?.title,
+    entry.decoded.specialCards.ancestry2?.title,
+    entry.decoded.specialCards.community?.title,
+  ].filter(Boolean)
+
+  return parts.length ? `${parts.join('-')}-LV${entry.decoded.level}` : `角色 LV${entry.decoded.level}`
+}
+
+function normalizeMobilePanelState(value: MobilePanelState | undefined): MobilePanelState {
+  if (!value) return createEmptyMobilePanelState()
+
+  return {
+    fear: {
+      value: clamp(Math.round(finiteNumber(value.fear?.value, 0)), 0, 12),
+      max: 12,
+    },
+    countdowns: Array.isArray(value.countdowns)
+      ? value.countdowns.map((countdown, index) => normalizeResourceTrackerCountdown(countdown, index))
+      : [],
+    characters: Array.isArray(value.characters)
+      ? value.characters.map((character) => normalizeMobilePanelCharacterEntry(character))
+      : [],
+    character_order: Array.isArray(value.character_order)
+      ? value.character_order.filter((item) => typeof item === 'string')
+      : [],
+    activity_log: Array.isArray(value.activity_log) ? value.activity_log.slice(-200) : [],
+  }
 }
 
 function normalizeResourceTrackerCountdown(
@@ -3036,6 +3432,101 @@ function formatTrackerResourceValue(value: number | boolean[]): string {
       const chest = value[20] ? 1 : 0
       return `把 ${hand}/10，袋 ${bag}/10，箱 ${chest}/1`
     }
+    return `${value.filter(Boolean).length}/${value.length}`
+  }
+  return String(value)
+}
+
+function cloneMobilePanelResourceValue(value: number | boolean[]): number | boolean[] {
+  return Array.isArray(value) ? [...value] : value
+}
+
+function getMobilePanelResourceValue(
+  entry: MobilePanelCharacterEntry,
+  resourceKey: MobilePanelResourceKey,
+): number | boolean[] {
+  switch (resourceKey) {
+    case 'hopeCurrent':
+      return entry.tracker.hopeCurrent
+    case 'stress':
+      return [...entry.tracker.stress]
+    case 'hp':
+      return [...entry.tracker.hp]
+    case 'armor_slots':
+      return [...entry.tracker.armor_slots]
+    case 'goldCurrent':
+      return entry.tracker.goldCurrent
+  }
+}
+
+function setMobilePanelResourceValue(
+  entry: MobilePanelCharacterEntry,
+  resourceKey: MobilePanelResourceKey,
+  nextValue: number | boolean[],
+): void {
+  switch (resourceKey) {
+    case 'hopeCurrent':
+      entry.tracker.hopeCurrent = nextValue as number
+      return
+    case 'stress':
+      entry.tracker.stress = [...(nextValue as boolean[])]
+      return
+    case 'hp':
+      entry.tracker.hp = [...(nextValue as boolean[])]
+      return
+    case 'armor_slots':
+      entry.tracker.armor_slots = [...(nextValue as boolean[])]
+      return
+    case 'goldCurrent':
+      entry.tracker.goldCurrent = nextValue as number
+      return
+  }
+}
+
+function normalizeMobilePanelResourceValue(
+  entry: MobilePanelCharacterEntry,
+  resourceKey: MobilePanelResourceKey,
+  nextValue: number | boolean[],
+): number | boolean[] {
+  switch (resourceKey) {
+    case 'hopeCurrent':
+      return clamp(Math.round(finiteNumber(nextValue, entry.tracker.hopeCurrent)), 0, entry.decoded.resources.hopeMax)
+    case 'stress':
+      return normalizeBooleanTrack(nextValue, entry.decoded.resources.stressMax)
+    case 'hp':
+      return normalizeBooleanTrack(nextValue, entry.decoded.resources.hpMax)
+    case 'armor_slots':
+      return normalizeBooleanTrack(nextValue, entry.decoded.resources.armorMax)
+    case 'goldCurrent':
+      return clamp(Math.round(finiteNumber(nextValue, entry.tracker.goldCurrent)), 0, 255)
+  }
+}
+
+function isMobilePanelResourceValueEqual(left: number | boolean[], right: number | boolean[]): boolean {
+  if (Array.isArray(left) && Array.isArray(right)) {
+    if (left.length !== right.length) return false
+    return left.every((item, index) => item === right[index])
+  }
+  return left === right
+}
+
+function getMobilePanelResourceLabel(resourceKey: MobilePanelResourceKey): string {
+  switch (resourceKey) {
+    case 'hopeCurrent':
+      return '希望点'
+    case 'stress':
+      return '压力点'
+    case 'hp':
+      return '生命点'
+    case 'armor_slots':
+      return '护甲槽'
+    case 'goldCurrent':
+      return '金币'
+  }
+}
+
+function formatMobilePanelResourceValue(value: number | boolean[]): string {
+  if (Array.isArray(value)) {
     return `${value.filter(Boolean).length}/${value.length}`
   }
   return String(value)

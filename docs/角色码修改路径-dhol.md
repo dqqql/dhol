@@ -1,162 +1,384 @@
-# 角色码修改路径：dhol 手机端角色房间
+# dhol 手机角色码房间协议说明
 
-## 目标
+更新日期：2026-05-30
 
-在 `D:\Dql\Desktop\dhol` 中新增一个专门解析角色码的实时房间。这个房间不是复刻完整 HTML 角色卡，也不是 GM 面板 iframe，而是一个适合手机端跑团使用的轻量角色与资源追踪界面。
+## 1. 文档定位
 
-这份文档只面向 dhol 的 agent 开发。
+这份文档描述的是 `dhol` 项目里“手机角色码房间（`mobile-panel`）”所采用的 `dhc2_` 角色码解析协议，以及当前实现边界。
 
-## 核心要求
+它不是旧版“给外部 agent 的迁移草稿”，而是当前项目成员的正式对接说明。
 
-- 新增独立房间类型，例如 `character-code-room` 或等价命名。
-- 房间内提供角色码粘贴解析器，解析 `DHCHAR.v1.<base64url-json>`。
-- 解析后渲染为手机端友好的角色面板，去掉卡图、HTML iframe、A4 纸张布局。
-- 所有人权限完全一样：任何人都能导入多个角色、修改所有角色资源、修改 GM 资源。
-- GM 资源需要包含恐惧点和进度钟。
-- 重复导入同一个角色时完整覆盖，包括资料与资源状态。
+截至 2026-05-30：
 
-## 统一角色码协议
+- `dhol` 当前桌面 GM 面板仍然主要消费 HTML 角色卡
+- 新增的手机角色码房间改为直接消费 `dhc2_` 角色码
+- `dhol` 内部的共享解码实现位于：
+  - `packages/shared/src/mobile-panel-code.ts`
+- 当前 vendoring 的上游字典快照位于：
+  - `packages/shared/src/data/builtin-base.json`
 
-必须与 MyDHcharsheet 侧保持完全一致：
+## 2. 上游真相源
 
-```text
-DHCHAR.v1.<base64url-json>
-```
+`dhol` 不自己发明另一套角色码协议解释，当前唯一真相源是上游车卡器项目 `MyDHcharsheet`。
 
-`base64url-json` 解码后是 UTF-8 JSON，最外层结构：
+上游参考位置：
 
-```json
-{
-  "format": "dh-character-code",
-  "version": 1,
-  "character_id": "string",
-  "exported_at": "2026-05-30T00:00:00.000Z",
-  "sheet": {
-    "character_name": "string",
-    "summary_line": "string",
-    "identity": {},
-    "stats": {},
-    "resources": {},
-    "equipment": {},
-    "features": {},
-    "domain_cards": [],
-    "narrative": {}
-  }
-}
-```
+- 协议实现：`D:\Dql\Desktop\MyDHcharsheet\lib\character-code.ts`
+- 字典构建：`D:\Dql\Desktop\MyDHcharsheet\lib\character-code-dictionary.ts`
+- 字典源数据：`D:\Dql\Desktop\MyDHcharsheet\data\cards\builtin-base.json`
+- 协议测试：`D:\Dql\Desktop\MyDHcharsheet\tests\unit\character-code.test.ts`
 
-解析要求：
+`dhol` 手机角色码房间只支持上游截至 2026-05-30 的“新版 v2”角色码。
 
-- 只接受 `DHCHAR.v1.` 前缀。
-- 只接受 `format === "dh-character-code"` 且 `version === 1`。
-- Base64URL 解码必须按 UTF-8 处理，保证中文和多行文本不损坏。
-- 对输入长度设上限，避免粘贴超大内容拖垮页面或 WebSocket。
-- 前端可以先本地校验，但服务端也必须再次校验。
+## 3. 当前支持范围
 
-## 数据模型建议
+### 3.1 支持
 
-优先复用 dhol 现有资源追踪抽象：
+- 前缀为 `dhc2_` 的角色码
+- 版本字节为 `2`
+- 包含以下静态数据：
+  - 等级
+  - 熟练度总数
+  - 闪避
+  - 护甲值
+  - 六个属性
+  - 重伤 / 严重阈值
+  - 希望上限
+  - 压力上限
+  - 金币当前值
+  - 生命上限
+  - 护甲槽总数
+  - 职业 / 子职业 / 种族 / 社群 / 领域卡文本
 
-- `packages/shared/src/types.ts` 已有 `ResourceTrackerSheet`、`ResourceTrackerResources`、`ResourceTrackerCountdown` 等类型。
-- 新角色码房间可以扩展现有 sheet 结构，新增 `features` 与 `domain_cards` 字段。
-- 如果不想污染现有 GM 面板类型，可以新增 `CharacterCodeSheet`，但资源字段语义要与 `ResourceTrackerSheet.resources` 保持一致。
+### 3.2 不支持
 
-建议新增状态：
+- 2026-05-30 之前那批“短版 v2”角色码
+- 自定义职业卡
+- 自定义领域卡
+- 自定义卡包字典
+
+如果用户贴入旧短码，`dhol` 应直接报错，并提示重新在车卡器导出新版角色码。
+
+## 4. 字典快照校验
+
+当前 `dhol` vendoring 的 `builtin-base.json` 必须与上游快照一致。
+
+校验点：
+
+- 包名：`系统内置卡牌包`
+- 版本：`V20251114`
+- SHA256：`446F7FBB4C3C0A371D737ABAEDAEC7F5F57A69AC28D55871E1C7101498ED03C6`
+
+条目数量应为：
+
+- `profession`: `9`
+- `subclass`: `54`
+- `ancestry`: `36`
+- `community`: `9`
+- `domain`: `189`
+
+只要版本、哈希、数量或数组顺序任一项不一致，都不能保证旧角色码反解正确。
+
+## 5. 字典规则
+
+角色码本体不存卡牌正文，只存字典索引。
+
+因此解析器必须满足以下规则：
+
+- 所有索引都是 `0` 基
+- 索引顺序严格等于 `builtin-base.json` 原始数组顺序
+- 绝对不能自行排序
+- 绝对不能按名称排序
+- 绝对不能按 `id` 排序
+
+五组字典字段映射如下。
+
+### 5.1 Profession
+
+来源：`builtin-base.json.profession`
 
 ```ts
-interface CharacterCodeRoomState {
-  fear: { value: number; max: number }
-  countdowns: ResourceTrackerCountdown[]
-  characters: CharacterCodeCharacterEntry[]
-  character_order: string[]
-  activity_log: Array<...>
-}
-```
-
-角色条目建议：
-
-```ts
-interface CharacterCodeCharacterEntry {
+type ProfessionEntry = {
   id: string
-  character_id: string
-  imported_at: string
-  updated_at: string
-  source_code_version: 1
-  source_exported_at: string
-  sheet: CharacterCodeSheet
+  title: string
+  text: string
+  hopeFeature: string
 }
 ```
 
-覆盖策略：
+- `id = raw.id`
+- `title = raw["名称"]`
+- `text = raw["职业特性"]`
+- `hopeFeature = raw["希望特性"]`
 
-- 如果新导入的 `character_id` 已存在，完整覆盖该角色条目。
-- 覆盖时资源状态也使用新角色码中的状态，不保留旧 HP/压力/希望。
-- 如果 `character_id` 不存在，则新增角色。
+### 5.2 Subclass
 
-## 房间与协议修改路径
+来源：`builtin-base.json.subclass`
 
-建议修改位置：
+```ts
+type CardEntry = {
+  id: string
+  title: string
+  text: string
+}
+```
 
-- 共享类型与解析：`packages/shared/src/types.ts`、`packages/shared/src/protocol.ts`、`packages/shared/src/validators.ts`，或新增 `packages/shared/src/character-code.ts`。
-- Durable Object 房间逻辑：`apps/realtime/src/index.ts`。
-- 前端 store：`fronted/src/store/useStore.ts`。
-- 创建房间入口：`fronted/src/pages/LandingPage.tsx`。
-- 房间路由渲染：`fronted/src/pages/RoomPage.tsx`。
-- 新 UI 组件目录：`fronted/src/components/character-code-room/`。
+- `id = raw.id`
+- `title = raw["名称"]`
+- `text = raw["描述"]`
 
-建议新增消息：
+### 5.3 Ancestry
 
-- `character.importCode`：导入角色码。
-- `character.updateResource`：更新角色资源。
-- `character.delete`：删除角色。
-- `character.move`：调整角色顺序。
-- `character.updateFear`：更新恐惧点。
-- `character.createCountdown`、`character.updateCountdown`、`character.deleteCountdown`：管理进度钟。
+- `id = raw.id`
+- `title = raw["名称"]`
+- `text = raw["效果"]`
 
-也可以复用 tracker/gm 的资源更新函数，但外部消息命名建议独立，避免未来维护时误判房间类型。
+### 5.4 Community
 
-## UI 与手机端要求
+- `id = raw.id`
+- `title = raw["名称"]`
+- `text = raw["描述"]`
 
-这个房间的重点是“手机端适合跑团”，不要照搬 GM 面板的桌面双栏 iframe 设计。
+### 5.5 Domain
 
-布局建议：
+- `id = raw.id`
+- `title = raw["名称"]`
+- `text = raw["描述"]`
 
-- 顶部固定或半固定：房间名、邀请码、恐惧点、添加角色按钮。
-- 主区域单列卡片流，每个角色一张移动端卡片。
-- 角色卡顶部显示姓名、等级、职业/种族/社群摘要。
-- 资源区放在最前：希望、HP、压力、护甲槽、熟练，用大点击目标。
-- 详情区用折叠块：属性、经历、武器护甲、职业/希望特性、领域卡、背景文本。
-- 领域卡只显示标题和内容，不显示卡图。
-- 长文本需要良好换行，避免横向滚动。
-- 底部或悬浮区域提供进度钟管理，手机上不遮挡资源按钮。
+## 6. 外层格式
 
-视觉建议：
+完整角色码格式：
 
-- 延续 dhol 现有 Hope/Fear 氛围，但避免桌面大画布感。
-- 使用清晰层级：资源追踪比装饰更优先。
-- 触控目标建议不小于 44px。
-- 字号和行高按手机阅读优化，长段落不要太密。
-- 空房间状态要明确提示“粘贴 MyDHcharsheet 导出的角色码”。
+```txt
+dhc2_<base64url(body)>
+```
 
-## 导入器行为
+说明：
 
-- 导入入口是 textarea 或 modal，支持粘贴长角色码。
-- 粘贴后显示解析预览：角色姓名、摘要、领域卡数量、资源最大值。
-- 确认后发送给服务端导入。
-- 导入失败时明确区分：前缀错误、版本不支持、内容损坏、字段缺失、文本过长。
-- 不需要支持 HTML 文件导入，不需要支持二维码，不需要下载文件。
+- 固定前缀：`dhc2_`
+- 前缀后是一个 `base64url` 编码后的二进制体
+- 解码时需要先恢复成普通 Base64：
+  1. `-` 还原成 `+`
+  2. `_` 还原成 `/`
+  3. 尾部补齐 `=` 到 4 的倍数长度
 
-## 测试与验收
+## 7. 字节序与整体布局
 
-- 单测解析合法角色码并转换为房间角色数据。
-- 单测拒绝错误前缀、坏 Base64URL、错误 `format`、错误 `version`、超长输入。
-- 单测重复导入同一 `character_id` 会完整覆盖资料和资源。
-- 集成验证多人房间同步：任意用户导入角色，其他用户能看到；任意用户修改资源，其他用户同步更新。
-- 移动端验证：窄屏下没有横向滚动，领域卡文本可读，资源按钮可稳定点击。
-- 运行 `npm run build`，必要时运行 realtime typecheck。
+所有 `u16` / `i16` 都是小端序。
 
-## 与 MyDHcharsheet 的一致性要求
+当前新版 v2 的最短长度是 `41` 字节。
 
-- MyDHcharsheet 侧文档见 `D:\Dql\Desktop\MyDHcharsheet\docs\角色码修改路径.md`。
-- 如果解析字段要调整，必须同步更新两边文档和测试。
-- dhol 不负责生成角色码，只负责解析、导入、渲染和同步。
+整体布局如下：
+
+| 偏移 | 长度 | 类型 | 含义 |
+| --- | --- | --- | --- |
+| 0 | 1 | `u8` | 版本，固定 `2` |
+| 1 | 1 | `u8` | 等级 |
+| 2 | 1 | `u8` | 熟练度总数 |
+| 3 | 2 | `i16` | 闪避 |
+| 5 | 2 | `i16` | 护甲 |
+| 7 | 2 | `i16` | 敏捷 |
+| 9 | 2 | `i16` | 力量 |
+| 11 | 2 | `i16` | 灵巧 |
+| 13 | 2 | `i16` | 本能 |
+| 15 | 2 | `i16` | 风度 |
+| 17 | 2 | `i16` | 知识 |
+| 19 | 2 | `i16` | 重伤阈值 |
+| 21 | 2 | `i16` | 严重阈值 |
+| 23 | 1 | `u8` | 希望上限 |
+| 24 | 1 | `u8` | 压力上限 |
+| 25 | 1 | `u8` | 金币当前值 |
+| 26 | 1 | `u8` | 生命上限 |
+| 27 | 1 | `u8` | 护甲槽总数 |
+| 28 | 2 | `u16?` | 职业索引，可空 |
+| 30 | 2 | `u16?` | 子职业索引，可空 |
+| 32 | 2 | `u16?` | 种族 1 索引，可空 |
+| 34 | 2 | `u16?` | 种族 2 索引，可空 |
+| 36 | 2 | `u16?` | 社群索引，可空 |
+| 38 | 1 | `u8` | 领域卡数量 |
+| 39 | `2 * N` | `u16[]` | 领域卡索引数组 |
+| 尾部 | 2 | `u16` | 校验和 |
+
+其中：
+
+- `N = domainCount`
+- 总长度 = `39 + 2 * N + 2`
+
+## 8. 空值与校验
+
+### 8.1 可空索引
+
+特殊卡索引使用 `u16` 存储。
+
+空值哨兵：
+
+- 十进制：`65535`
+- 十六进制：`0xFFFF`
+
+含义：
+
+- `0xFFFF` 表示该槽位没有卡
+- 其余值表示字典下标
+
+### 8.2 校验和
+
+最后两个字节是校验和，规则为：
+
+```ts
+checksum = sum(all previous bytes) & 0xffff
+```
+
+也就是：
+
+1. 取除最后 2 字节外的所有字节
+2. 按无符号字节求和
+3. 最终写成一个小端 `u16`
+
+校验失败说明角色码已损坏、复制不完整或被改动。
+
+## 9. 业务语义
+
+### 9.1 特殊卡槽位
+
+五个槽位语义固定：
+
+- `profession` = 职业卡
+- `subclass` = 子职业卡
+- `ancestry1` = 第一张种族卡
+- `ancestry2` = 第二张种族卡
+- `community` = 社群卡
+
+### 9.2 领域卡
+
+领域卡是一个顺序数组。
+
+导出端会扫描角色卡中的所有 `type === "domain"` 卡牌，并按扫描顺序写入。
+
+接收方只需要：
+
+1. 读取 `domainCount`
+2. 依次读取 `domainCount` 个 `u16`
+3. 按顺序映射到领域字典
+
+### 9.3 存储的是显示值
+
+角色码里存的是页面最终显示值，不是原始表单值：
+
+- 熟练度存“总数”
+- 闪避存“总值”
+- 护甲存“总值”
+- 伤害阈值存“总值”
+- `hpMax` 存页面显示生命上限
+- `armorMax` 存页面显示护甲槽总数
+
+`dhol` 解析器不需要重新执行车卡器侧的派生计算。
+
+## 10. dhol 内部角色状态模型
+
+手机角色码房间里的单个角色条目由四层组成：
+
+### 10.1 `source`
+
+- 原始角色码
+- 导入时间
+- 最近替换时间
+- 协议版本
+
+### 10.2 `decoded`
+
+角色码反解后的静态结构化结果。
+
+### 10.3 `custom`
+
+房间内自定义信息：
+
+- `display_name`
+- `experiences[]`
+
+每条经历包含：
+
+- `id`
+- `name`
+- `value`
+
+### 10.4 `tracker`
+
+房间内独立维护的实时资源状态：
+
+- `hopeCurrent`
+- `stress`
+- `hp`
+- `armor_slots`
+- `goldCurrent`
+
+## 11. 导入与替换规则
+
+### 11.1 首次导入
+
+导入角色码后，`tracker` 默认值为：
+
+- `hopeCurrent = 0`
+- `stress = [false ...]`，长度等于 `stressMax`
+- `hp = [false ...]`，长度等于 `hpMax`
+- `armor_slots = [false ...]`，长度等于 `armorMax`
+- `goldCurrent = decoded.resources.goldCurrent`
+
+### 11.2 替换角色码
+
+替换角色码时：
+
+- 保留角色条目 `id`
+- 保留自定义名称
+- 保留经历列表
+- 保留资源当前进度
+- 若新版上限变小，则按新上限裁剪布尔数组
+- 若新版上限变大，则补空位
+
+## 12. 推荐的解码结果结构
+
+`packages/shared/src/types.ts` 中的 `MobilePanelDecodedCode` 即当前统一输出结构。
+
+实现约束：
+
+- 所有卡牌文本在解码阶段直接展开到 `specialCards` / `domains`
+- 若索引越界，必须报错
+- 不允许静默忽略未知索引
+
+## 13. 错误处理要求
+
+以下情况必须直接报错：
+
+- 前缀不是 `dhc2_`
+- 内容为空
+- 长度小于 `41` 字节
+- 校验和不匹配
+- 版本不是 `2`
+- 领域卡字节长度与 `domainCount` 不一致
+- 任意特殊卡索引越界
+- 任意领域卡索引越界
+
+对旧短码的报错文案应明确提示：
+
+- 当前 `dhol` 只支持 2026-05-30 之后的新版 v2 角色码
+- 需要回到车卡器重新导出
+
+## 14. 当前实现位置
+
+`dhol` 当前与手机角色码房间直接相关的文件：
+
+- 共享类型：`packages/shared/src/types.ts`
+- 共享协议：`packages/shared/src/protocol.ts`
+- 共享解码器：`packages/shared/src/mobile-panel-code.ts`
+- 上游字典快照：`packages/shared/src/data/builtin-base.json`
+- Worker 房间逻辑：`apps/realtime/src/index.ts`
+- 前端房间组件：`fronted/src/components/mobile-panel/MobilePanelRoom.tsx`
+
+## 15. 实施边界总结
+
+当前版本的结论可以概括为：
+
+1. `dhol` 手机房间只认新版 `dhc2_`
+2. 静态角色信息来自角色码反解
+3. 动态资源状态在房间内独立维护
+4. 字典必须与上游快照严格一致
+5. 出错时宁可明确报错，也不要静默容错

@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import type { RoomType } from '@dhgc/shared'
 import { Dices, LogIn, Plus, Sparkles } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 
@@ -12,6 +13,7 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
   const [roomName, setRoomName] = useState('匕首之心 GM 面板')
   const [nickname, setNickname] = useState('')
   const [inviteCode, setInviteCode] = useState('')
+  const [roomType, setRoomType] = useState<RoomType>('gm-panel')
 
   async function handleCreate(event: React.FormEvent) {
     event.preventDefault()
@@ -23,7 +25,7 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
     const entered = await createRoom({
       nickname,
       roomName,
-      roomType: 'gm-panel',
+      roomType,
     })
 
     if (entered) onEnterRoom()
@@ -171,6 +173,39 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
                 <div>
                   <label className="label">房间名称</label>
                   <input className="input" value={roomName} onChange={(event) => setRoomName(event.target.value)} maxLength={40} />
+                </div>
+
+                <div>
+                  <label className="label">房间类型</label>
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {[
+                      { id: 'gm-panel', label: 'GM 面板', hint: '适合桌面端导入 HTML 角色卡。' },
+                      { id: 'mobile-panel', label: '手机角色码房间', hint: '适合手机端直接粘贴 `dhc2_` 角色码。' },
+                    ].map((option) => {
+                      const selected = roomType === option.id
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => {
+                            setRoomType(option.id as RoomType)
+                            setRoomName(option.id === 'mobile-panel' ? '匕首之心 手机角色码房间' : '匕首之心 GM 面板')
+                          }}
+                          style={{
+                            padding: 14,
+                            textAlign: 'left',
+                            border: selected ? '1px solid rgba(139,224,213,0.44)' : '1px solid var(--border-subtle)',
+                            background: selected ? 'linear-gradient(180deg, #ffffff, #e7f8f6)' : 'rgba(255,255,255,0.75)',
+                            boxShadow: selected ? '0 10px 22px rgba(39,24,90,0.08)' : 'none',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>{option.label}</div>
+                          <div style={{ marginTop: 4, fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)' }}>{option.hint}</div>
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
 
                 <div>

@@ -1,12 +1,13 @@
 export type DeckCardType = 'Location' | 'Feature' | 'Hook' | 'Custom'
 export type CardType = DeckCardType | 'Role'
 export type RoomMode = 'free' | 'co-creation' | 'normal'
-export type RoomType = 'co-creation' | 'resource-tracker' | 'gm-panel'
+export type RoomType = 'co-creation' | 'resource-tracker' | 'gm-panel' | 'mobile-panel'
 export type ConnectionColor = 'red' | 'green' | 'gray'
 export type RoomPackSource = 'built-in' | 'imported'
 export type ResourceTrackerResourceKey = 'hope' | 'proficiency' | 'hp' | 'stress' | 'armor_slots' | 'gold'
 export type GmPanelResourceKey = ResourceTrackerResourceKey
 export type GmPanelTheme = 'violet-mint' | 'solar-abyss' | 'frost-ember'
+export type MobilePanelResourceKey = 'hopeCurrent' | 'stress' | 'hp' | 'armor_slots' | 'goldCurrent'
 
 export interface RoleCardDetails {
   player_name: string
@@ -278,6 +279,123 @@ export interface GmPanelState {
   activity_log: GmPanelActivityLogItem[]
 }
 
+export interface MobilePanelCardEntry {
+  id: string
+  title: string
+  text: string
+}
+
+export interface MobilePanelProfessionEntry extends MobilePanelCardEntry {
+  hopeFeature: string
+}
+
+export interface MobilePanelDecodedCode {
+  version: 2
+  level: number
+  proficiency: number
+  evasion: number
+  armor: number
+  attributes: {
+    agility: number
+    strength: number
+    finesse: number
+    instinct: number
+    presence: number
+    knowledge: number
+  }
+  damageThresholds: {
+    minor: number
+    major: number
+  }
+  resources: {
+    hopeMax: number
+    stressMax: number
+    goldCurrent: number
+    hpMax: number
+    armorMax: number
+  }
+  specialCardIndices: {
+    profession: number | null
+    subclass: number | null
+    ancestry1: number | null
+    ancestry2: number | null
+    community: number | null
+  }
+  domainCardIndices: number[]
+  specialCards: {
+    profession?: MobilePanelProfessionEntry
+    subclass?: MobilePanelCardEntry
+    ancestry1?: MobilePanelCardEntry
+    ancestry2?: MobilePanelCardEntry
+    community?: MobilePanelCardEntry
+  }
+  domains: MobilePanelCardEntry[]
+}
+
+export interface MobilePanelExperience {
+  id: string
+  name: string
+  value: string
+}
+
+export interface MobilePanelCharacterCustom {
+  display_name: string
+  experiences: MobilePanelExperience[]
+}
+
+export interface MobilePanelCharacterTracker {
+  hopeCurrent: number
+  stress: boolean[]
+  hp: boolean[]
+  armor_slots: boolean[]
+  goldCurrent: number
+}
+
+export interface MobilePanelCharacterSource {
+  code: string
+  version: 2
+  imported_at: string
+  updated_at: string
+}
+
+export interface MobilePanelCharacterEntry {
+  id: string
+  source: MobilePanelCharacterSource
+  decoded: MobilePanelDecodedCode
+  custom: MobilePanelCharacterCustom
+  tracker: MobilePanelCharacterTracker
+}
+
+export interface MobilePanelActivityLogItem {
+  id: string
+  created_at: string
+  actor_player_id?: string
+  actor_name: string
+  kind:
+    | 'character-import'
+    | 'character-replace'
+    | 'character-update'
+    | 'character-delete'
+    | 'resource-change'
+    | 'fear-change'
+    | 'countdown-create'
+    | 'countdown-update'
+    | 'countdown-delete'
+    | 'system'
+  message: string
+}
+
+export interface MobilePanelState {
+  fear: {
+    value: number
+    max: number
+  }
+  countdowns: ResourceTrackerCountdown[]
+  characters: MobilePanelCharacterEntry[]
+  character_order: string[]
+  activity_log: MobilePanelActivityLogItem[]
+}
+
 export interface RoomState {
   room_type: RoomType
   room_id: string
@@ -301,6 +419,7 @@ export interface RoomState {
   drawn_this_turn: Record<string, boolean>
   resource_tracker?: ResourceTrackerState
   gm_panel?: GmPanelState
+  mobile_panel?: MobilePanelState
   snapshot_version: number
   updated_at: string
 }
@@ -354,6 +473,7 @@ export interface DhRoomBackup {
   settings: RoomSettings
   resource_tracker?: ResourceTrackerState
   gm_panel?: GmPanelState
+  mobile_panel?: MobilePanelState
   players: Array<Pick<Player, 'id' | 'nickname' | 'color' | 'is_host' | 'is_online'>>
   exported_at: string
 }

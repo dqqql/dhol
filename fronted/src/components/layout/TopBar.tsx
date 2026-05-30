@@ -5,6 +5,7 @@ import { fetchDhRoomBackup } from '@/lib/realtime'
 import { useStore } from '@/store/useStore'
 
 function getModeLabel(roomType: string) {
+  if (roomType === 'mobile-panel') return '手机角色码房间'
   if (roomType === 'gm-panel') return 'GM 面板'
   if (roomType === 'resource-tracker') return '追踪资源'
   return '房间'

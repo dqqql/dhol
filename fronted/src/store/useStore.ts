@@ -8,6 +8,8 @@ import {
   type GmPanelTheme,
   type GmPanelResourceKey,
   type MapCard,
+  type MobilePanelExperience,
+  type MobilePanelResourceKey,
   type ResourceTrackerResourceKey,
   type ResourceTrackerSheet,
   type RoomSession,
@@ -117,6 +119,16 @@ interface AppStore extends UIState {
   deleteGmCountdown: (countdownId: string) => void
   moveGmSheet: (sheetId: string, direction: 'left' | 'right') => void
   updateGmCardsPerPage: (cardsPerPage: number) => void
+
+  importMobileCharacter: (code: string, displayName: string, experiences: MobilePanelExperience[]) => void
+  replaceMobileCharacter: (characterId: string, code: string) => void
+  deleteMobileCharacter: (characterId: string) => void
+  updateMobileCharacterCustom: (characterId: string, displayName: string, experiences: MobilePanelExperience[]) => void
+  updateMobileResource: (characterId: string, resourceKey: MobilePanelResourceKey, nextValue: number | boolean[]) => void
+  updateMobileFear: (value: number) => void
+  createMobileCountdown: (name: string, max: number) => void
+  updateMobileCountdown: (countdownId: string, value: number) => void
+  deleteMobileCountdown: (countdownId: string) => void
 
   endTurn: () => void
   forceSkipTurn: (playerId: string) => void
@@ -242,7 +254,7 @@ function clearTransientOverrides() {
 }
 
 function preserveTransientRoomState(previous: RoomState | null, incoming: RoomState): RoomState {
-  if (incoming.room_type === 'resource-tracker' || incoming.room_type === 'gm-panel') {
+  if (incoming.room_type === 'resource-tracker' || incoming.room_type === 'gm-panel' || incoming.room_type === 'mobile-panel') {
     clearTransientOverrides()
     return incoming
   }
@@ -770,6 +782,69 @@ export const useStore = create<AppStore>((set, get) => {
       sendMessage({
         type: 'gm.updateCardsPerPage',
         payload: { cardsPerPage },
+      })
+    },
+
+    importMobileCharacter: (code, displayName, experiences) => {
+      sendMessage({
+        type: 'mobile.importCharacterCode',
+        payload: { code, displayName, experiences },
+      })
+    },
+
+    replaceMobileCharacter: (characterId, code) => {
+      sendMessage({
+        type: 'mobile.replaceCharacterCode',
+        payload: { characterId, code },
+      })
+    },
+
+    deleteMobileCharacter: (characterId) => {
+      sendMessage({
+        type: 'mobile.deleteCharacter',
+        payload: { characterId },
+      })
+    },
+
+    updateMobileCharacterCustom: (characterId, displayName, experiences) => {
+      sendMessage({
+        type: 'mobile.updateCharacterCustom',
+        payload: { characterId, displayName, experiences },
+      })
+    },
+
+    updateMobileResource: (characterId, resourceKey, nextValue) => {
+      sendMessage({
+        type: 'mobile.updateResource',
+        payload: { characterId, resourceKey, nextValue },
+      })
+    },
+
+    updateMobileFear: (value) => {
+      sendMessage({
+        type: 'mobile.updateFear',
+        payload: { value },
+      })
+    },
+
+    createMobileCountdown: (name, max) => {
+      sendMessage({
+        type: 'mobile.createCountdown',
+        payload: { name, max },
+      })
+    },
+
+    updateMobileCountdown: (countdownId, value) => {
+      sendMessage({
+        type: 'mobile.updateCountdown',
+        payload: { countdownId, value },
+      })
+    },
+
+    deleteMobileCountdown: (countdownId) => {
+      sendMessage({
+        type: 'mobile.deleteCountdown',
+        payload: { countdownId },
       })
     },
 

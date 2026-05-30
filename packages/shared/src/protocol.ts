@@ -6,6 +6,8 @@ import type {
   DhRoomBackup,
   GmPanelResourceKey,
   ImportedCharacterData,
+  MobilePanelExperience,
+  MobilePanelResourceKey,
   Rect,
   ResourceTrackerResourceKey,
   ResourceTrackerSheet,
@@ -52,6 +54,31 @@ export type ClientMessage =
   | { type: 'gm.deleteCountdown'; requestId?: string; payload: { countdownId: string } }
   | { type: 'gm.moveSheet'; requestId?: string; payload: { sheetId: string; direction: 'left' | 'right' } }
   | { type: 'gm.updateCardsPerPage'; requestId?: string; payload: { cardsPerPage: number } }
+  | {
+    type: 'mobile.importCharacterCode'
+    requestId?: string
+    payload: { code: string; displayName: string; experiences: MobilePanelExperience[] }
+  }
+  | {
+    type: 'mobile.replaceCharacterCode'
+    requestId?: string
+    payload: { characterId: string; code: string }
+  }
+  | { type: 'mobile.deleteCharacter'; requestId?: string; payload: { characterId: string } }
+  | {
+    type: 'mobile.updateCharacterCustom'
+    requestId?: string
+    payload: { characterId: string; displayName: string; experiences: MobilePanelExperience[] }
+  }
+  | {
+    type: 'mobile.updateResource'
+    requestId?: string
+    payload: { characterId: string; resourceKey: MobilePanelResourceKey; nextValue: number | boolean[] }
+  }
+  | { type: 'mobile.updateFear'; requestId?: string; payload: { value: number } }
+  | { type: 'mobile.createCountdown'; requestId?: string; payload: { name: string; max: number } }
+  | { type: 'mobile.updateCountdown'; requestId?: string; payload: { countdownId: string; value: number } }
+  | { type: 'mobile.deleteCountdown'; requestId?: string; payload: { countdownId: string } }
   | { type: 'turn.end'; requestId?: string; payload?: Record<string, never> }
   | { type: 'turn.forceSkip'; requestId?: string; payload: { playerId: string } }
   | { type: 'card.draw'; requestId?: string; payload?: Record<string, never> }
