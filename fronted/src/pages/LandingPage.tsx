@@ -179,8 +179,8 @@ export function LandingPage({ onEnterRoom }: LandingPageProps) {
                   <label className="label">房间类型</label>
                   <div style={{ display: 'grid', gap: 8 }}>
                     {[
-                      { id: 'gm-panel', label: 'GM 面板', hint: '适合桌面端导入 HTML 角色卡。' },
-                      { id: 'mobile-panel', label: '手机角色码房间', hint: '适合手机端直接粘贴 `dhc2_` 角色码。' },
+                      { id: 'gm-panel', label: 'GM 面板', hint: '桌面端导入 HTML 角色卡。' },
+                      { id: 'mobile-panel', label: '手机角色码房间', hint: '手机端直接粘贴角色码。' },
                     ].map((option) => {
                       const selected = roomType === option.id
                       return (

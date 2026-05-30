@@ -450,7 +450,7 @@ export function MobilePanelRoom() {
                   textAlign: 'center',
                 }}
               >
-                还没有角色。贴入 `dhc2_` 角色码后，这里会显示所有角色卡片。
+                还没有角色。
               </div>
             )}
           </div>
@@ -463,7 +463,7 @@ export function MobilePanelRoom() {
             className="input"
             value={draftCode}
             onChange={(event) => setDraftCode(event.target.value)}
-            placeholder="粘贴 dhc2_ 角色码"
+            placeholder="粘贴角色码"
             rows={5}
             style={{ resize: 'vertical', fontFamily: 'monospace' }}
           />
@@ -621,7 +621,7 @@ export function MobilePanelRoom() {
             className="input"
             value={replaceCode}
             onChange={(event) => setReplaceCode(event.target.value)}
-            placeholder="粘贴新的 dhc2_ 角色码"
+            placeholder="粘贴新的 dhc3_ 或新版 dhc2_ 角色码"
             rows={5}
             style={{ resize: 'vertical', fontFamily: 'monospace' }}
           />

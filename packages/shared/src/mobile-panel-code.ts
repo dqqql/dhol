@@ -5,8 +5,13 @@ import type {
   MobilePanelProfessionEntry,
 } from './types'
 
-const CHARACTER_CODE_PREFIX = 'dhc2_'
-const CHARACTER_CODE_VERSION = 2
+type MobilePanelCharacterCodeVersion = 2 | 3
+
+const CHARACTER_CODE_FORMATS = [
+  { prefix: 'dhc3_', version: 3 as const },
+  { prefix: 'dhc2_', version: 2 as const },
+] as const
+const CURRENT_CHARACTER_CODE_FORMAT = CHARACTER_CODE_FORMATS[0]
 const UINT16_NULL = 0xffff
 const MIN_CHARACTER_CODE_LENGTH = 41
 
@@ -21,8 +26,9 @@ type BuiltinCardPack = {
 const builtin = builtinCardPack as BuiltinCardPack
 
 export const MOBILE_PANEL_PROTOCOL = {
-  prefix: CHARACTER_CODE_PREFIX,
-  version: CHARACTER_CODE_VERSION,
+  currentPrefix: CURRENT_CHARACTER_CODE_FORMAT.prefix,
+  currentVersion: CURRENT_CHARACTER_CODE_FORMAT.version,
+  supportedFormats: CHARACTER_CODE_FORMATS,
   minLength: MIN_CHARACTER_CODE_LENGTH,
 } as const
 
@@ -58,18 +64,19 @@ export const MOBILE_PANEL_DOMAIN_DICT: MobilePanelCardEntry[] = (builtin.domain 
 }))
 
 export function decodeMobilePanelCharacterCode(code: string): MobilePanelDecodedCode {
-  if (!code.startsWith(CHARACTER_CODE_PREFIX)) {
+  const matchedFormat = CHARACTER_CODE_FORMATS.find(({ prefix }) => code.startsWith(prefix))
+  if (!matchedFormat) {
     throw new Error('角色码版本前缀无效。')
   }
 
-  const body = code.slice(CHARACTER_CODE_PREFIX.length)
+  const body = code.slice(matchedFormat.prefix.length)
   if (!body) {
     throw new Error('角色码内容为空。')
   }
 
   const bytes = fromBase64Url(body)
   if (bytes.length < MIN_CHARACTER_CODE_LENGTH) {
-    throw new Error('当前 dhol 仅支持 2026-05-30 后的新版 v2 角色码，请在车卡器重新导出后再导入。')
+    throw new Error('当前 dhol 仅支持包含生命上限与护甲上限的新角色码格式，请在车卡器重新导出后再导入。')
   }
 
   const payloadLength = bytes.length - 2
@@ -77,8 +84,11 @@ export function decodeMobilePanelCharacterCode(code: string): MobilePanelDecoded
 
   let offset = 0
   const version = bytes[offset++]
-  if (version !== CHARACTER_CODE_VERSION) {
+  if (!isSupportedCharacterCodeVersion(version)) {
     throw new Error(`暂不支持的角色码版本: ${version}`)
+  }
+  if (version !== matchedFormat.version) {
+    throw new Error(`角色码前缀与内容版本不匹配: ${matchedFormat.prefix} / ${version}`)
   }
 
   const level = bytes[offset++]
@@ -136,7 +146,7 @@ export function decodeMobilePanelCharacterCode(code: string): MobilePanelDecoded
   }
 
   return {
-    version: CHARACTER_CODE_VERSION,
+    version,
     level,
     proficiency,
     evasion,
@@ -198,6 +208,10 @@ function decodeOptionalCardIndex<T extends MobilePanelCardEntry>(
 
 function cleanString(value: unknown): string {
   return typeof value === 'string' ? value : ''
+}
+
+function isSupportedCharacterCodeVersion(value: number): value is MobilePanelCharacterCodeVersion {
+  return CHARACTER_CODE_FORMATS.some((format) => format.version === value)
 }
 
 function fromBase64Url(value: string): Uint8Array {

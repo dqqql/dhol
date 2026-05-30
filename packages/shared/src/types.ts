@@ -290,7 +290,7 @@ export interface MobilePanelProfessionEntry extends MobilePanelCardEntry {
 }
 
 export interface MobilePanelDecodedCode {
-  version: 2
+  version: 2 | 3
   level: number
   proficiency: number
   evasion: number
@@ -353,7 +353,7 @@ export interface MobilePanelCharacterTracker {
 
 export interface MobilePanelCharacterSource {
   code: string
-  version: 2
+  version: 2 | 3
   imported_at: string
   updated_at: string
 }
