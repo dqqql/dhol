@@ -3,7 +3,7 @@ import type {
   MobilePanelCharacterEntry,
   MobilePanelExperience,
 } from '@dhgc/shared'
-import { BookText, Clock3, Pencil, Plus, RefreshCw, ScrollText, Shield, Swords, Trash2, UserPlus, Zap } from 'lucide-react'
+import { BookText, Clock3, MoreHorizontal, Pencil, Plus, RefreshCw, ScrollText, Shield, Swords, Trash2, UserPlus } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { useStore } from '@/store/useStore'
 
@@ -156,7 +156,7 @@ function parseMarkdownBlocks(source: string): MarkdownBlock[] {
 
 function renderMarkdownInline(text: string): React.ReactNode[] {
   const nodes: React.ReactNode[] = []
-  const pattern = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[[^\]]+\]\([^)]+\))/g
+  const pattern = /(\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[[^\]]+\]\([^)]+\))/g
   let lastIndex = 0
 
   for (const match of text.matchAll(pattern)) {
@@ -166,7 +166,13 @@ function renderMarkdownInline(text: string): React.ReactNode[] {
       nodes.push(text.slice(lastIndex, index))
     }
 
-    if (full.startsWith('**') && full.endsWith('**')) {
+    if (full.startsWith('***') && full.endsWith('***')) {
+      nodes.push(
+        <strong key={`${index}-bold-italic`} style={{ fontWeight: 800 }}>
+          <em style={{ fontStyle: 'italic' }}>{full.slice(3, -3)}</em>
+        </strong>,
+      )
+    } else if (full.startsWith('**') && full.endsWith('**')) {
       nodes.push(<strong key={`${index}-bold`}>{full.slice(2, -2)}</strong>)
     } else if (full.startsWith('*') && full.endsWith('*')) {
       nodes.push(<em key={`${index}-italic`}>{full.slice(1, -1)}</em>)
@@ -384,23 +390,24 @@ export function MobilePanelRoom() {
   const [replaceCode, setReplaceCode] = useState('')
   const [countdownName, setCountdownName] = useState('')
   const [countdownMax, setCountdownMax] = useState('6')
+  const [activeCharacterMenuId, setActiveCharacterMenuId] = useState<string | null>(null)
 
-  if (!room || room.room_type !== 'mobile-panel' || !room.mobile_panel) return null
-
-  const panel = room.mobile_panel
-  const orderedCharacters = panel.character_order
-    .map((characterId) => panel.characters.find((item) => item.id === characterId) ?? null)
-    .filter((item): item is MobilePanelCharacterEntry => Boolean(item))
-  const selectedCharacter = selectedCharacterId
+  const panel = room?.room_type === 'mobile-panel' ? room.mobile_panel : null
+  const orderedCharacters = panel
+    ? panel.character_order
+      .map((characterId) => panel.characters.find((item) => item.id === characterId) ?? null)
+      .filter((item): item is MobilePanelCharacterEntry => Boolean(item))
+    : []
+  const selectedCharacter = panel && selectedCharacterId
     ? panel.characters.find((item) => item.id === selectedCharacterId) ?? null
     : null
-  const editingCharacter = editingCharacterId
+  const editingCharacter = panel && editingCharacterId
     ? panel.characters.find((item) => item.id === editingCharacterId) ?? null
     : null
-  const replacingCharacter = replacingCharacterId
+  const replacingCharacter = panel && replacingCharacterId
     ? panel.characters.find((item) => item.id === replacingCharacterId) ?? null
     : null
-  const deletingCharacter = deletingCharacterId
+  const deletingCharacter = panel && deletingCharacterId
     ? panel.characters.find((item) => item.id === deletingCharacterId) ?? null
     : null
 
@@ -422,6 +429,19 @@ export function MobilePanelRoom() {
       setReplaceCode('')
     }
   }, [replacingCharacterId])
+
+  useEffect(() => {
+    if (!activeCharacterMenuId) return
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as HTMLElement | null
+      if (target?.closest('[data-mobile-actions-root="true"]')) return
+      setActiveCharacterMenuId(null)
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => document.removeEventListener('pointerdown', handlePointerDown)
+  }, [activeCharacterMenuId])
 
   function updateExperience(index: number, key: 'name' | 'value', value: string) {
     setDraftExperiences((current) => current.map((item, currentIndex) => (
@@ -453,16 +473,52 @@ export function MobilePanelRoom() {
       addToast('请输入新的角色码。', 'error')
       return
     }
+
     replaceMobileCharacter(replacingCharacter.id, replaceCode.trim())
     setReplacingCharacterId(null)
     addToast('新的角色码已提交。', 'success')
   }
 
   function submitCountdown() {
-    createMobileCountdown(countdownName.trim(), Math.max(2, Math.min(12, Number.parseInt(countdownMax, 10) || 6)))
+    if (!panel) return
+    createMobileCountdown(
+      countdownName.trim() || `进度钟 ${panel.countdowns.length + 1}`,
+      Math.max(2, Math.min(12, Number.parseInt(countdownMax, 10) || 6)),
+    )
     setCountdownName('')
     setCountdownMax('6')
   }
+
+  function closeActionMenus() {
+    setActiveCharacterMenuId(null)
+  }
+
+  function openAddCharacter() {
+    closeActionMenus()
+    setIsAddOpen(true)
+  }
+
+  function openActivityLog() {
+    closeActionMenus()
+    setIsLogOpen(true)
+  }
+
+  function openEditCharacter(characterId: string) {
+    closeActionMenus()
+    setEditingCharacterId(characterId)
+  }
+
+  function openReplaceCharacter(characterId: string) {
+    closeActionMenus()
+    setReplacingCharacterId(characterId)
+  }
+
+  function openDeleteCharacter(characterId: string) {
+    closeActionMenus()
+    setDeletingCharacterId(characterId)
+  }
+
+  if (!panel) return null
 
   return (
     <div
@@ -476,27 +532,51 @@ export function MobilePanelRoom() {
         padding: '18px 14px 28px',
       }}
     >
-      <div style={{ maxWidth: 720, margin: '0 auto', display: 'grid', gap: 14 }}>
-        <section
+      <div style={{ maxWidth: 1180, margin: '0 auto', display: 'grid', gap: 16 }}>
+        <div
           style={{
-            padding: 16,
-            background: 'linear-gradient(145deg, rgba(76,41,21,0.92), rgba(120,72,38,0.88))',
-            color: '#fff5ea',
-            border: '1px solid rgba(255,236,214,0.2)',
-            boxShadow: '0 18px 40px rgba(86, 52, 28, 0.18)',
+            display: 'grid',
+            gap: 16,
+            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+            alignItems: 'start',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 12, letterSpacing: '0.08em', fontWeight: 800, color: 'rgba(255,245,234,0.78)' }}>MOBILE PANEL</div>
-              <div style={{ marginTop: 4, fontSize: 24, fontWeight: 950 }}>恐惧点与进度钟</div>
+          <section
+            style={{
+              padding: 16,
+              background: 'linear-gradient(145deg, rgba(76,41,21,0.92), rgba(120,72,38,0.88))',
+              color: '#fff5ea',
+              border: '1px solid rgba(255,236,214,0.2)',
+              boxShadow: '0 18px 40px rgba(86, 52, 28, 0.18)',
+              display: 'grid',
+              gap: 14,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 12, letterSpacing: '0.08em', fontWeight: 800, color: 'rgba(255,245,234,0.78)' }}>MOBILE PANEL</div>
+                <div style={{ marginTop: 4, fontSize: 24, fontWeight: 950 }}>恐惧点与进度钟</div>
+                <div style={{ marginTop: 6, fontSize: 12, lineHeight: 1.7, color: 'rgba(255,245,234,0.76)' }}>
+                  管理全队共享资源，也可以同时浏览角色列表。
+                </div>
+              </div>
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 10px',
+                  border: '1px solid rgba(255,245,234,0.2)',
+                  background: 'rgba(255,245,234,0.08)',
+                  fontSize: 12,
+                  fontWeight: 700,
+                }}
+              >
+                <Clock3 size={14} />
+                {panel.countdowns.length} 个进度钟
+              </div>
             </div>
-            <button className="btn btn-secondary btn-sm" type="button" onClick={() => setIsLogOpen(true)}>
-              <ScrollText size={14} /> 日志
-            </button>
-          </div>
 
-          <div style={{ marginTop: 14, display: 'grid', gap: 12 }}>
             <NumberAdjuster
               label="恐惧点"
               value={panel.fear.value}
@@ -505,7 +585,7 @@ export function MobilePanelRoom() {
             />
 
             <div style={{ display: 'grid', gap: 10 }}>
-              {panel.countdowns.map((countdown) => (
+              {panel.countdowns.length ? panel.countdowns.map((countdown) => (
                 <div
                   key={countdown.id}
                   style={{
@@ -533,7 +613,20 @@ export function MobilePanelRoom() {
                     onChange={(event) => updateMobileCountdown(countdown.id, Number(event.target.value))}
                   />
                 </div>
-              ))}
+              )) : (
+                <div
+                  style={{
+                    padding: '14px 16px',
+                    border: '1px dashed rgba(255,245,234,0.26)',
+                    background: 'rgba(255,245,234,0.06)',
+                    fontSize: 13,
+                    lineHeight: 1.7,
+                    color: 'rgba(255,245,234,0.78)',
+                  }}
+                >
+                  还没有进度钟。你可以先在下方创建一个新的共享倒计时。
+                </div>
+              )}
 
               <div
                 style={{
@@ -564,88 +657,136 @@ export function MobilePanelRoom() {
                 </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
 
-        <section
-          style={{
-            padding: 16,
-            background: 'rgba(255,250,244,0.78)',
-            border: '1px solid rgba(113, 88, 52, 0.12)',
-            boxShadow: '0 12px 30px rgba(118, 83, 36, 0.08)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
-            <div>
-              <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--text-primary)' }}>角色列表</div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>点击卡片查看详情与追踪资源</div>
+          <section
+            style={{
+              padding: 16,
+              background: 'rgba(255,250,244,0.78)',
+              border: '1px solid rgba(113, 88, 52, 0.12)',
+              boxShadow: '0 12px 30px rgba(118, 83, 36, 0.08)',
+              display: 'grid',
+              gap: 12,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--text-primary)' }}>角色列表</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                  点击卡片查看详情。角色管理操作仍然收在每张卡片右上角的菜单里。
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} data-mobile-actions-root="true">
+                <button className="btn btn-secondary btn-sm" type="button" onClick={openActivityLog}>
+                  <ScrollText size={14} /> 活动日志
+                </button>
+                <button className="btn btn-primary btn-sm" type="button" onClick={openAddCharacter}>
+                  <UserPlus size={14} /> 添加角色
+                </button>
+              </div>
             </div>
-            <button className="btn btn-primary" type="button" onClick={() => setIsAddOpen(true)}>
-              <UserPlus size={14} /> 添加角色
-            </button>
-          </div>
 
-          <div style={{ display: 'grid', gap: 12 }}>
-            {orderedCharacters.length ? orderedCharacters.map((entry) => (
-              <div
-                key={entry.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => setSelectedCharacterId(entry.id)}
-                onKeyDown={(event) => handleCardKeyActivate(event, () => setSelectedCharacterId(entry.id))}
-                style={{
-                  padding: 14,
-                  textAlign: 'left',
-                  border: '1px solid rgba(113, 88, 52, 0.14)',
-                  background: 'linear-gradient(180deg, rgba(255,255,255,0.94), rgba(251,243,232,0.92))',
-                  boxShadow: '0 8px 18px rgba(118, 83, 36, 0.06)',
-                  cursor: 'pointer',
-                  display: 'grid',
-                  gap: 10,
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
-                  <div>
-                    <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--text-primary)' }}>{getCharacterTitle(entry)}</div>
-                    <div style={{ marginTop: 4, fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)' }}>{getIdentityLine(entry)}</div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                    <button className="btn btn-secondary btn-sm" type="button" onClick={(event) => { event.stopPropagation(); setEditingCharacterId(entry.id) }}>
-                      <Pencil size={12} /> 编辑
-                    </button>
-                    <button className="btn btn-secondary btn-sm" type="button" onClick={(event) => { event.stopPropagation(); setReplacingCharacterId(entry.id) }}>
-                      <RefreshCw size={12} /> 换码
-                    </button>
-                    <button className="btn btn-secondary btn-sm" type="button" onClick={(event) => { event.stopPropagation(); setDeletingCharacterId(entry.id) }}>
-                      <Trash2 size={12} /> 删除
-                    </button>
-                  </div>
-                </div>
+            <div style={{ display: 'grid', gap: 12 }}>
+              {orderedCharacters.length ? orderedCharacters.map((entry) => {
+                const isMenuOpen = activeCharacterMenuId === entry.id
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
-                  <StatPill label="希望" value={`${entry.tracker.hopeCurrent}/${entry.decoded.resources.hopeMax}`} />
-                  <StatPill label="生命" value={`${entry.tracker.hp.filter(Boolean).length}/${entry.tracker.hp.length}`} />
-                  <StatPill label="压力" value={`${entry.tracker.stress.filter(Boolean).length}/${entry.tracker.stress.length}`} />
-                  <StatPill label="护甲槽" value={`${entry.tracker.armor_slots.filter(Boolean).length}/${entry.tracker.armor_slots.length}`} />
-                  <StatPill label="金币" value={entry.tracker.goldCurrent} />
-                  <StatPill label="领域卡" value={entry.decoded.domains.length} />
+                return (
+                  <div
+                    key={entry.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      closeActionMenus()
+                      setSelectedCharacterId(entry.id)
+                    }}
+                    onKeyDown={(event) => handleCardKeyActivate(event, () => setSelectedCharacterId(entry.id))}
+                    style={{
+                      padding: 14,
+                      textAlign: 'left',
+                      border: '1px solid rgba(113, 88, 52, 0.14)',
+                      background: 'linear-gradient(180deg, rgba(255,255,255,0.94), rgba(251,243,232,0.92))',
+                      boxShadow: '0 8px 18px rgba(118, 83, 36, 0.06)',
+                      cursor: 'pointer',
+                      display: 'grid',
+                      gap: 10,
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+                      <div>
+                        <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--text-primary)' }}>{getCharacterTitle(entry)}</div>
+                        <div style={{ marginTop: 4, fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)' }}>{getIdentityLine(entry)}</div>
+                      </div>
+
+                      <div style={{ position: 'relative' }} data-mobile-actions-root="true">
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          aria-label={`${getCharacterTitle(entry)} 的角色操作`}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setActiveCharacterMenuId((current) => current === entry.id ? null : entry.id)
+                          }}
+                        >
+                          <MoreHorizontal size={14} />
+                        </button>
+
+                        {isMenuOpen && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: 'calc(100% + 8px)',
+                              right: 0,
+                              zIndex: 8,
+                              minWidth: 156,
+                              padding: 8,
+                              border: '1px solid rgba(113, 88, 52, 0.18)',
+                              background: 'rgba(255,252,247,0.98)',
+                              boxShadow: '0 14px 30px rgba(118, 83, 36, 0.14)',
+                              display: 'grid',
+                              gap: 6,
+                            }}
+                          >
+                            <button className="btn btn-secondary btn-sm" type="button" onClick={() => openEditCharacter(entry.id)}>
+                              <Pencil size={12} /> 编辑信息
+                            </button>
+                            <button className="btn btn-secondary btn-sm" type="button" onClick={() => openReplaceCharacter(entry.id)}>
+                              <RefreshCw size={12} /> 替换角色码
+                            </button>
+                            <button className="btn btn-secondary btn-sm" type="button" onClick={() => openDeleteCharacter(entry.id)}>
+                              <Trash2 size={12} /> 删除角色
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+                      <StatPill label="希望" value={`${entry.tracker.hopeCurrent}/${entry.decoded.resources.hopeMax}`} />
+                      <StatPill label="生命" value={`${entry.tracker.hp.filter(Boolean).length}/${entry.tracker.hp.length}`} />
+                      <StatPill label="压力" value={`${entry.tracker.stress.filter(Boolean).length}/${entry.tracker.stress.length}`} />
+                      <StatPill label="护甲槽" value={`${entry.tracker.armor_slots.filter(Boolean).length}/${entry.tracker.armor_slots.length}`} />
+                      <StatPill label="金币" value={entry.tracker.goldCurrent} />
+                      <StatPill label="领域卡" value={entry.decoded.domains.length} />
+                    </div>
+                  </div>
+                )
+              }) : (
+                <div
+                  style={{
+                    padding: 22,
+                    border: '1px dashed rgba(113, 88, 52, 0.24)',
+                    color: 'var(--text-secondary)',
+                    background: 'rgba(255,255,255,0.58)',
+                    textAlign: 'center',
+                    lineHeight: 1.8,
+                  }}
+                >
+                  还没有角色。点击右下角的悬浮按钮，就可以添加角色或查看活动日志。
                 </div>
-              </div>
-            )) : (
-              <div
-                style={{
-                  padding: 22,
-                  border: '1px dashed rgba(113, 88, 52, 0.24)',
-                  color: 'var(--text-secondary)',
-                  background: 'rgba(255,255,255,0.58)',
-                  textAlign: 'center',
-                }}
-              >
-                还没有角色。
-              </div>
-            )}
-          </div>
-        </section>
+              )}
+            </div>
+          </section>
+        </div>
       </div>
 
       <Modal open={isAddOpen} onClose={() => setIsAddOpen(false)} title="添加角色" maxWidth={640}>
@@ -687,7 +828,7 @@ export function MobilePanelRoom() {
               <StatPill label="护甲值" value={selectedCharacter.decoded.armor} />
               <StatPill label="重伤阈值" value={selectedCharacter.decoded.damageThresholds.minor} />
               <StatPill label="严重阈值" value={selectedCharacter.decoded.damageThresholds.major} />
-              <StatPill label="熟练度" value={selectedCharacter.decoded.proficiency} />
+              <StatPill label="熟练值" value={selectedCharacter.decoded.proficiency} />
               <StatPill label="金币" value={selectedCharacter.tracker.goldCurrent} />
             </div>
 
@@ -806,13 +947,13 @@ export function MobilePanelRoom() {
       <Modal open={Boolean(replacingCharacter)} onClose={() => setReplacingCharacterId(null)} title="替换角色码" maxWidth={640}>
         <div style={{ display: 'grid', gap: 14 }}>
           <div style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text-secondary)' }}>
-            替换后会保留当前角色的自定义名称、经历和已追踪的资源进度，并按新的上限自动裁剪。
+            替换后会保留当前角色的自定义名称、经历和已追踪的资源进度，并按新角色的上限自动裁剪。
           </div>
           <textarea
             className="input"
             value={replaceCode}
             onChange={(event) => setReplaceCode(event.target.value)}
-            placeholder="粘贴新的 dhc3_ 或新版 dhc2_ 角色码"
+            placeholder="粘贴新的 dhc3_ 或旧版 dhc2_ 角色码"
             rows={5}
             style={{ resize: 'vertical', fontFamily: 'monospace' }}
           />
@@ -828,7 +969,7 @@ export function MobilePanelRoom() {
       <Modal open={Boolean(deletingCharacter)} onClose={() => setDeletingCharacterId(null)} title="删除角色" maxWidth={520}>
         <div style={{ display: 'grid', gap: 14 }}>
           <div style={{ fontSize: 14, lineHeight: 1.8, color: 'var(--text-secondary)' }}>
-            {deletingCharacter ? `确认删除「${getCharacterTitle(deletingCharacter)}」吗？此操作会立即同步给房间内所有成员。` : ''}
+            {deletingCharacter ? `确认删除「${getCharacterTitle(deletingCharacter)}」吗？此操作会立刻同步给房间内所有成员。` : ''}
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <button className="btn btn-secondary" type="button" onClick={() => setDeletingCharacterId(null)}>取消</button>

@@ -90,7 +90,7 @@ function clamp(value: number, min: number, max: number) {
 
 function renderInlineMarkdown(text: string) {
   const nodes: React.ReactNode[] = []
-  const pattern = /(\*\*[^*]+\*\*|\*[^*]+\*)/g
+  const pattern = /(\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|\*[^*]+\*)/g
   let lastIndex = 0
 
   for (const match of text.matchAll(pattern)) {
@@ -101,7 +101,13 @@ function renderInlineMarkdown(text: string) {
       nodes.push(text.slice(lastIndex, index))
     }
 
-    if (matched.startsWith('**') && matched.endsWith('**')) {
+    if (matched.startsWith('***') && matched.endsWith('***')) {
+      nodes.push(
+        <strong key={`bold-italic-${index}`} style={{ fontWeight: 800, color: '#1f2937' }}>
+          <em style={{ fontStyle: 'italic' }}>{matched.slice(3, -3)}</em>
+        </strong>,
+      )
+    } else if (matched.startsWith('**') && matched.endsWith('**')) {
       nodes.push(
         <strong key={`bold-${index}`} style={{ fontWeight: 800, color: '#1f2937' }}>
           {matched.slice(2, -2)}

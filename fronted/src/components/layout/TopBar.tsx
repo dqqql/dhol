@@ -5,10 +5,10 @@ import { fetchDhRoomBackup } from '@/lib/realtime'
 import { useStore } from '@/store/useStore'
 
 function getModeLabel(roomType: string) {
-  if (roomType === 'mobile-panel') return '鎵嬫満瑙掕壊鐮佹埧闂?'
-  if (roomType === 'gm-panel') return 'GM 闈㈡澘'
-  if (roomType === 'resource-tracker') return '杩借釜璧勬簮'
-  return '鎴块棿'
+  if (roomType === 'mobile-panel') return '手机角色码房间'
+  if (roomType === 'gm-panel') return 'GM 面板'
+  if (roomType === 'resource-tracker') return '资源追踪'
+  return '房间'
 }
 
 interface TopBarProps {
@@ -67,10 +67,10 @@ export function TopBar({ onLeaveRoom, onHeightChange }: TopBarProps) {
       link.download = `${currentRoom.room_name}.dhroom.json`
       link.click()
       URL.revokeObjectURL(url)
-      addToast('鎴块棿澶囦唤宸插鍑恒€?', 'success')
+      addToast('房间备份已开始下载。', 'success')
       toggleExportMenu()
     } catch (error) {
-      addToast(error instanceof Error ? error.message : '瀵煎嚭鎴块棿澶囦唤澶辫触銆?', 'error')
+      addToast(error instanceof Error ? error.message : '导出房间备份失败。', 'error')
     }
   }
 
@@ -158,7 +158,7 @@ export function TopBar({ onLeaveRoom, onHeightChange }: TopBarProps) {
           }}
         >
           <Clock size={10} />
-          {daysLeft > 0 ? `${daysLeft} 澶╁悗鍒版湡` : '浠婃棩鍒版湡'}
+          {daysLeft > 0 ? `${daysLeft} 天后过期` : '即将过期'}
         </div>
 
         <div style={{ flex: 1 }} />
@@ -177,7 +177,7 @@ export function TopBar({ onLeaveRoom, onHeightChange }: TopBarProps) {
             }}
           >
             <Wifi size={11} />
-            閲嶈繛涓?
+            正在重连
           </div>
         )}
 
@@ -199,23 +199,23 @@ export function TopBar({ onLeaveRoom, onHeightChange }: TopBarProps) {
             }}
           >
             <WifiOff size={11} />
-            杩炴帴鏂紑锛岀偣鍑婚噸杩?
+            连接已断开，点击重连
           </button>
         )}
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
         <button className="btn btn-secondary btn-sm" onClick={() => setShowInviteModal(true)}>
-          <Share2 size={13} /> 閭€璇风爜
+          <Share2 size={13} /> 分享邀请码
         </button>
 
         <button className="btn btn-secondary btn-sm" onClick={openImportModal}>
-          <FileUp size={13} /> 瀵煎叆
+          <FileUp size={13} /> 导入
         </button>
 
         <div style={{ position: 'relative' }}>
           <button className="btn btn-secondary btn-sm" onClick={toggleExportMenu}>
-            <Download size={13} /> 瀵煎嚭 <ChevronDown size={11} />
+            <Download size={13} /> 导出<ChevronDown size={11} />
           </button>
           {isExportMenuOpen && (
             <div
@@ -229,14 +229,14 @@ export function TopBar({ onLeaveRoom, onHeightChange }: TopBarProps) {
               }}
             >
               <div className="context-menu__item" onClick={exportDhRoom}>
-                <FileJson size={13} /> 鎴块棿澶囦唤 (.dhroom.json)
+                <FileJson size={13} /> 房间备份 (.dhroom.json)
               </div>
             </div>
           )}
         </div>
 
-        <button className="btn btn-secondary btn-sm" onClick={openRoomSettings} title="鎴块棿璁剧疆">
-          <Settings size={13} /> 璁剧疆
+        <button className="btn btn-secondary btn-sm" onClick={openRoomSettings} title="房间设置">
+          <Settings size={13} /> 设置
         </button>
 
         <button
@@ -251,7 +251,7 @@ export function TopBar({ onLeaveRoom, onHeightChange }: TopBarProps) {
             color: '#f7f2ff',
           }}
         >
-          <LogOut size={13} /> 閫€鍑?
+          <LogOut size={13} /> 离开
         </button>
       </div>
 
@@ -260,7 +260,7 @@ export function TopBar({ onLeaveRoom, onHeightChange }: TopBarProps) {
         inviteCode={currentRoom.invite_code}
         roomName={currentRoom.room_name}
         onClose={() => setShowInviteModal(false)}
-        onCopied={() => addToast('閭€璇风爜宸插鍒躲€?', 'success')}
+        onCopied={() => addToast('邀请码已复制到剪贴板。', 'success')}
       />
     </div>
   )
