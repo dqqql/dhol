@@ -299,7 +299,7 @@ export class RoomDurableObject {
         imports_enabled: true,
         resource_change_requires_approval: false,
         battle_panel_visibility: 'shared',
-        gm_panel_theme: 'violet-mint',
+        gm_panel_theme: 'gold-abyss',
       },
       selected_built_in_pack_ids: selectedPackIds,
       drawn_this_turn: {},
@@ -1106,7 +1106,7 @@ export class RoomDurableObject {
   private updateSettings(updates: {
     importsEnabled?: boolean
     resourceChangeRequiresApproval?: boolean
-    gmPanelTheme?: 'violet-mint' | 'solar-abyss' | 'frost-ember'
+    gmPanelTheme?: 'gold-abyss' | 'jade-hex' | 'amethyst-ember'
   }): void {
     const room = this.requireRoom()
     room.settings = {
@@ -2068,7 +2068,7 @@ export class RoomDurableObject {
       settings?: {
         imports_enabled?: boolean
         resource_change_requires_approval?: boolean
-        gm_panel_theme?: 'violet-mint' | 'solar-abyss' | 'frost-ember'
+        gm_panel_theme?: 'gold-abyss' | 'jade-hex' | 'amethyst-ember'
       }
       selected_pack_ids?: string[]
     }
@@ -2098,7 +2098,7 @@ export class RoomDurableObject {
         imports_enabled: migrated.settings?.imports_enabled ?? true,
         resource_change_requires_approval: migrated.settings?.resource_change_requires_approval ?? false,
         battle_panel_visibility: 'shared',
-        gm_panel_theme: migrated.settings?.gm_panel_theme ?? 'violet-mint',
+        gm_panel_theme: migrated.settings?.gm_panel_theme ?? 'gold-abyss',
       },
       room_type: migrated.room_type ?? 'co-creation',
       resource_tracker: (migrated.room_type ?? 'co-creation') === 'resource-tracker'

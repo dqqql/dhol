@@ -26,7 +26,7 @@ export type ClientMessage =
       importsEnabled?: boolean
       resourceChangeRequiresApproval?: boolean
       battlePanelVisibility?: 'host-only' | 'shared'
-      gmPanelTheme?: 'violet-mint' | 'solar-abyss' | 'frost-ember'
+      gmPanelTheme?: 'gold-abyss' | 'jade-hex' | 'amethyst-ember'
     }
   }
   | { type: 'room.importPack'; requestId?: string; payload: { pack: DhPack } }

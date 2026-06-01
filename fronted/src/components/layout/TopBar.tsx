@@ -243,17 +243,20 @@ export function TopBar({ onLeaveRoom, onHeightChange }: TopBarProps) {
       >
         <div
           style={{
-            width: 28,
-            height: 28,
+            width: 30,
+            height: 30,
             flex: '0 0 auto',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'linear-gradient(135deg, #8be0d5, #38a89c)',
-            color: '#171027',
-            fontSize: 13,
+            background: 'linear-gradient(135deg, #E0A830, #B88020)',
+            color: '#1A0C04',
+            fontSize: 11,
             fontWeight: 900,
-            border: '1px solid rgba(247,242,255,0.34)',
+            letterSpacing: '0.06em',
+            fontFamily: 'var(--font-display)',
+            border: '1px solid rgba(224,168,48,0.50)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.24)',
           }}
         >
           GM

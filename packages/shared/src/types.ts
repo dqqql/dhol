@@ -6,7 +6,7 @@ export type ConnectionColor = 'red' | 'green' | 'gray'
 export type RoomPackSource = 'built-in' | 'imported'
 export type ResourceTrackerResourceKey = 'hope' | 'proficiency' | 'hp' | 'stress' | 'armor_slots' | 'gold'
 export type GmPanelResourceKey = ResourceTrackerResourceKey
-export type GmPanelTheme = 'violet-mint' | 'solar-abyss' | 'frost-ember'
+export type GmPanelTheme = 'gold-abyss' | 'jade-hex' | 'amethyst-ember'
 export type MobilePanelResourceKey = 'hopeCurrent' | 'stress' | 'hp' | 'armor_slots' | 'goldCurrent'
 
 export interface RoleCardDetails {

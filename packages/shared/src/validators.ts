@@ -118,7 +118,7 @@ export function assertDhRoomBackup(value: unknown): DhRoomBackup {
       imports_enabled: false,
       resource_change_requires_approval: false,
       battle_panel_visibility: 'host-only',
-      gm_panel_theme: 'violet-mint',
+      gm_panel_theme: 'gold-abyss',
     }
   }
 
@@ -190,13 +190,13 @@ function assertRoomSettings(settings: unknown): asserts settings is RoomSettings
     candidate.battle_panel_visibility = 'host-only'
   }
   if (candidate.gm_panel_theme !== undefined
-    && candidate.gm_panel_theme !== 'violet-mint'
-    && candidate.gm_panel_theme !== 'solar-abyss'
-    && candidate.gm_panel_theme !== 'frost-ember') {
-    throw new Error('Room gm_panel_theme must be violet-mint, solar-abyss, or frost-ember')
+    && candidate.gm_panel_theme !== 'gold-abyss'
+    && candidate.gm_panel_theme !== 'jade-hex'
+    && candidate.gm_panel_theme !== 'amethyst-ember') {
+    throw new Error('Room gm_panel_theme must be gold-abyss, jade-hex, or amethyst-ember')
   }
   if (candidate.gm_panel_theme === undefined) {
-    candidate.gm_panel_theme = 'violet-mint'
+    candidate.gm_panel_theme = 'gold-abyss'
   }
 }
 
