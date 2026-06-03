@@ -3,6 +3,20 @@ import type { CardType, DeckCardType, DhRoomBackup, DhPack, RoomPackLibraryItem,
 const CARD_TYPES: CardType[] = ['Location', 'Feature', 'Hook', 'Custom', 'Role']
 const LEGACY_CARD_TYPES = new Set(['NPC'])
 
+// 卡包大小限制
+const MAX_PACK_CARDS = 200
+const MAX_CARD_TITLE_LENGTH = 100
+const MAX_CARD_CONTENT_LENGTH = 20000
+const MAX_PACK_NAME_LENGTH = 100
+const MAX_PACK_DESCRIPTION_LENGTH = 500
+
+// 房间备份大小限制
+const MAX_MAP_CARDS = 500
+const MAX_SESSION_TOTAL_HAND_CARDS = 200
+const MAX_IMPORTED_PACKS = 20
+const MAX_MAP_ANNOTATIONS = 200
+const MAX_ANNOTATION_TEXT_LENGTH = 2000
+
 export function isCardType(value: unknown): value is CardType {
   return typeof value === 'string' && (CARD_TYPES.includes(value as CardType) || LEGACY_CARD_TYPES.has(value))
 }
@@ -46,10 +60,19 @@ export function assertDhPack(value: unknown): DhPack {
   if (typeof pack.pack_name !== 'string' || !pack.pack_name.trim()) {
     throw new Error('Pack name is required')
   }
+  if (pack.pack_name.length > MAX_PACK_NAME_LENGTH) {
+    throw new Error(`卡包名称不能超过 ${MAX_PACK_NAME_LENGTH} 个字符`)
+  }
   if (pack.description !== undefined && typeof pack.description !== 'string') {
     throw new Error('Pack description must be a string when provided')
   }
+  if (typeof pack.description === 'string' && pack.description.length > MAX_PACK_DESCRIPTION_LENGTH) {
+    throw new Error(`卡包描述不能超过 ${MAX_PACK_DESCRIPTION_LENGTH} 个字符`)
+  }
   if (!Array.isArray(pack.cards)) throw new Error('Pack cards must be an array')
+  if (pack.cards.length > MAX_PACK_CARDS) {
+    throw new Error(`卡包中的卡牌数量不能超过 ${MAX_PACK_CARDS} 张`)
+  }
 
   for (const [index, card] of pack.cards.entries()) {
     if (!card || typeof card !== 'object') throw new Error(`Card ${index} must be an object`)
@@ -60,7 +83,13 @@ export function assertDhPack(value: unknown): DhPack {
       throw new Error(`Card ${index} custom_type_name is required for Custom cards`)
     }
     if (typeof card.title !== 'string' || !card.title.trim()) throw new Error(`Card ${index} title is required`)
+    if (card.title.length > MAX_CARD_TITLE_LENGTH) {
+      throw new Error(`第 ${index} 张卡牌的标题不能超过 ${MAX_CARD_TITLE_LENGTH} 个字符`)
+    }
     if (typeof card.content !== 'string') throw new Error(`Card ${index} content is required`)
+    if (card.content.length > MAX_CARD_CONTENT_LENGTH) {
+      throw new Error(`第 ${index} 张卡牌的内容不能超过 ${MAX_CARD_CONTENT_LENGTH} 个字符`)
+    }
     if (typeof card.style !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(card.style)) {
       throw new Error(`Card ${index} style must be a hex color`)
     }
@@ -92,6 +121,39 @@ export function assertDhRoomBackup(value: unknown): DhRoomBackup {
   if (!Array.isArray(backup.map.cards)) throw new Error('Room map cards must be an array')
   if (!Array.isArray(backup.map.connections)) throw new Error('Room connections must be an array')
   if (!Array.isArray(backup.map.annotations)) throw new Error('Room annotations must be an array')
+
+  // 大小限制检查
+  if (backup.map.cards.length > MAX_MAP_CARDS) {
+    throw new Error(`地图中的卡牌数量不能超过 ${MAX_MAP_CARDS} 张`)
+  }
+  if (backup.map.annotations.length > MAX_MAP_ANNOTATIONS) {
+    throw new Error(`地图中的注释数量不能超过 ${MAX_MAP_ANNOTATIONS} 个`)
+  }
+  for (const [index, annotation] of backup.map.annotations.entries()) {
+    if (annotation && typeof annotation === 'object' && typeof (annotation as { text?: unknown }).text === 'string') {
+      const text = (annotation as { text: string }).text
+      if (text.length > MAX_ANNOTATION_TEXT_LENGTH) {
+        throw new Error(`第 ${index} 个注释的文字内容不能超过 ${MAX_ANNOTATION_TEXT_LENGTH} 个字符`)
+      }
+    }
+  }
+  for (const [index, card] of backup.map.cards.entries()) {
+    if (card && typeof card === 'object') {
+      const c = card as { title?: unknown; content?: unknown }
+      if (typeof c.title === 'string' && c.title.length > MAX_CARD_TITLE_LENGTH) {
+        throw new Error(`地图第 ${index} 张卡牌的标题不能超过 ${MAX_CARD_TITLE_LENGTH} 个字符`)
+      }
+      if (typeof c.content === 'string' && c.content.length > MAX_CARD_CONTENT_LENGTH) {
+        throw new Error(`地图第 ${index} 张卡牌的内容不能超过 ${MAX_CARD_CONTENT_LENGTH} 个字符`)
+      }
+    }
+  }
+  const totalHandCards = backup.session.hands.reduce((sum: number, hand: { cards?: unknown[] }) => {
+    return sum + (Array.isArray(hand.cards) ? hand.cards.length : 0)
+  }, 0)
+  if (totalHandCards > MAX_SESSION_TOTAL_HAND_CARDS) {
+    throw new Error(`所有玩家手牌总数不能超过 ${MAX_SESSION_TOTAL_HAND_CARDS} 张`)
+  }
 
   if (backup.library) {
     const importedPacks = Array.isArray(backup.library.imported_packs)
@@ -140,6 +202,9 @@ function assertRoomLibrary(packs: unknown, selectedPackIds: unknown): asserts pa
   if (!Array.isArray(selectedPackIds)) throw new Error('Room selected pack ids must be an array')
   if (selectedPackIds.some((packId) => typeof packId !== 'string')) {
     throw new Error('Room selected pack ids must be strings')
+  }
+  if (packs.length > MAX_IMPORTED_PACKS) {
+    throw new Error(`导入的卡包数量不能超过 ${MAX_IMPORTED_PACKS} 个`)
   }
 
   for (const [index, pack] of packs.entries()) {

@@ -76,26 +76,85 @@
 - [x] **S2** — CORS 改为环境变量可配置（`ALLOWED_ORIGIN`）
 - [x] **P1** — RoomPage.tsx 改用 Zustand 细粒度 selector
 
-### 第二轮（待规划）
+### 第二轮（已完成）
 目标：结构性重构，改善可维护性
 
-- [ ] **Q1** — 拆分 useStore.ts（按领域分为 UI store / Room store）
-- [ ] **Q2** — 拆分 GmPanelBoard.tsx（≥5 个子组件）
-- [ ] **Q3** — 拆分 MobilePanelRoom.tsx（≥5 个子组件）
-- [ ] **A1** — 提取 shared/utils.ts（后端业务工具函数）
-- [ ] **A2** — 合并 grid.ts（前端只保留 UI 扩展层）
+- [x] **Q1** — 拆分 useStore.ts（按领域分为 UI store / Room store）（2026-06-03）
+- [x] **Q2** — 拆分 GmPanelBoard.tsx（≥5 个子组件）（2026-06-03）
+- [x] **Q3** — 拆分 MobilePanelRoom.tsx（≥5 个子组件）（2026-06-03）
+- [x] **A1** — 提取 shared/utils.ts（后端业务工具函数）（2026-06-03）
+- [x] **A2** — 合并 grid.ts（前端只保留 UI 扩展层）（2026-06-03）
 
-### 第三轮（待规划）
+### 第三轮（已完成）
 目标：完善性改进
 
-- [ ] **S3/S4** — 速率限制 + 导入大小验证
-- [ ] **P2/P3** — 优化 map_cards 索引和 preserveTransientRoomState 算法
-- [ ] **A3** — 错误码结构化
-- [ ] **A5** — 引入 Vitest，覆盖 shared 验证器和核心业务逻辑
+- [x] **S3/S4** — 速率限制 + 导入大小验证（2026-06-03）
+- [x] **P2/P3** — 优化 map_cards 索引和 preserveTransientRoomState 算法（2026-06-03）
+- [x] **A3** — 错误码结构化（2026-06-03）
+- [x] **A5** — 引入 Vitest，覆盖 shared 验证器和核心业务逻辑（2026-06-03）
 
 ---
 
 ## 改动记录
+
+### 第三轮 - 2026-06-03
+
+**S3 - 导入大小验证**
+- `packages/shared/src/validators.ts` 新增 10 个防 DoS 常量
+- `assertDhPack`：限制 200 张卡、包名 100 字符、描述 500 字符、标题/内容 100/20000 字符
+- `assertDhRoomBackup`：限制地图 500 张卡、500 个注释（注释文本 2000 字符）、导入包 20 个、手牌总数 200 张
+
+**S4 - HTTP + WebSocket 速率限制**
+- `apps/realtime/src/index.ts` 新增模块级 `_ipRateLimitMap`，IP 维度每分钟 10 次限制
+- `createRoom` 和 `joinRoom` 都调用 `checkHttpRateLimit`，超限返回 HTTP 429
+- `RoomDurableObject` 新增 `wsRateLimitMap`，每连接每秒 30 条消息限制
+- 超速 WebSocket 连接发送错误消息后立即关闭（code 1008）
+
+**A3 - 错误码结构化**
+- `apps/realtime/src/index.ts` 新增 `ERR` 常量对象（8 个错误码：ROOM_NOT_FOUND、PERMISSION_DENIED 等）
+- `sendError` 方法完整传递 `{ code, message }`（匹配 ServerMessage error 协议定义）
+- 所有 HTTP 错误响应统一添加 `code` 字段
+
+**P2 - map_cards 操作优化**
+- `fronted/src/store/useStore.ts` 新增 `updateCardById` 辅助函数
+- 通过 `findIndex` + array slice 替代全量 `.map()`，card 不存在时直接返回原数组（early exit）
+- 覆盖：`moveCard`、`resizeCard`、`toggleExpandCard`、`lockCard`、`unlockCard` 等
+
+**P3 - preserveTransientRoomState 快速路径**
+- 无本地 override 时（最常见情况）走快速路径：跳过清理逻辑，仅对比 `is_expanded` 差异
+- 若 `is_expanded` 也无差异则直接返回 `incoming`（零拷贝）
+- 有 override 时才走原有慢速路径
+
+**A5 - Vitest 测试框架**
+- `packages/shared/package.json` 新增 vitest devDependency 和 test/test:watch scripts
+- `packages/shared/vitest.config.ts` 新建
+- `packages/shared/src/__tests__/validators.test.ts`：20 个测试用例覆盖 assertDhPack（正常/边界/错误）、assertDhRoomBackup、safeJsonParse
+- `packages/shared/src/__tests__/grid.test.ts`：16 个测试用例覆盖 snapToGrid、getCardGridSize、normalizeCardDimensions、createLocationTerritory、normalizeTerritoryRect
+
+### 第二轮 - 2026-06-03
+
+**Q1 - useStore.ts 拆分**
+- 新建 `storeTypes.ts`：集中所有 TypeScript 类型定义（UIState、AppStore 等接口）
+- 新建 `uiSlice.ts`：UI 状态初始值 + 25 个纯 UI action（模态框开关、toast、连线工具等），使用 Zustand `StateCreator` slice 模式
+- 改写 `useStore.ts`：仅保留房间/网络逻辑，通过 `...createUISlice()` 组合 UI slice；文件行数 1423 → 650 行
+
+**Q2 - GmPanelBoard.tsx 拆分**
+- 新建 `gmPanelTypes.ts`：共享类型定义（SheetDocState、ImportPendingState 等）
+- 提取 6 个子组件：`GmImportPendingToast`、`GmHtmlSheetCard`、`GmEmptySlotCard`、`GmActivityLogPanel`、`GmFearTracker`（含进度钟和 IconButton）
+- 主文件行数 1194 → 280 行
+
+**Q3 - MobilePanelRoom.tsx 拆分**
+- 提取 5 个文件：`MobileSharedWidgets`（StatPill/TrackDots/NumberAdjuster）、`MobileMarkdownRenderer`（Markdown 解析 + SectionCard/InfoBlock）、`MobileFearAndCountdowns`、`MobileCharacterList`、`MobileCharacterModals`（含 5 个 Modal 组件 + ExperienceDraft 工具函数）
+- 主文件行数 1120 → 220 行
+
+**A1 - 提取 shared/utils.ts**
+- 新建 `packages/shared/src/utils.ts`（约 1250 行），提取 60+ 个纯工具函数（卡牌、玩家、房间、资源追踪、GM 面板、HTML 解析、Mobile 面板等）
+- 更新 `packages/shared/src/index.ts`：新增 `export * from './utils'`
+- `apps/realtime/src/index.ts` 改为从 shared 导入，行数 3685 → 2480 行
+
+**A2 - 合并 grid.ts**
+- 分析确认两个版本逻辑完全一致（前端版本的 `cols/rows/scale` 别名字段无实际调用）
+- `fronted/src/utils/grid.ts` 改为从 `@dhgc/shared` 纯 re-export，保持原有导入路径不变
 
 ### 第一轮 - 2026-06-03
 

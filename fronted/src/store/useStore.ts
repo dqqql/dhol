@@ -4,207 +4,22 @@ import {
   assertDhPack,
   assertDhRoomBackup,
   type ClientMessage,
-  type DhCard,
-  type GmPanelTheme,
-  type GmPanelResourceKey,
   type MapCard,
-  type MobilePanelExperience,
-  type MobilePanelResourceKey,
-  type ResourceTrackerResourceKey,
-  type ResourceTrackerSheet,
   type RoomSession,
   type RoomState,
-  type RoomType,
 } from '@dhgc/shared'
-import type { Annotation, Connection, DrawOption, Rect, Toast } from '@/types'
-import { createRoomRequest, joinRoomRequest, RoomSocketConnection, type ConnectionState } from '@/lib/realtime'
+import type { Annotation, Rect } from '@/types'
+import { createRoomRequest, joinRoomRequest, RoomSocketConnection } from '@/lib/realtime'
 import { createLocationTerritory, normalizeCardDimensions, normalizeTerritoryRect, snapToGrid } from '@/utils/grid'
+import type { AppStore, LocalAnnotationOverride, LocalMapCardOverride } from '@/store/storeTypes'
+import { createUISlice } from '@/store/uiSlice'
 
-type ConnectionStatus = ConnectionState
-
-interface ScreenRect {
-  left: number
-  top: number
-  width: number
-  height: number
-}
-
-interface HandDragSnapshot {
-  cardId: string
-  card: DhCard
-  originRect: ScreenRect
-}
-
-interface PlacementAnimation {
-  id: string
-  card: DhCard
-  fromRect: ScreenRect
-  toRect: ScreenRect
-  playerColor?: string
-}
-
-interface RecycleAnimation {
-  id: string
-  card: DhCard
-  fromRect: ScreenRect
-  toRect: ScreenRect
-  playerColor?: string
-}
-
-type LocalMapCardOverride = Partial<Pick<MapCard, 'x' | 'y' | 'width' | 'height' | 'grid_cols' | 'grid_rows' | 'grid_scale' | 'territory'>>
-type LocalAnnotationOverride = Partial<Pick<Annotation, 'text' | 'x' | 'y' | 'font_size'>>
-
-interface UIState {
-  isPlayerPanelOpen: boolean
-  isHandPanelOpen: boolean
-  isExportMenuOpen: boolean
-  isImportModalOpen: boolean
-  isCreateCardModalOpen: boolean
-  isEditCardModalOpen: boolean
-  isRoomSettingsOpen: boolean
-  isCardLibraryOpen: boolean
-  isDrawModalOpen: boolean
-  isEndCoCreationConfirmOpen: boolean
-  isEnteringRoom: boolean
-  connectionStatus: ConnectionStatus
-  contextMenu: { x: number; y: number; cardId: string } | null
-  expandedCardId: string | null
-  editingCardId: string | null
-  connectionDraftFromCardId: string | null
-  connectionEditor: { connectionId?: string; fromCardId: string; toCardId: string } | null
-  draggingHandCard: HandDragSnapshot | null
-  placementAnimation: PlacementAnimation | null
-  recycleAnimation: RecycleAnimation | null
-  drawOptions: DrawOption[]
-  toasts: Toast[]
-  currentPlayerId: string
-  session: RoomSession | null
-}
-
-interface AppStore extends UIState {
-  room: RoomState | null
-
-  createRoom: (input: { nickname: string; roomName: string; roomType: RoomType; selectedPackIds?: string[] }) => Promise<boolean>
-  joinRoom: (input: { inviteCode: string; nickname: string }) => Promise<boolean>
-
-  manualReconnect: () => void
-  leaveRoom: () => void
-
-  startCoCreation: () => void
-  endCoCreation: () => void
-  updateSelectedPacks: (packIds: string[]) => void
-  updateImportsEnabled: (enabled: boolean) => void
-  updateResourceChangeRequiresApproval: (enabled: boolean) => void
-  updateGmPanelTheme: (theme: GmPanelTheme) => void
-
-  importTrackerCharacter: (fileName: string, sheet: ResourceTrackerSheet) => void
-  updateTrackerSheet: (columnId: string, sheet: ResourceTrackerSheet) => void
-  updateTrackerResource: (columnId: string, resourceKey: ResourceTrackerResourceKey, nextValue: number | boolean[]) => void
-  updateTrackerFear: (value: number) => void
-  createTrackerCountdown: (name: string, max: number) => void
-  updateTrackerCountdown: (countdownId: string, value: number) => void
-  deleteTrackerCountdown: (countdownId: string) => void
-  moveTrackerColumn: (columnId: string, direction: 'left' | 'right') => void
-  approveTrackerResourceRequest: (requestId: string) => void
-  rejectTrackerResourceRequest: (requestId: string) => void
-
-  importGmCharacter: (fileName: string, html: string) => void
-  replaceGmCharacter: (sheetId: string, fileName: string, html: string) => void
-  deleteGmCharacter: (sheetId: string) => void
-  updateGmSheet: (sheetId: string, sheet: ResourceTrackerSheet) => void
-  updateGmResource: (sheetId: string, resourceKey: GmPanelResourceKey, nextValue: number | boolean[]) => void
-  updateGmFear: (value: number) => void
-  createGmCountdown: (name: string, max: number) => void
-  updateGmCountdown: (countdownId: string, value: number) => void
-  deleteGmCountdown: (countdownId: string) => void
-  moveGmSheet: (sheetId: string, direction: 'left' | 'right') => void
-  updateGmCardsPerPage: (cardsPerPage: number) => void
-
-  importMobileCharacter: (code: string, displayName: string, experiences: MobilePanelExperience[]) => void
-  replaceMobileCharacter: (characterId: string, code: string) => void
-  deleteMobileCharacter: (characterId: string) => void
-  updateMobileCharacterCustom: (characterId: string, displayName: string, experiences: MobilePanelExperience[]) => void
-  updateMobileResource: (characterId: string, resourceKey: MobilePanelResourceKey, nextValue: number | boolean[]) => void
-  updateMobileFear: (value: number) => void
-  createMobileCountdown: (name: string, max: number) => void
-  updateMobileCountdown: (countdownId: string, value: number) => void
-  deleteMobileCountdown: (countdownId: string) => void
-
-  endTurn: () => void
-  forceSkipTurn: (playerId: string) => void
-
-  drawCards: () => void
-  confirmDraw: (cardId: string) => void
-  createCustomCard: (card: Omit<DhCard, 'id'>) => void
-  playCard: (cardId: string, x?: number, y?: number) => void
-  beginHandCardDrag: (card: DhCard, originRect: ScreenRect) => void
-  clearHandCardDrag: (cardId?: string) => void
-  triggerPlacementAnimation: (cardId: string, toRect: ScreenRect, playerColor?: string) => void
-  clearPlacementAnimation: () => void
-  triggerRecycleAnimation: (card: DhCard, fromRect: ScreenRect, toRect: ScreenRect, playerColor?: string) => void
-  clearRecycleAnimation: () => void
-
-  moveCard: (cardId: string, x: number, y: number) => void
-  commitMoveCard: (cardId: string, x: number, y: number) => void
-  resizeCard: (cardId: string, width: number, height: number) => void
-  commitResizeCard: (cardId: string, width: number, height: number) => void
-  markCardTerritory: (cardId: string) => void
-  clearCardTerritory: (cardId: string) => void
-  updateCardTerritory: (cardId: string, territory: Rect) => void
-  commitCardTerritory: (cardId: string, territory: Rect) => void
-  toggleExpandCard: (cardId: string) => void
-  editCard: (cardId: string, updates: Partial<DhCard> & { territory?: Rect | null }) => void
-  deleteCard: (cardId: string) => void
-  recycleCard: (cardId: string) => void
-  lockCard: (cardId: string) => void
-  unlockCard: (cardId: string) => void
-
-  addConnection: (conn: Omit<Connection, 'id'>) => void
-  updateConnection: (connectionId: string, updates: Partial<Pick<Connection, 'color' | 'label'>>) => void
-  removeConnection: (connId: string) => void
-
-  addAnnotation: (ann: Annotation) => boolean
-  updateAnnotationLocal: (annotationId: string, updates: Partial<Pick<Annotation, 'text' | 'x' | 'y' | 'font_size'>>) => void
-  commitAnnotationUpdate: (annotationId: string, updates: Partial<Pick<Annotation, 'text' | 'x' | 'y' | 'font_size'>>) => void
-  removeAnnotation: (annId: string) => void
-  importPack: (value: unknown) => void
-  importRoomBackup: (value: unknown) => void
-  importLibraryPack: (packId: string, packName: string) => void
-  importLibraryCards: (packId: string, cardIds: string[]) => void
-
-  setContextMenu: (menu: { x: number; y: number; cardId: string } | null) => void
-  setExpandedCard: (id: string | null) => void
-  togglePlayerPanel: () => void
-  toggleHandPanel: () => void
-  toggleExportMenu: () => void
-  openImportModal: () => void
-  closeImportModal: () => void
-  openCreateCardModal: () => void
-  closeCreateCardModal: () => void
-  openEditCardModal: (cardId: string) => void
-  closeEditCardModal: () => void
-  openRoomSettings: () => void
-  closeRoomSettings: () => void
-  openCardLibrary: () => void
-  closeCardLibrary: () => void
-  openDrawModal: () => void
-  closeDrawModal: () => void
-  openEndConfirm: () => void
-  closeEndConfirm: () => void
-  startConnection: (fromCardId: string) => void
-  completeConnection: (toCardId: string) => void
-  cancelConnection: () => void
-  openConnectionEditor: (value: { connectionId?: string; fromCardId: string; toCardId: string }) => void
-  closeConnectionEditor: () => void
-
-  addToast: (message: string, type?: Toast['type']) => void
-  removeToast: (id: string) => void
-}
-
+// ── Module-level room state singletons ──────────────────────────────────────
 let activeConnection: RoomSocketConnection | null = null
 const localMapCardOverrides = new Map<string, LocalMapCardOverride>()
 const localAnnotationOverrides = new Map<string, LocalAnnotationOverride>()
 
+// ── Helper functions ─────────────────────────────────────────────────────────
 function rectEquals(left?: Rect, right?: Rect) {
   if (!left && !right) return true
   if (!left || !right) return false
@@ -253,6 +68,16 @@ function clearTransientOverrides() {
   localAnnotationOverrides.clear()
 }
 
+function updateCardById<T extends { id: string }>(
+  cards: T[],
+  cardId: string,
+  updater: (card: T) => T,
+): T[] {
+  const idx = cards.findIndex((c) => c.id === cardId)
+  if (idx === -1) return cards
+  return [...cards.slice(0, idx), updater(cards[idx]), ...cards.slice(idx + 1)]
+}
+
 function preserveTransientRoomState(previous: RoomState | null, incoming: RoomState): RoomState {
   if (incoming.room_type === 'resource-tracker' || incoming.room_type === 'gm-panel' || incoming.room_type === 'mobile-panel') {
     clearTransientOverrides()
@@ -261,20 +86,32 @@ function preserveTransientRoomState(previous: RoomState | null, incoming: RoomSt
 
   if (!previous) return incoming
 
-  const expandedById = new Map(previous.map_cards.map((card) => [card.id, card.is_expanded]))
-  const incomingCardIds = new Set(incoming.map_cards.map((card) => card.id))
-  const incomingAnnotationIds = new Set(incoming.annotations.map((annotation) => annotation.id))
-
-  for (const cardId of localMapCardOverrides.keys()) {
-    if (!incomingCardIds.has(cardId)) {
-      localMapCardOverrides.delete(cardId)
+  // 快速路径：无本地 override 时，只需保留 is_expanded 状态
+  if (localMapCardOverrides.size === 0 && localAnnotationOverrides.size === 0) {
+    const expandedById = new Map(previous.map_cards.map((c) => [c.id, c.is_expanded]))
+    const needsUpdate = incoming.map_cards.some(
+      (c) => expandedById.get(c.id) !== undefined && expandedById.get(c.id) !== c.is_expanded,
+    )
+    if (!needsUpdate) return incoming
+    return {
+      ...incoming,
+      map_cards: incoming.map_cards.map((c) => {
+        const expanded = expandedById.get(c.id)
+        return expanded !== undefined && expanded !== c.is_expanded ? { ...c, is_expanded: expanded } : c
+      }),
     }
   }
 
+  // 慢速路径：有 override 时，清理失效 override 并应用
+  const expandedById = new Map(previous.map_cards.map((c) => [c.id, c.is_expanded]))
+  const incomingCardIds = new Set(incoming.map_cards.map((c) => c.id))
+  const incomingAnnotationIds = new Set(incoming.annotations.map((a) => a.id))
+
+  for (const cardId of localMapCardOverrides.keys()) {
+    if (!incomingCardIds.has(cardId)) localMapCardOverrides.delete(cardId)
+  }
   for (const annotationId of localAnnotationOverrides.keys()) {
-    if (!incomingAnnotationIds.has(annotationId)) {
-      localAnnotationOverrides.delete(annotationId)
-    }
+    if (!incomingAnnotationIds.has(annotationId)) localAnnotationOverrides.delete(annotationId)
   }
 
   return {
@@ -282,10 +119,7 @@ function preserveTransientRoomState(previous: RoomState | null, incoming: RoomSt
     map_cards: incoming.map_cards.map((card) => {
       const override = localMapCardOverrides.get(card.id)
       const overrideMatches = override ? doesMapCardMatchOverride(card, override) : false
-      if (override && overrideMatches) {
-        localMapCardOverrides.delete(card.id)
-      }
-
+      if (override && overrideMatches) localMapCardOverrides.delete(card.id)
       return {
         ...card,
         ...(override && !overrideMatches ? override : {}),
@@ -295,18 +129,13 @@ function preserveTransientRoomState(previous: RoomState | null, incoming: RoomSt
     annotations: incoming.annotations.map((annotation) => {
       const override = localAnnotationOverrides.get(annotation.id)
       const overrideMatches = override ? doesAnnotationMatchOverride(annotation, override) : false
-      if (override && overrideMatches) {
-        localAnnotationOverrides.delete(annotation.id)
-      }
-
-      return {
-        ...annotation,
-        ...(override && !overrideMatches ? override : {}),
-      }
+      if (override && overrideMatches) localAnnotationOverrides.delete(annotation.id)
+      return { ...annotation, ...(override && !overrideMatches ? override : {}) }
     }),
   }
 }
 
+// ── Unified store ────────────────────────────────────────────────────────────
 export const useStore = create<AppStore>((set, get) => {
   const applyRoomState = (room: RoomState) => {
     set((state) => ({ room: preserveTransientRoomState(state.room, room) }))
@@ -366,8 +195,6 @@ export const useStore = create<AppStore>((set, get) => {
       const connection = new RoomSocketConnection(session.websocket_url, {
         onClose: () => {
           if (activeConnection !== connection) return
-          // If snapshot was received, the disconnect is handled by reconnect logic
-          // Connection class updates status via onStatusChange
           if (!receivedSnapshot) {
             finishReject(latestConnectionError ?? new Error('连接房间失败，请重试。'))
           }
@@ -433,32 +260,13 @@ export const useStore = create<AppStore>((set, get) => {
   }
 
   return {
-    isPlayerPanelOpen: true,
-    isHandPanelOpen: true,
-    isExportMenuOpen: false,
-  isImportModalOpen: false,
-  isCreateCardModalOpen: false,
-  isEditCardModalOpen: false,
-  isRoomSettingsOpen: false,
-  isCardLibraryOpen: false,
-  isDrawModalOpen: false,
-  isEndCoCreationConfirmOpen: false,
-    isEnteringRoom: false,
-    connectionStatus: 'idle',
-    contextMenu: null,
-    expandedCardId: null,
-    editingCardId: null,
-    connectionDraftFromCardId: null,
-    connectionEditor: null,
-    draggingHandCard: null,
-    placementAnimation: null,
-    recycleAnimation: null,
-    drawOptions: [],
-    toasts: [],
-    currentPlayerId: '',
-    session: null,
+    // ── UI slice ─────────────────────────────────────────────────────────────
+    ...createUISlice(set, get, undefined as never),
+
+    // ── Room state ───────────────────────────────────────────────────────────
     room: null,
 
+    // ── Room lifecycle ────────────────────────────────────────────────────────
     createRoom: async ({ nickname, roomName, roomType, selectedPackIds }) => {
       const cleanedNickname = nickname.trim()
       if (!cleanedNickname) {
@@ -466,10 +274,7 @@ export const useStore = create<AppStore>((set, get) => {
         return false
       }
 
-      set({
-        isEnteringRoom: true,
-        connectionStatus: 'connecting',
-      })
+      set({ isEnteringRoom: true, connectionStatus: 'connecting' })
 
       try {
         const response = await createRoomRequest({
@@ -483,11 +288,7 @@ export const useStore = create<AppStore>((set, get) => {
         return true
       } catch (error) {
         disconnectConnection()
-        set({
-          room: null,
-          session: null,
-          connectionStatus: 'error',
-        })
+        set({ room: null, session: null, connectionStatus: 'error' })
         get().addToast(error instanceof Error ? error.message : '创建房间失败', 'error')
         return false
       } finally {
@@ -507,10 +308,7 @@ export const useStore = create<AppStore>((set, get) => {
         return false
       }
 
-      set({
-        isEnteringRoom: true,
-        connectionStatus: 'connecting',
-      })
+      set({ isEnteringRoom: true, connectionStatus: 'connecting' })
 
       try {
         const response = await joinRoomRequest({
@@ -522,11 +320,7 @@ export const useStore = create<AppStore>((set, get) => {
         return true
       } catch (error) {
         disconnectConnection()
-        set({
-          room: null,
-          session: null,
-          connectionStatus: 'error',
-        })
+        set({ room: null, session: null, connectionStatus: 'error' })
         get().addToast(error instanceof Error ? error.message : '加入房间失败', 'error')
         return false
       } finally {
@@ -568,9 +362,8 @@ export const useStore = create<AppStore>((set, get) => {
       })
     },
 
-    startCoCreation: () => {
-      sendMessage({ type: 'room.startCoCreation' })
-    },
+    // ── Room settings ─────────────────────────────────────────────────────────
+    startCoCreation: () => { sendMessage({ type: 'room.startCoCreation' }) },
 
     endCoCreation: () => {
       set({ isEndCoCreationConfirmOpen: false })
@@ -582,283 +375,98 @@ export const useStore = create<AppStore>((set, get) => {
         get().addToast('请至少选择一套卡包', 'warning')
         return
       }
-
-      const sent = sendMessage({
-        type: 'room.updateSelectedPacks',
-        payload: { selectedPackIds: packIds },
-      })
-
-      if (sent) {
-        get().addToast('房间卡包设置已更新', 'success')
-      }
+      const sent = sendMessage({ type: 'room.updateSelectedPacks', payload: { selectedPackIds: packIds } })
+      if (sent) { get().addToast('房间卡包设置已更新', 'success') }
     },
 
     updateImportsEnabled: (enabled) => {
-      const sent = sendMessage({
-        type: 'room.updateSettings',
-        payload: { importsEnabled: enabled },
-      })
-
-      if (sent) {
-        get().addToast(enabled ? '已启用导入功能' : '已关闭导入功能', 'success')
-      }
+      const sent = sendMessage({ type: 'room.updateSettings', payload: { importsEnabled: enabled } })
+      if (sent) { get().addToast(enabled ? '已启用导入功能' : '已关闭导入功能', 'success') }
     },
 
     updateResourceChangeRequiresApproval: (enabled) => {
-      const sent = sendMessage({
-        type: 'room.updateSettings',
-        payload: { resourceChangeRequiresApproval: enabled },
-      })
-
-      if (sent) {
-        get().addToast(enabled ? '已开启资源审批' : '已关闭资源审批', 'success')
-      }
+      const sent = sendMessage({ type: 'room.updateSettings', payload: { resourceChangeRequiresApproval: enabled } })
+      if (sent) { get().addToast(enabled ? '已开启资源审批' : '已关闭资源审批', 'success') }
     },
 
     updateGmPanelTheme: (theme) => {
-      const sent = sendMessage({
-        type: 'room.updateSettings',
-        payload: { gmPanelTheme: theme },
-      })
-
-      if (sent) {
-        get().addToast('GM 面板主题已更新', 'success')
-      }
+      const sent = sendMessage({ type: 'room.updateSettings', payload: { gmPanelTheme: theme } })
+      if (sent) { get().addToast('GM 面板主题已更新', 'success') }
     },
 
+    // ── Tracker actions ───────────────────────────────────────────────────────
     importTrackerCharacter: (fileName, sheet) => {
-      const sent = sendMessage({
-        type: 'tracker.importCharacter',
-        payload: { fileName, sheet },
-      })
-
-      if (sent) {
-        get().addToast(`已上传角色卡：${sheet.character_name || fileName}`, 'success')
-      }
+      const sent = sendMessage({ type: 'tracker.importCharacter', payload: { fileName, sheet } })
+      if (sent) { get().addToast(`已上传角色卡：${sheet.character_name || fileName}`, 'success') }
     },
 
     updateTrackerSheet: (columnId, sheet) => {
-      const sent = sendMessage({
-        type: 'tracker.updateSheet',
-        payload: { columnId, sheet },
-      })
-
-      if (sent) {
-        get().addToast(`已保存 ${sheet.character_name} 的信息`, 'success')
-      }
+      const sent = sendMessage({ type: 'tracker.updateSheet', payload: { columnId, sheet } })
+      if (sent) { get().addToast(`已保存 ${sheet.character_name} 的信息`, 'success') }
     },
 
     updateTrackerResource: (columnId, resourceKey, nextValue) => {
-      sendMessage({
-        type: 'tracker.updateResource',
-        payload: { columnId, resourceKey, nextValue },
-      })
+      sendMessage({ type: 'tracker.updateResource', payload: { columnId, resourceKey, nextValue } })
     },
 
-    updateTrackerFear: (value) => {
-      sendMessage({
-        type: 'tracker.updateFear',
-        payload: { value },
-      })
-    },
-
-    createTrackerCountdown: (name, max) => {
-      sendMessage({
-        type: 'tracker.createCountdown',
-        payload: { name, max },
-      })
-    },
-
-    updateTrackerCountdown: (countdownId, value) => {
-      sendMessage({
-        type: 'tracker.updateCountdown',
-        payload: { countdownId, value },
-      })
-    },
-
-    deleteTrackerCountdown: (countdownId) => {
-      sendMessage({
-        type: 'tracker.deleteCountdown',
-        payload: { countdownId },
-      })
-    },
-
-    moveTrackerColumn: (columnId, direction) => {
-      sendMessage({
-        type: 'tracker.moveColumn',
-        payload: { columnId, direction },
-      })
-    },
+    updateTrackerFear: (value) => { sendMessage({ type: 'tracker.updateFear', payload: { value } }) },
+    createTrackerCountdown: (name, max) => { sendMessage({ type: 'tracker.createCountdown', payload: { name, max } }) },
+    updateTrackerCountdown: (countdownId, value) => { sendMessage({ type: 'tracker.updateCountdown', payload: { countdownId, value } }) },
+    deleteTrackerCountdown: (countdownId) => { sendMessage({ type: 'tracker.deleteCountdown', payload: { countdownId } }) },
+    moveTrackerColumn: (columnId, direction) => { sendMessage({ type: 'tracker.moveColumn', payload: { columnId, direction } }) },
 
     approveTrackerResourceRequest: (requestId) => {
-      sendMessage({
-        type: 'tracker.approveResourceChange',
-        payload: { requestIdToResolve: requestId },
-      })
+      sendMessage({ type: 'tracker.approveResourceChange', payload: { requestIdToResolve: requestId } })
     },
-
     rejectTrackerResourceRequest: (requestId) => {
-      sendMessage({
-        type: 'tracker.rejectResourceChange',
-        payload: { requestIdToResolve: requestId },
-      })
+      sendMessage({ type: 'tracker.rejectResourceChange', payload: { requestIdToResolve: requestId } })
     },
 
-    importGmCharacter: (fileName, html) => {
-      sendMessage({
-        type: 'gm.importHtmlCharacter',
-        payload: { fileName, html },
-      })
-    },
-
-    replaceGmCharacter: (sheetId, fileName, html) => {
-      sendMessage({
-        type: 'gm.replaceHtmlCharacter',
-        payload: { sheetId, fileName, html },
-      })
-    },
-
-    deleteGmCharacter: (sheetId) => {
-      sendMessage({
-        type: 'gm.deleteSheet',
-        payload: { sheetId },
-      })
-    },
+    // ── GM Panel actions ──────────────────────────────────────────────────────
+    importGmCharacter: (fileName, html) => { sendMessage({ type: 'gm.importHtmlCharacter', payload: { fileName, html } }) },
+    replaceGmCharacter: (sheetId, fileName, html) => { sendMessage({ type: 'gm.replaceHtmlCharacter', payload: { sheetId, fileName, html } }) },
+    deleteGmCharacter: (sheetId) => { sendMessage({ type: 'gm.deleteSheet', payload: { sheetId } }) },
 
     updateGmSheet: (sheetId, sheet) => {
-      const sent = sendMessage({
-        type: 'gm.updateSheet',
-        payload: { sheetId, sheet },
-      })
-
-      if (sent) {
-        get().addToast(`已保存 ${sheet.character_name} 的信息`, 'success')
-      }
+      const sent = sendMessage({ type: 'gm.updateSheet', payload: { sheetId, sheet } })
+      if (sent) { get().addToast(`已保存 ${sheet.character_name} 的信息`, 'success') }
     },
 
     updateGmResource: (sheetId, resourceKey, nextValue) => {
-      sendMessage({
-        type: 'gm.updateResource',
-        payload: { sheetId, resourceKey, nextValue },
-      })
+      sendMessage({ type: 'gm.updateResource', payload: { sheetId, resourceKey, nextValue } })
     },
+    updateGmFear: (value) => { sendMessage({ type: 'gm.updateFear', payload: { value } }) },
+    createGmCountdown: (name, max) => { sendMessage({ type: 'gm.createCountdown', payload: { name, max } }) },
+    updateGmCountdown: (countdownId, value) => { sendMessage({ type: 'gm.updateCountdown', payload: { countdownId, value } }) },
+    deleteGmCountdown: (countdownId) => { sendMessage({ type: 'gm.deleteCountdown', payload: { countdownId } }) },
+    moveGmSheet: (sheetId, direction) => { sendMessage({ type: 'gm.moveSheet', payload: { sheetId, direction } }) },
+    updateGmCardsPerPage: (cardsPerPage) => { sendMessage({ type: 'gm.updateCardsPerPage', payload: { cardsPerPage } }) },
 
-    updateGmFear: (value) => {
-      sendMessage({
-        type: 'gm.updateFear',
-        payload: { value },
-      })
-    },
-
-    createGmCountdown: (name, max) => {
-      sendMessage({
-        type: 'gm.createCountdown',
-        payload: { name, max },
-      })
-    },
-
-    updateGmCountdown: (countdownId, value) => {
-      sendMessage({
-        type: 'gm.updateCountdown',
-        payload: { countdownId, value },
-      })
-    },
-
-    deleteGmCountdown: (countdownId) => {
-      sendMessage({
-        type: 'gm.deleteCountdown',
-        payload: { countdownId },
-      })
-    },
-
-    moveGmSheet: (sheetId, direction) => {
-      sendMessage({
-        type: 'gm.moveSheet',
-        payload: { sheetId, direction },
-      })
-    },
-
-    updateGmCardsPerPage: (cardsPerPage) => {
-      sendMessage({
-        type: 'gm.updateCardsPerPage',
-        payload: { cardsPerPage },
-      })
-    },
-
+    // ── Mobile Panel actions ──────────────────────────────────────────────────
     importMobileCharacter: (code, displayName, experiences) => {
-      sendMessage({
-        type: 'mobile.importCharacterCode',
-        payload: { code, displayName, experiences },
-      })
+      sendMessage({ type: 'mobile.importCharacterCode', payload: { code, displayName, experiences } })
     },
-
     replaceMobileCharacter: (characterId, code) => {
-      sendMessage({
-        type: 'mobile.replaceCharacterCode',
-        payload: { characterId, code },
-      })
+      sendMessage({ type: 'mobile.replaceCharacterCode', payload: { characterId, code } })
     },
-
-    deleteMobileCharacter: (characterId) => {
-      sendMessage({
-        type: 'mobile.deleteCharacter',
-        payload: { characterId },
-      })
-    },
-
+    deleteMobileCharacter: (characterId) => { sendMessage({ type: 'mobile.deleteCharacter', payload: { characterId } }) },
     updateMobileCharacterCustom: (characterId, displayName, experiences) => {
-      sendMessage({
-        type: 'mobile.updateCharacterCustom',
-        payload: { characterId, displayName, experiences },
-      })
+      sendMessage({ type: 'mobile.updateCharacterCustom', payload: { characterId, displayName, experiences } })
     },
-
     updateMobileResource: (characterId, resourceKey, nextValue) => {
-      sendMessage({
-        type: 'mobile.updateResource',
-        payload: { characterId, resourceKey, nextValue },
-      })
+      sendMessage({ type: 'mobile.updateResource', payload: { characterId, resourceKey, nextValue } })
     },
+    updateMobileFear: (value) => { sendMessage({ type: 'mobile.updateFear', payload: { value } }) },
+    createMobileCountdown: (name, max) => { sendMessage({ type: 'mobile.createCountdown', payload: { name, max } }) },
+    updateMobileCountdown: (countdownId, value) => { sendMessage({ type: 'mobile.updateCountdown', payload: { countdownId, value } }) },
+    deleteMobileCountdown: (countdownId) => { sendMessage({ type: 'mobile.deleteCountdown', payload: { countdownId } }) },
 
-    updateMobileFear: (value) => {
-      sendMessage({
-        type: 'mobile.updateFear',
-        payload: { value },
-      })
-    },
+    // ── Turn actions ──────────────────────────────────────────────────────────
+    endTurn: () => { sendMessage({ type: 'turn.end' }) },
+    forceSkipTurn: (playerId) => { sendMessage({ type: 'turn.forceSkip', payload: { playerId } }) },
 
-    createMobileCountdown: (name, max) => {
-      sendMessage({
-        type: 'mobile.createCountdown',
-        payload: { name, max },
-      })
-    },
-
-    updateMobileCountdown: (countdownId, value) => {
-      sendMessage({
-        type: 'mobile.updateCountdown',
-        payload: { countdownId, value },
-      })
-    },
-
-    deleteMobileCountdown: (countdownId) => {
-      sendMessage({
-        type: 'mobile.deleteCountdown',
-        payload: { countdownId },
-      })
-    },
-
-    endTurn: () => {
-      sendMessage({ type: 'turn.end' })
-    },
-
-    forceSkipTurn: (playerId) => {
-      sendMessage({ type: 'turn.forceSkip', payload: { playerId } })
-    },
-
-    drawCards: () => {
-      sendMessage({ type: 'card.draw' })
-    },
+    // ── Card hand actions ─────────────────────────────────────────────────────
+    drawCards: () => { sendMessage({ type: 'card.draw' }) },
 
     confirmDraw: (cardId) => {
       set({ isDrawModalOpen: false })
@@ -869,11 +477,8 @@ export const useStore = create<AppStore>((set, get) => {
       const { type, custom_type_name, title, content, style } = cardData
       const sent = sendMessage({
         type: 'card.create',
-        payload: {
-          card: { type, custom_type_name, title, content, style },
-        },
+        payload: { card: { type, custom_type_name, title, content, style } },
       })
-
       if (sent) {
         set({ isCreateCardModalOpen: false })
         get().addToast(`已创建自定义卡牌：${title}`, 'success')
@@ -881,28 +486,17 @@ export const useStore = create<AppStore>((set, get) => {
     },
 
     playCard: (cardId, x = 200, y = 200) => {
-      sendMessage({
-        type: 'card.play',
-        payload: { cardId, x: snapToGrid(x), y: snapToGrid(y) },
-      })
+      sendMessage({ type: 'card.play', payload: { cardId, x: snapToGrid(x), y: snapToGrid(y) } })
     },
 
+    // ── Card drag / animation (local UI state) ────────────────────────────────
     beginHandCardDrag: (card, originRect) => {
-      set({
-        draggingHandCard: {
-          cardId: card.id,
-          card,
-          originRect,
-        },
-      })
+      set({ draggingHandCard: { cardId: card.id, card, originRect } })
     },
 
     clearHandCardDrag: (cardId) => {
       set((state) => {
-        if (cardId && state.draggingHandCard?.cardId !== cardId) {
-          return state
-        }
-
+        if (cardId && state.draggingHandCard?.cardId !== cardId) return state
         return { draggingHandCard: null }
       })
     },
@@ -924,8 +518,7 @@ export const useStore = create<AppStore>((set, get) => {
       })
 
       window.setTimeout(() => {
-        const currentAnimation = get().placementAnimation
-        if (currentAnimation?.id === animationId) {
+        if (get().placementAnimation?.id === animationId) {
           set({ placementAnimation: null })
         }
       }, 420)
@@ -935,19 +528,10 @@ export const useStore = create<AppStore>((set, get) => {
 
     triggerRecycleAnimation: (card, fromRect, toRect, playerColor) => {
       const animationId = nanoid()
-      set({
-        recycleAnimation: {
-          id: animationId,
-          card,
-          fromRect,
-          toRect,
-          playerColor,
-        },
-      })
+      set({ recycleAnimation: { id: animationId, card, fromRect, toRect, playerColor } })
 
       window.setTimeout(() => {
-        const currentAnimation = get().recycleAnimation
-        if (currentAnimation?.id === animationId) {
+        if (get().recycleAnimation?.id === animationId) {
           set({ recycleAnimation: null })
         }
       }, 420)
@@ -955,6 +539,7 @@ export const useStore = create<AppStore>((set, get) => {
 
     clearRecycleAnimation: () => set({ recycleAnimation: null }),
 
+    // ── Map card actions ──────────────────────────────────────────────────────
     moveCard: (cardId, x, y) => {
       const nextX = snapToGrid(x)
       const nextY = snapToGrid(y)
@@ -963,28 +548,14 @@ export const useStore = create<AppStore>((set, get) => {
       set((state) => ({
         room: state.room ? {
           ...state.room,
-          map_cards: state.room.map_cards.map((card) => {
-            if (card.id !== cardId) return card
-
-            return {
-              ...card,
-              x: nextX,
-              y: nextY,
-            }
-          }),
+          map_cards: updateCardById(state.room.map_cards, cardId, (card) => ({ ...card, x: nextX, y: nextY })),
         } : null,
       }))
     },
 
     commitMoveCard: (cardId, x, y) => {
-      const sent = sendMessage({
-        type: 'card.move.commit',
-        payload: { cardId, x: snapToGrid(x), y: snapToGrid(y) },
-      })
-
-      if (!sent) {
-        localMapCardOverrides.delete(cardId)
-      }
+      const sent = sendMessage({ type: 'card.move.commit', payload: { cardId, x: snapToGrid(x), y: snapToGrid(y) } })
+      if (!sent) { localMapCardOverrides.delete(cardId) }
     },
 
     resizeCard: (cardId, width, height) => {
@@ -995,14 +566,7 @@ export const useStore = create<AppStore>((set, get) => {
             if (card.id !== cardId) return card
             const nextSize = normalizeCardDimensions(card.type, width, height)
             setLocalMapCardOverride(cardId, nextSize)
-            return {
-              ...card,
-              width: nextSize.width,
-              height: nextSize.height,
-              grid_cols: nextSize.grid_cols,
-              grid_rows: nextSize.grid_rows,
-              grid_scale: nextSize.grid_scale,
-            }
+            return { ...card, ...nextSize }
           }),
         } : null,
       }))
@@ -1012,16 +576,9 @@ export const useStore = create<AppStore>((set, get) => {
       const normalized = get().room?.map_cards.find((card) => card.id === cardId)
       const sent = sendMessage({
         type: 'card.resize.commit',
-        payload: {
-          cardId,
-          width: normalized?.width ?? width,
-          height: normalized?.height ?? height,
-        },
+        payload: { cardId, width: normalized?.width ?? width, height: normalized?.height ?? height },
       })
-
-      if (!sent) {
-        localMapCardOverrides.delete(cardId)
-      }
+      if (!sent) { localMapCardOverrides.delete(cardId) }
     },
 
     markCardTerritory: (cardId) => {
@@ -1034,23 +591,14 @@ export const useStore = create<AppStore>((set, get) => {
         card.height,
       )
 
-      const sent = sendMessage({
-        type: 'card.edit',
-        payload: {
-          cardId,
-          updates: { territory },
-        },
-      })
-
+      const sent = sendMessage({ type: 'card.edit', payload: { cardId, updates: { territory } } })
       if (!sent) return
 
       set((state) => ({
         room: state.room ? {
           ...state.room,
           map_cards: state.room.map_cards.map((item) => (
-            item.id === cardId && item.type === 'Location'
-              ? { ...item, territory }
-              : item
+            item.id === cardId && item.type === 'Location' ? { ...item, territory } : item
           )),
         } : null,
         contextMenu: null,
@@ -1061,14 +609,7 @@ export const useStore = create<AppStore>((set, get) => {
       const card = get().room?.map_cards.find((item) => item.id === cardId)
       if (!card || card.type !== 'Location' || !card.territory) return
 
-      const sent = sendMessage({
-        type: 'card.edit',
-        payload: {
-          cardId,
-          updates: { territory: null },
-        },
-      })
-
+      const sent = sendMessage({ type: 'card.edit', payload: { cardId, updates: { territory: null } } })
       if (!sent) return
 
       set((state) => ({
@@ -1093,10 +634,7 @@ export const useStore = create<AppStore>((set, get) => {
             if (card.id !== cardId || card.type !== 'Location') return card
             const nextTerritory = normalizeTerritoryRect(territory, card.width, card.height)
             setLocalMapCardOverride(cardId, { territory: nextTerritory })
-            return {
-              ...card,
-              territory: nextTerritory,
-            }
+            return { ...card, territory: nextTerritory }
           }),
         } : null,
       }))
@@ -1108,17 +646,9 @@ export const useStore = create<AppStore>((set, get) => {
 
       const sent = sendMessage({
         type: 'card.edit',
-        payload: {
-          cardId,
-          updates: {
-            territory: normalizeTerritoryRect(territory, card.width, card.height),
-          },
-        },
+        payload: { cardId, updates: { territory: normalizeTerritoryRect(territory, card.width, card.height) } },
       })
-
-      if (!sent) {
-        localMapCardOverrides.delete(cardId)
-      }
+      if (!sent) { localMapCardOverrides.delete(cardId) }
     },
 
     toggleExpandCard: (cardId) => {
@@ -1134,33 +664,18 @@ export const useStore = create<AppStore>((set, get) => {
     },
 
     editCard: (cardId, updates) => {
-      const sent = sendMessage({
-        type: 'card.edit',
-        payload: { cardId, updates },
-      })
-      if (sent) {
-        set({ isEditCardModalOpen: false, editingCardId: null, contextMenu: null })
-      }
+      const sent = sendMessage({ type: 'card.edit', payload: { cardId, updates } })
+      if (sent) { set({ isEditCardModalOpen: false, editingCardId: null, contextMenu: null }) }
     },
 
     deleteCard: (cardId) => {
-      const sent = sendMessage({
-        type: 'card.delete',
-        payload: { cardId },
-      })
-      if (sent) {
-        set({ contextMenu: null })
-      }
+      const sent = sendMessage({ type: 'card.delete', payload: { cardId } })
+      if (sent) { set({ contextMenu: null }) }
     },
 
     recycleCard: (cardId) => {
-      const sent = sendMessage({
-        type: 'card.recycle',
-        payload: { cardId },
-      })
-      if (sent) {
-        set({ contextMenu: null })
-      }
+      const sent = sendMessage({ type: 'card.recycle', payload: { cardId } })
+      if (sent) { set({ contextMenu: null }) }
     },
 
     lockCard: (cardId) => {
@@ -1178,10 +693,7 @@ export const useStore = create<AppStore>((set, get) => {
         } : null,
       }))
 
-      sendMessage({
-        type: 'card.lock',
-        payload: { cardId },
-      })
+      sendMessage({ type: 'card.lock', payload: { cardId } })
     },
 
     unlockCard: (cardId) => {
@@ -1196,38 +708,22 @@ export const useStore = create<AppStore>((set, get) => {
           } : card),
         } : null,
       }))
-
-      sendMessage({
-        type: 'card.unlock',
-        payload: { cardId },
-      })
+      sendMessage({ type: 'card.unlock', payload: { cardId } })
     },
 
+    // ── Connection actions ────────────────────────────────────────────────────
     addConnection: (conn) => {
-      const sent = sendMessage({
-        type: 'connection.add',
-        payload: conn,
-      })
-      if (sent) {
-        set({ connectionEditor: null, connectionDraftFromCardId: null, contextMenu: null })
-      }
+      const sent = sendMessage({ type: 'connection.add', payload: conn })
+      if (sent) { set({ connectionEditor: null, connectionDraftFromCardId: null, contextMenu: null }) }
     },
 
     updateConnection: (connectionId, updates) => {
-      const sent = sendMessage({
-        type: 'connection.update',
-        payload: { connectionId, updates },
-      })
-      if (sent) {
-        set({ connectionEditor: null, contextMenu: null })
-      }
+      const sent = sendMessage({ type: 'connection.update', payload: { connectionId, updates } })
+      if (sent) { set({ connectionEditor: null, contextMenu: null }) }
     },
 
     removeConnection: (connId) => {
-      const sent = sendMessage({
-        type: 'connection.remove',
-        payload: { connectionId: connId },
-      })
+      const sent = sendMessage({ type: 'connection.remove', payload: { connectionId: connId } })
       if (sent) {
         set((state) => ({
           connectionEditor: state.connectionEditor?.connectionId === connId ? null : state.connectionEditor,
@@ -1236,26 +732,15 @@ export const useStore = create<AppStore>((set, get) => {
       }
     },
 
+    // ── Annotation actions ────────────────────────────────────────────────────
     addAnnotation: (ann) => {
-      const sent = sendMessage({
-        type: 'annotation.add',
-        payload: ann,
-      })
-
+      const sent = sendMessage({ type: 'annotation.add', payload: ann })
       if (!sent) return false
 
       set((state) => {
         if (!state.room) return state
-        if (state.room.annotations.some((annotation) => annotation.id === ann.id)) {
-          return state
-        }
-
-        return {
-          room: {
-            ...state.room,
-            annotations: [...state.room.annotations, ann],
-          },
-        }
+        if (state.room.annotations.some((annotation) => annotation.id === ann.id)) return state
+        return { room: { ...state.room, annotations: [...state.room.annotations, ann] } }
       })
 
       return true
@@ -1274,23 +759,13 @@ export const useStore = create<AppStore>((set, get) => {
     },
 
     commitAnnotationUpdate: (annotationId, updates) => {
-      const sent = sendMessage({
-        type: 'annotation.update',
-        payload: { annotationId, updates },
-      })
-
-      if (!sent) {
-        localAnnotationOverrides.delete(annotationId)
-      }
+      const sent = sendMessage({ type: 'annotation.update', payload: { annotationId, updates } })
+      if (!sent) { localAnnotationOverrides.delete(annotationId) }
     },
 
     removeAnnotation: (annId) => {
       localAnnotationOverrides.delete(annId)
-      const sent = sendMessage({
-        type: 'annotation.remove',
-        payload: { annotationId: annId },
-      })
-
+      const sent = sendMessage({ type: 'annotation.remove', payload: { annotationId: annId } })
       if (sent) {
         set((state) => ({
           room: state.room ? {
@@ -1301,13 +776,11 @@ export const useStore = create<AppStore>((set, get) => {
       }
     },
 
+    // ── Import actions ────────────────────────────────────────────────────────
     importPack: (value) => {
       try {
         const pack = assertDhPack(value)
-        const sent = sendMessage({
-          type: 'room.importPack',
-          payload: { pack },
-        })
+        const sent = sendMessage({ type: 'room.importPack', payload: { pack } })
         if (sent) {
           set({ isImportModalOpen: false })
           get().addToast(`已导入卡包：${pack.pack_name}`, 'success')
@@ -1320,11 +793,7 @@ export const useStore = create<AppStore>((set, get) => {
     importRoomBackup: (value) => {
       try {
         const backup = assertDhRoomBackup(value)
-        const sent = sendMessage({
-          type: 'room.importRoomBackup',
-          payload: { backup },
-        })
-
+        const sent = sendMessage({ type: 'room.importRoomBackup', payload: { backup } })
         if (sent) {
           set({ isImportModalOpen: false })
           get().addToast(`已导入房间备份：${backup.room.name}`, 'success')
@@ -1335,14 +804,8 @@ export const useStore = create<AppStore>((set, get) => {
     },
 
     importLibraryPack: (packId, packName) => {
-      const sent = sendMessage({
-        type: 'room.importLibraryPack',
-        payload: { packId },
-      })
-
-      if (sent) {
-        get().addToast(`已追加整包：${packName}`, 'success')
-      }
+      const sent = sendMessage({ type: 'room.importLibraryPack', payload: { packId } })
+      if (sent) { get().addToast(`已追加整包：${packName}`, 'success') }
     },
 
     importLibraryCards: (packId, cardIds) => {
@@ -1350,74 +813,8 @@ export const useStore = create<AppStore>((set, get) => {
         get().addToast('请至少选择一张卡牌', 'warning')
         return
       }
-
-      const sent = sendMessage({
-        type: 'room.importCards',
-        payload: { packId, cardIds },
-      })
-
-      if (sent) {
-        get().addToast(`已导入 ${cardIds.length} 张卡牌`, 'success')
-      }
-    },
-
-    setContextMenu: (menu) => set({ contextMenu: menu }),
-    setExpandedCard: (id) => set({ expandedCardId: id }),
-    togglePlayerPanel: () => set((state) => ({ isPlayerPanelOpen: !state.isPlayerPanelOpen })),
-    toggleHandPanel: () => set((state) => ({ isHandPanelOpen: !state.isHandPanelOpen })),
-    toggleExportMenu: () => set((state) => ({ isExportMenuOpen: !state.isExportMenuOpen })),
-    openImportModal: () => set({ isImportModalOpen: true }),
-    closeImportModal: () => set({ isImportModalOpen: false }),
-    openCreateCardModal: () => set({ isCreateCardModalOpen: true }),
-    closeCreateCardModal: () => set({ isCreateCardModalOpen: false }),
-    openEditCardModal: (cardId) => set({ isEditCardModalOpen: true, editingCardId: cardId, contextMenu: null }),
-    closeEditCardModal: () => set({ isEditCardModalOpen: false, editingCardId: null }),
-    openRoomSettings: () => set({ isRoomSettingsOpen: true }),
-    closeRoomSettings: () => set({ isRoomSettingsOpen: false }),
-    openCardLibrary: () => set({ isCardLibraryOpen: true }),
-    closeCardLibrary: () => set({ isCardLibraryOpen: false }),
-    openDrawModal: () => set((state) => ({ isDrawModalOpen: state.drawOptions.length > 0 })),
-    closeDrawModal: () => set({ isDrawModalOpen: false }),
-    openEndConfirm: () => set({ isEndCoCreationConfirmOpen: true }),
-    closeEndConfirm: () => set({ isEndCoCreationConfirmOpen: false }),
-    startConnection: (fromCardId) => {
-      set({ connectionDraftFromCardId: fromCardId, contextMenu: null })
-      get().addToast('请选择目标卡牌以创建连线', 'info')
-    },
-    completeConnection: (toCardId) => {
-      const { connectionDraftFromCardId, room } = get()
-      if (!connectionDraftFromCardId) return
-
-      if (connectionDraftFromCardId === toCardId) {
-        get().addToast('不能将卡牌连接到自己', 'warning')
-        return
-      }
-
-      const existing = room?.connections.find((item) => (
-        item.from_card_id === connectionDraftFromCardId && item.to_card_id === toCardId
-      ))
-
-      set({
-        connectionDraftFromCardId: null,
-        connectionEditor: {
-          connectionId: existing?.id,
-          fromCardId: connectionDraftFromCardId,
-          toCardId,
-        },
-      })
-    },
-    cancelConnection: () => set({ connectionDraftFromCardId: null }),
-    openConnectionEditor: (value) => set({ connectionEditor: value, connectionDraftFromCardId: null, contextMenu: null }),
-    closeConnectionEditor: () => set({ connectionEditor: null, connectionDraftFromCardId: null }),
-
-    addToast: (message, type = 'info') => {
-      const id = nanoid()
-      set((state) => ({ toasts: [...state.toasts, { id, message, type }] }))
-      window.setTimeout(() => get().removeToast(id), 3500)
-    },
-
-    removeToast: (id) => {
-      set((state) => ({ toasts: state.toasts.filter((toast) => toast.id !== id) }))
+      const sent = sendMessage({ type: 'room.importCards', payload: { packId, cardIds } })
+      if (sent) { get().addToast(`已导入 ${cardIds.length} 张卡牌`, 'success') }
     },
   }
 })

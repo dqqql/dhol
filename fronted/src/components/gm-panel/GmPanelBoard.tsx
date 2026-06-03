@@ -1,8 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react'
-import type { GmPanelCharacterSheetEntry, GmPanelResourceKey, ResourceTrackerCountdown } from '@dhgc/shared'
-import { ChevronLeft, ChevronRight, FileUp, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import type { GmPanelCharacterSheetEntry } from '@dhgc/shared'
+import { ChevronLeft, ChevronRight, FileUp, Trash2 } from 'lucide-react'
 import { FloatingBattlePanel } from '@/components/gm-panel/FloatingBattlePanel'
-import { getGmPanelTheme, type GmPanelThemeDefinition } from '@/components/gm-panel/gmPanelThemes'
+import { getGmPanelTheme } from '@/components/gm-panel/gmPanelThemes'
+import { GmActivityLogPanel } from '@/components/gm-panel/GmActivityLogPanel'
+import { GmEmptySlotCard } from '@/components/gm-panel/GmEmptySlotCard'
+import { GmFearTracker } from '@/components/gm-panel/GmFearTracker'
+import { GmHtmlSheetCard } from '@/components/gm-panel/GmHtmlSheetCard'
+import { GmImportPendingToast } from '@/components/gm-panel/GmImportPendingToast'
+import type { ImportPendingState, ResourceMessage, SheetDocState } from '@/components/gm-panel/gmPanelTypes'
 import { FloatingNotebook } from '@/components/notebook/FloatingNotebook'
 import { Modal } from '@/components/ui/Modal'
 import { fetchGmSheetHtml } from '@/lib/realtime'
@@ -10,36 +16,6 @@ import { useStore } from '@/store/useStore'
 import { buildGmSheetSrcDoc, getGmSheetResourceSnapshot } from '@/utils/gmPanelHtml'
 
 const SHEETS_PER_PAGE = 2
-
-type SheetDocState = {
-  htmlUpdatedAt: string
-  srcDoc: string
-  loading: boolean
-  error?: string
-}
-
-type ResourceChangeMessage = {
-  type: 'dhol-gm-resource-change'
-  sheetId: string
-  resourceKey: GmPanelResourceKey
-  value: number | boolean[]
-  index?: number | null
-}
-
-type ResourceReplayFailedMessage = {
-  type: 'dhol-gm-resource-replay-failed'
-  sheetId: string
-}
-
-type ResourceMessage = ResourceChangeMessage | ResourceReplayFailedMessage
-
-type ImportPendingState = {
-  fileName: string
-  mode: 'import' | 'replace'
-  previousSheetCount: number
-  previousHtmlUpdatedAt?: string
-  targetSheetId?: string
-}
 
 const SRD_CHARACTER_SHEET_ERROR = '请使用srd车卡器导出的角色卡'
 
@@ -345,7 +321,7 @@ export function GmPanelBoard() {
       }}
     >
       <div style={{ minWidth: 1320, padding: 20, display: 'grid', gap: 18 }}>
-        <TrackerFearBar
+        <GmFearTracker
           value={panel.fear.value}
           max={panel.fear.max}
           countdowns={panel.countdowns}
@@ -419,7 +395,7 @@ export function GmPanelBoard() {
         >
           {slotEntries.map((entry, index) => (
             entry ? (
-              <HtmlSheetCard
+              <GmHtmlSheetCard
                 key={entry.id}
                 entry={entry}
                 sheetState={sheetDocs[entry.id]}
@@ -446,7 +422,7 @@ export function GmPanelBoard() {
                 theme={theme}
               />
             ) : (
-              <EmptySlotCard
+              <GmEmptySlotCard
                 key={`empty-${currentPage}-${index}`}
                 canImport={!isImportPending}
                 onImport={() => importInputRef.current?.click()}
@@ -456,27 +432,27 @@ export function GmPanelBoard() {
           ))}
         </section>
 
-        <ActivityLogPanel logs={panel.activity_log} theme={theme} />
+        <GmActivityLogPanel logs={panel.activity_log} theme={theme} />
       </div>
 
       <FloatingBattlePanel roomId={room.room_id} />
       <FloatingNotebook roomId={room.room_id} />
-      {pendingImport && <ImportPendingToast pendingImport={pendingImport} theme={theme} />}
+      {pendingImport && <GmImportPendingToast pendingImport={pendingImport} theme={theme} />}
 
       <input ref={importInputRef} type="file" accept=".html,text/html" style={{ display: 'none' }} onChange={handleImportChange} />
       <input ref={replaceInputRef} type="file" accept=".html,text/html" style={{ display: 'none' }} onChange={handleReplaceChange} />
 
-      <Modal open={Boolean(deleteTargetEntry)} onClose={closeDeleteConfirm} title={'\u5220\u9664\u89d2\u8272\u5361'} maxWidth={460}>
+      <Modal open={Boolean(deleteTargetEntry)} onClose={closeDeleteConfirm} title="删除角色卡" maxWidth={460}>
         {deleteTargetEntry && (
           <div style={{ display: 'grid', gap: 14 }}>
             <div style={{ fontSize: 13, lineHeight: 1.7, color: theme.colors.dialogText }}>
               {deleteConfirmStep === 1
-                ? `\u8fd9\u5c06\u6c38\u4e45\u5220\u9664\u300c${deleteTargetEntry.parsed_sheet.character_name || deleteTargetEntry.source_file_name}\u300d\u3002\u5220\u9664\u540e\u65e0\u6cd5\u6062\u590d\u3002`
-                : `\u8bf7\u518d\u6b21\u786e\u8ba4\uff1a\u89d2\u8272\u5361\u300c${deleteTargetEntry.parsed_sheet.character_name || deleteTargetEntry.source_file_name}\u300d\u4f1a\u7acb\u523b\u4ece\u5f53\u524d\u623f\u95f4\u72b6\u6001\u4e2d\u79fb\u9664\u3002`}
+                ? `这将永久删除「${deleteTargetEntry.parsed_sheet.character_name || deleteTargetEntry.source_file_name}」。删除后无法恢复。`
+                : `请再次确认：角色卡「${deleteTargetEntry.parsed_sheet.character_name || deleteTargetEntry.source_file_name}」会立刻从当前房间状态中移除。`}
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button className="btn btn-secondary" onClick={closeDeleteConfirm}>
-                {'\u53d6\u6d88'}
+                取消
               </button>
               {deleteConfirmStep === 1 ? (
                 <button
@@ -488,7 +464,7 @@ export function GmPanelBoard() {
                     color: theme.colors.fearActionText,
                   }}
                 >
-                  {'\u6211\u77e5\u9053\u4e86\uff0c\u7ee7\u7eed'}
+                  我知道了，继续
                 </button>
               ) : (
                 <button
@@ -500,7 +476,7 @@ export function GmPanelBoard() {
                     color: theme.colors.fearActionText,
                   }}
                 >
-                  <Trash2 size={14} /> {'\u786e\u8ba4\u6c38\u4e45\u5220\u9664'}
+                  <Trash2 size={14} /> 确认永久删除
                 </button>
               )}
             </div>
@@ -509,686 +485,4 @@ export function GmPanelBoard() {
       </Modal>
     </div>
   )
-}
-
-function ImportPendingToast({ pendingImport, theme }: { pendingImport: ImportPendingState; theme: GmPanelThemeDefinition }) {
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      style={{
-        position: 'fixed',
-        right: 22,
-        bottom: 22,
-        zIndex: 50,
-        display: 'grid',
-        gap: 4,
-        minWidth: 260,
-        maxWidth: 360,
-        padding: '12px 14px',
-        border: `1px solid ${theme.colors.statusBorder}`,
-        background: theme.colors.surfaceBackground,
-        color: theme.colors.statusText,
-        boxShadow: theme.colors.surfaceShadow,
-      }}
-    >
-      <div style={{ fontSize: 13, fontWeight: 900 }}>
-        {pendingImport.mode === 'replace' ? '正在替换角色卡' : '正在导入角色卡'}
-      </div>
-      <div
-        style={{
-          fontSize: 12,
-          fontWeight: 700,
-          lineHeight: 1.5,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {pendingImport.fileName}
-      </div>
-    </div>
-  )
-}
-
-function HtmlSheetCard(props: {
-  entry: GmPanelCharacterSheetEntry
-  sheetState?: SheetDocState
-  canManage: boolean
-  actionsDisabled?: boolean
-  isFirst: boolean
-  isLast: boolean
-  onMoveLeft: () => void
-  onMoveRight: () => void
-  onReplace: () => void
-  onDelete: () => void
-  onIframeReady: (iframe: HTMLIFrameElement) => void
-  theme: GmPanelThemeDefinition
-}) {
-  const {
-    entry,
-    sheetState,
-    canManage,
-    actionsDisabled = false,
-    isFirst,
-    isLast,
-    onMoveLeft,
-    onMoveRight,
-    onReplace,
-    onDelete,
-    onIframeReady,
-    theme,
-  } = props
-
-  return (
-    <article
-      style={{
-        minWidth: 0,
-        border: `1px solid ${theme.colors.sheetCardBorder}`,
-        background: theme.colors.sheetCardBackground,
-        boxShadow: theme.colors.sheetCardShadow,
-        overflow: 'hidden',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          gap: 12,
-          padding: 14,
-          borderBottom: `1px solid ${theme.colors.sheetHeaderBorder}`,
-          background: theme.colors.sheetHeaderBackground,
-        }}
-      >
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 18, fontWeight: 900, color: theme.colors.sheetTitle, marginBottom: 4 }}>
-            {entry.parsed_sheet.character_name || '未命名角色'}
-          </div>
-          <div
-            style={{
-              fontSize: 12,
-              fontWeight: 700,
-              color: theme.colors.sheetAccent,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {entry.parsed_sheet.summary_line || entry.source_file_name}
-          </div>
-          <div
-            style={{
-              marginTop: 4,
-              fontSize: 11,
-              color: theme.colors.sheetMeta,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {entry.source_file_name}
-          </div>
-        </div>
-
-        {canManage && (
-          <div style={{ display: 'grid', gap: 6 }}>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button className="btn btn-secondary btn-sm" disabled={actionsDisabled} onClick={onReplace}>
-                <RefreshCw size={13} /> 替换
-              </button>
-              <button
-                className="btn btn-sm"
-                onClick={onDelete}
-                style={{
-                  background: theme.colors.dangerSoftBackground,
-                  borderColor: theme.colors.dangerSoftBorder,
-                  color: theme.colors.dangerSoftText,
-                }}
-                title={'\u6c38\u4e45\u5220\u9664\u8fd9\u5f20\u89d2\u8272\u5361'}
-              >
-                <Trash2 size={13} /> 删除
-              </button>
-            </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button className="btn btn-secondary btn-sm" disabled={isFirst} onClick={onMoveLeft}>
-                <ChevronLeft size={13} />
-              </button>
-              <button className="btn btn-secondary btn-sm" disabled={isLast} onClick={onMoveRight}>
-                <ChevronRight size={13} />
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div style={{ position: 'relative', height: 'calc(100vh - 280px)', minHeight: 680, background: theme.colors.sheetViewport }}>
-        {sheetState?.srcDoc ? (
-          <iframe
-            title={`${entry.parsed_sheet.character_name}-sheet`}
-            srcDoc={sheetState.srcDoc}
-            onLoad={(event) => onIframeReady(event.currentTarget)}
-            style={{
-              width: '100%',
-              height: '100%',
-              border: 'none',
-              display: 'block',
-              background: theme.colors.sheetViewport,
-            }}
-          />
-        ) : (
-          <div style={{ display: 'grid', placeItems: 'center', width: '100%', height: '100%', color: theme.colors.logEmpty, fontSize: 13 }}>
-            {sheetState?.loading ? '正在加载角色卡…' : '等待角色卡内容…'}
-          </div>
-        )}
-
-        {(sheetState?.loading || sheetState?.error) && (
-          <div
-            style={{
-              position: 'absolute',
-              right: 12,
-              bottom: 12,
-              maxWidth: '70%',
-              padding: '8px 10px',
-              background: sheetState.error ? theme.colors.syncErrorBackground : theme.colors.syncBackground,
-              color: theme.colors.syncText,
-              fontSize: 12,
-              lineHeight: 1.5,
-              boxShadow: theme.colors.syncShadow,
-            }}
-          >
-            {sheetState.error ?? '正在同步最新 HTML…'}
-          </div>
-        )}
-      </div>
-    </article>
-  )
-}
-
-function EmptySlotCard({ canImport, onImport, theme }: { canImport: boolean; onImport: () => void; theme: GmPanelThemeDefinition }) {
-  if (!canImport) {
-    return (
-      <div
-        style={{
-          minHeight: 680,
-          border: `2px dashed ${theme.colors.emptySlotBorder}`,
-          background: theme.colors.emptySlotBackground,
-          color: theme.colors.emptySlotText,
-          display: 'grid',
-          placeItems: 'center',
-          fontSize: 14,
-          fontWeight: 700,
-        }}
-      >
-        等待导入角色卡
-      </div>
-    )
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={onImport}
-      style={{
-        minHeight: 680,
-        border: `2px dashed ${theme.colors.emptySlotBorder}`,
-        background: theme.colors.emptySlotBackground,
-        color: theme.colors.statusText,
-        cursor: 'pointer',
-        fontSize: 15,
-        fontWeight: 800,
-      }}
-    >
-      导入 HTML 角色卡
-    </button>
-  )
-}
-
-function ActivityLogPanel({
-  logs,
-  theme,
-}: {
-  logs: Array<{ id: string; created_at: string; actor_name: string; message: string }>
-  theme: GmPanelThemeDefinition
-}) {
-  return (
-    <section
-      style={{
-        padding: 18,
-        border: `1px solid ${theme.colors.logBorder}`,
-        background: theme.colors.logBackground,
-        boxShadow: theme.colors.logShadow,
-      }}
-    >
-      <div style={{ marginBottom: 12, fontSize: 15, fontWeight: 800, color: theme.colors.logTitle, letterSpacing: '0.01em' }}>活动记录</div>
-      <div style={{ display: 'grid', gap: 10, maxHeight: 260, overflowY: 'auto' }}>
-        {logs.length === 0 ? (
-          <div style={{ fontSize: 13, color: theme.colors.logEmpty }}>还没有记录。</div>
-        ) : (
-          [...logs].reverse().map((log) => (
-              <div key={log.id} style={{ padding: 12, background: theme.colors.logItemBackground, border: `1px solid ${theme.colors.logItemBorder}` }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 6 }}>
-                <span style={{ fontSize: 12, fontWeight: 800, color: theme.colors.logActor }}>{log.actor_name}</span>
-                <span style={{ fontSize: 11, color: theme.colors.logTime }}>{formatTime(log.created_at)}</span>
-              </div>
-              <div style={{ fontSize: 13, lineHeight: 1.6, color: theme.colors.logText }}>{repairKnownGmLogMessage(log.message)}</div>
-            </div>
-          ))
-        )}
-      </div>
-    </section>
-  )
-}
-
-function repairKnownGmLogMessage(message: string) {
-  return message.replaceAll('鍒犻櫎浜嗚鑹插崱', '删除了角色卡')
-}
-
-function TrackerFearBar(props: {
-  value: number
-  max: number
-  countdowns: ResourceTrackerCountdown[]
-  editable: boolean
-  draftName: string
-  draftMax: string
-  onDraftNameChange: (value: string) => void
-  onDraftMaxChange: (value: string) => void
-  onChange: (value: number) => void
-  onCreateCountdown: () => void
-  onUpdateCountdown: (countdownId: string, value: number) => void
-  onDeleteCountdown: (countdownId: string) => void
-  theme: GmPanelThemeDefinition
-}) {
-  const {
-    value,
-    max,
-    countdowns,
-    editable,
-    draftName,
-    draftMax,
-    onDraftNameChange,
-    onDraftMaxChange,
-    onChange,
-    onCreateCountdown,
-    onUpdateCountdown,
-    onDeleteCountdown,
-    theme,
-  } = props
-
-  const [showCreator, setShowCreator] = useState(false)
-  const [visibleStart, setVisibleStart] = useState(0)
-  const visibleCount = 6
-  const maxStart = Math.max(0, countdowns.length - visibleCount)
-  const visibleCountdowns = countdowns.slice(visibleStart, visibleStart + visibleCount)
-  const hasOverflow = countdowns.length > visibleCount
-
-  useEffect(() => {
-    setVisibleStart((current) => Math.min(current, maxStart))
-  }, [maxStart])
-
-  useEffect(() => {
-    if (!editable) {
-      setShowCreator(false)
-    }
-  }, [editable])
-
-  function handleCreateCountdown() {
-    onCreateCountdown()
-    setShowCreator(false)
-  }
-
-  return (
-    <>
-      <section
-        style={{
-          padding: 20,
-          border: `1px solid ${theme.colors.fearPanelBorder}`,
-          background: theme.colors.fearPanelBackground,
-          boxShadow: theme.colors.fearPanelShadow,
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            gap: 14,
-            marginBottom: 12,
-            flexWrap: 'wrap',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              gap: 18,
-              alignItems: 'flex-start',
-              flex: '1 1 720px',
-              minWidth: 0,
-              flexWrap: 'wrap',
-            }}
-          >
-            <div
-              style={{
-                width: 180,
-                maxWidth: '100%',
-                flexShrink: 0,
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <span
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    padding: '5px 12px',
-                    background: theme.colors.fearBadgeBackground,
-                    color: theme.colors.fearBadgeText,
-                    fontSize: 12,
-                    fontWeight: 800,
-                    letterSpacing: '0.02em',
-                    boxShadow: theme.colors.fearBadgeShadow,
-                  }}
-                >
-                  {'\u6050\u60e7\u70b9'}
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 6 }}>
-                <span style={{ fontSize: 64, lineHeight: 0.9, fontWeight: 900, color: theme.colors.fearValue, letterSpacing: 0 }}>{value}</span>
-                <span style={{ fontSize: 20, fontWeight: 800, color: theme.colors.fearValueMuted }}>/ {max}</span>
-              </div>
-              {editable && (
-                <div style={{ marginTop: 8, fontSize: 11, lineHeight: 1.5, color: theme.colors.fearHint }}>
-                  {'\u70b9\u51fb\u4e0b\u65b9\u523b\u5ea6\u5373\u53ef\u628a\u6050\u60e7\u70b9\u8bbe\u7f6e\u5230\u5bf9\u5e94\u6570\u503c\u3002'}
-                </div>
-              )}
-            </div>
-
-            <div
-              style={{
-                flex: '1 1 420px',
-                minWidth: 280,
-                paddingTop: 4,
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                  marginBottom: 14,
-                  flexWrap: 'wrap',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: theme.colors.countdownTitle, letterSpacing: '0.01em' }}>{'\u8fdb\u5ea6\u949f'}</div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minHeight: 20 }}>
-                  {hasOverflow && (
-                    <>
-                      <IconButton theme={theme} title={'\u4e0a\u4e00\u4e2a\u8fdb\u5ea6\u949f'} onClick={() => setVisibleStart((current) => Math.max(0, current - 1))} disabled={visibleStart === 0}>
-                        <ChevronLeft size={14} />
-                      </IconButton>
-                      <IconButton
-                        theme={theme}
-                        title={'\u4e0b\u4e00\u4e2a\u8fdb\u5ea6\u949f'}
-                        onClick={() => setVisibleStart((current) => Math.min(maxStart, current + 1))}
-                        disabled={visibleStart >= maxStart}
-                      >
-                        <ChevronRight size={14} />
-                      </IconButton>
-                    </>
-                  )}
-                  {countdowns.length > visibleCount && (
-                    <div style={{ fontSize: 12, fontWeight: 700, color: theme.colors.countdownOverflow }}>
-                      {visibleStart + 1}-{Math.min(visibleStart + visibleCount, countdowns.length)} / {countdowns.length}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {visibleCountdowns.length > 0 ? (
-                <div
-                  style={{
-                    display: 'flex',
-                    flexWrap: 'nowrap',
-                    gap: 10,
-                    alignItems: 'flex-start',
-                    overflowX: 'auto',
-                    paddingBottom: 4,
-                  }}
-                >
-                  {visibleCountdowns.map((countdown) => (
-                    <div
-                      key={countdown.id}
-                      style={{
-                        width: 'fit-content',
-                        maxWidth: '100%',
-                        flex: '0 0 auto',
-                        padding: 14,
-                        border: `1px solid ${theme.colors.countdownCardBorder}`,
-                        background: theme.colors.countdownCardBackground,
-                        boxShadow: theme.colors.countdownCardShadow,
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 8,
-                          marginBottom: 12,
-                          flexWrap: 'wrap',
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 800,
-                            color: theme.colors.countdownName,
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
-                        >
-                          {countdown.name}
-                        </div>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: theme.colors.countdownValue }}>
-                          {countdown.value} / {countdown.max}
-                        </div>
-                        {editable && (
-                          <button
-                            type="button"
-                            onClick={() => onDeleteCountdown(countdown.id)}
-                            style={{
-                              border: 'none',
-                              background: 'transparent',
-                              color: theme.colors.countdownDelete,
-                              cursor: 'pointer',
-                              padding: 0,
-                              marginLeft: 'auto',
-                            }}
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        )}
-                      </div>
-
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {Array.from({ length: countdown.max }, (_, index) => {
-                          const step = index + 1
-                          const active = step <= countdown.value
-                          return (
-                            <button
-                              key={step}
-                              type="button"
-                              disabled={!editable}
-                              onClick={() => editable && onUpdateCountdown(countdown.id, step)}
-                              style={{
-                                width: 28,
-                                height: 28,
-                                border: active ? `1px solid ${theme.colors.countdownStepActiveBorder}` : `1px solid ${theme.colors.countdownStepInactiveBorder}`,
-                                background: active ? theme.colors.countdownStepActiveBackground : theme.colors.countdownStepInactiveBackground,
-                                color: active ? theme.colors.countdownStepActiveText : theme.colors.countdownStepInactiveText,
-                                fontSize: 12,
-                                fontWeight: 800,
-                                cursor: editable ? 'pointer' : 'default',
-                                boxShadow: active ? theme.colors.countdownStepActiveShadow : 'none',
-                                transition: 'all var(--transition-fast)',
-                              }}
-                            >
-                              {step}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{ fontSize: 13, color: theme.colors.countdownOverflow }}>{'\u8fd8\u6ca1\u6709\u8fdb\u5ea6\u949f\u3002'}</div>
-              )}
-            </div>
-          </div>
-
-          {editable && (
-            <div
-              style={{
-                display: 'grid',
-                gap: 8,
-                minWidth: 220,
-                width: 276,
-                maxWidth: '100%',
-              }}
-            >
-              <button
-                className="btn btn-sm"
-                onClick={() => onChange(Math.max(0, value - 1))}
-                style={{
-                  background: theme.colors.hopeActionBackground,
-                  borderColor: theme.colors.hopeActionBorder,
-                  color: theme.colors.hopeActionText,
-                }}
-              >
-                {'- \u6697\u5f71\u6d88\u6563'}
-              </button>
-              <button
-                className="btn btn-sm"
-                onClick={() => onChange(Math.min(max, value + 1))}
-                style={{
-                  background: theme.colors.fearActionBackground,
-                  borderColor: theme.colors.fearActionBorder,
-                  color: theme.colors.fearActionText,
-                }}
-              >
-                {'+ \u6050\u60e7\u6ecb\u751f'}
-              </button>
-              <button className="btn btn-secondary btn-sm" onClick={() => onChange(0)}>
-                <RefreshCw size={13} /> {'\u91cd\u7f6e'}
-              </button>
-              <button className="btn btn-secondary btn-sm" onClick={() => setShowCreator(true)}>
-                {'\u7ba1\u7406\u8fdb\u5ea6\u949f'}
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: `repeat(${max}, minmax(56px, 1fr))`,
-            gap: 8,
-          }}
-        >
-          {Array.from({ length: max }).map((_, index) => {
-            const step = index + 1
-            const active = step <= value
-            const opacity = 0.12 + (index / Math.max(1, max - 1)) * 0.88
-
-            return (
-              <button
-                key={step}
-                type="button"
-                disabled={!editable}
-                onClick={() => editable && onChange(step)}
-                style={{
-                  height: 44,
-                  border: active ? `1px solid ${theme.colors.fearTrackActiveBorder}` : `1px solid ${theme.colors.fearTrackInactiveBorder}`,
-                  background: active ? `rgba(${theme.colors.fearTrackActiveRgb}, ${opacity})` : theme.colors.fearTrackInactiveBackground,
-                  color: active ? theme.colors.fearTrackActiveText : theme.colors.fearTrackInactiveText,
-                  fontSize: 13,
-                  fontWeight: 800,
-                  cursor: editable ? 'pointer' : 'default',
-                  boxShadow: active ? `0 2px 8px rgba(${theme.colors.fearTrackActiveRgb}, ${opacity * 0.3})` : 'none',
-                  transition: 'all var(--transition-fast)',
-                }}
-              >
-                {step}
-              </button>
-            )
-          })}
-        </div>
-      </section>
-
-      <Modal open={showCreator} onClose={() => setShowCreator(false)} title={'\u7ba1\u7406\u8fdb\u5ea6\u949f'} maxWidth={420}>
-        <div style={{ display: 'grid', gap: 12 }}>
-          <input
-            className="input"
-            value={draftName}
-            onChange={(event) => onDraftNameChange(event.target.value)}
-            placeholder={'\u65b0\u7684\u8fdb\u5ea6\u949f\u540d\u79f0'}
-          />
-          <input
-            className="input"
-            value={draftMax}
-            onChange={(event) => onDraftMaxChange(event.target.value)}
-            placeholder="6"
-          />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <button className="btn btn-secondary" onClick={() => setShowCreator(false)}>
-              {'\u53d6\u6d88'}
-            </button>
-            <button className="btn btn-primary" onClick={handleCreateCountdown}>
-              <Plus size={14} /> {'\u6dfb\u52a0'}
-            </button>
-          </div>
-        </div>
-      </Modal>
-    </>
-  )
-}
-function IconButton(props: {
-  children: React.ReactNode
-  title: string
-  onClick: () => void
-  disabled?: boolean
-  theme: GmPanelThemeDefinition
-}) {
-  const { children, title, onClick, disabled = false, theme } = props
-
-  return (
-    <button
-      type="button"
-      title={title}
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        width: 28,
-        height: 28,
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        border: `1px solid ${theme.colors.iconBorder}`,
-        background: disabled ? theme.colors.iconBackgroundDisabled : theme.colors.iconBackground,
-        color: disabled ? theme.colors.iconTextDisabled : theme.colors.iconText,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-      }}
-    >
-      {children}
-    </button>
-  )
-}
-
-function formatTime(value: string) {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
 }
