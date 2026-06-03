@@ -1,73 +1,8 @@
-export type DeckCardType = 'Location' | 'Feature' | 'Hook' | 'Custom'
-export type CardType = DeckCardType | 'Role'
-export type RoomMode = 'free' | 'co-creation' | 'normal'
-export type RoomType = 'co-creation' | 'resource-tracker' | 'gm-panel' | 'mobile-panel'
-export type ConnectionColor = 'red' | 'green' | 'gray'
-export type RoomPackSource = 'built-in' | 'imported'
+export type RoomType = 'gm-panel' | 'mobile-panel'
 export type ResourceTrackerResourceKey = 'hope' | 'proficiency' | 'hp' | 'stress' | 'armor_slots' | 'gold'
 export type GmPanelResourceKey = ResourceTrackerResourceKey
 export type GmPanelTheme = 'gold-abyss' | 'jade-hex' | 'amethyst-ember'
 export type MobilePanelResourceKey = 'hopeCurrent' | 'stress' | 'hp' | 'armor_slots' | 'goldCurrent'
-
-export interface RoleCardDetails {
-  player_name: string
-  profession: string
-  ancestry: string
-  community: string
-}
-
-export interface DhCard {
-  id: string
-  type: CardType
-  custom_type_name?: string
-  title: string
-  content: string
-  style: string
-  is_custom: boolean
-  pack_id?: string
-  role_details?: RoleCardDetails
-}
-
-export interface MapCard extends DhCard {
-  x: number
-  y: number
-  width: number
-  height: number
-  grid_cols: number
-  grid_rows: number
-  grid_scale: number
-  territory?: Rect
-  placed_by: string
-  placed_by_player_id: string
-  player_color: string
-  locked_by?: string
-  locked_by_player_id?: string
-  locked_until?: string
-  is_expanded?: boolean
-}
-
-export interface Rect {
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
-export interface Connection {
-  id: string
-  from_card_id: string
-  to_card_id: string
-  color: ConnectionColor
-  label?: string
-}
-
-export interface Annotation {
-  id: string
-  text: string
-  x: number
-  y: number
-  font_size: number
-}
 
 export interface Player {
   id: string
@@ -77,23 +12,6 @@ export interface Player {
   is_online: boolean
   joined_at: string
   last_seen_at: string
-}
-
-export interface RoomPackCard {
-  id: string
-  type: DeckCardType
-  custom_type_name?: string
-  title: string
-  content: string
-  style: string
-}
-
-export interface RoomPackLibraryItem {
-  id: string
-  pack_name: string
-  description?: string
-  source: RoomPackSource
-  cards: RoomPackCard[]
 }
 
 export interface RoomSettings {
@@ -183,23 +101,6 @@ export interface ResourceTrackerSheet {
 
 export type ImportedCharacterData = Record<string, unknown>
 
-export interface ResourceTrackerCharacterColumn {
-  id: string
-  owner_player_id: string
-  imported_at: string
-  updated_at: string
-  sheet: ResourceTrackerSheet
-}
-
-export interface ResourceTrackerActivityLogItem {
-  id: string
-  created_at: string
-  actor_player_id?: string
-  actor_name: string
-  kind: 'resource-change' | 'sheet-change' | 'system' | 'approval'
-  message: string
-}
-
 export interface ResourceTrackerCountdown {
   id: string
   name: string
@@ -207,31 +108,6 @@ export interface ResourceTrackerCountdown {
   max: number
   created_at: string
   updated_at: string
-}
-
-export interface ResourceTrackerResourceChangeRequest {
-  id: string
-  column_id: string
-  owner_player_id: string
-  requested_by_player_id: string
-  requested_by_name: string
-  resource_key: ResourceTrackerResourceKey
-  current_value: number | boolean[]
-  next_value: number | boolean[]
-  created_at: string
-  status: 'pending' | 'approved' | 'rejected'
-}
-
-export interface ResourceTrackerState {
-  fear: {
-    value: number
-    max: number
-  }
-  countdowns: ResourceTrackerCountdown[]
-  columns: ResourceTrackerCharacterColumn[]
-  column_order: string[]
-  pending_resource_requests: ResourceTrackerResourceChangeRequest[]
-  activity_log: ResourceTrackerActivityLogItem[]
 }
 
 export interface GmPanelCharacterSheetEntry {
@@ -403,41 +279,13 @@ export interface RoomState {
   invite_code: string
   created_at: string
   expires_at: string
-  mode: RoomMode
   host_player_id: string
-  current_turn_player_id: string | null
-  turn_order: string[]
   players: Player[]
-  hands: Record<string, DhCard[]>
-  deck: DhCard[]
-  map_cards: MapCard[]
-  connections: Connection[]
-  annotations: Annotation[]
-  imported_pack_library: RoomPackLibraryItem[]
   settings: RoomSettings
-  selected_built_in_pack_ids: string[]
-  drawn_this_turn: Record<string, boolean>
-  resource_tracker?: ResourceTrackerState
   gm_panel?: GmPanelState
   mobile_panel?: MobilePanelState
   snapshot_version: number
   updated_at: string
-}
-
-export interface DhPack {
-  format: 'dhpack'
-  version: 1
-  id?: string
-  pack_name: string
-  description?: string
-  cards: Array<{
-    id?: string
-    type: DeckCardType
-    custom_type_name?: string
-    title: string
-    content: string
-    style: string
-  }>
 }
 
 export interface DhRoomBackup {
@@ -451,27 +299,7 @@ export interface DhRoomBackup {
     created_at: string
     expires_at: string
   }
-  session: {
-    mode: RoomMode
-    current_host: string
-    current_turn_player: string | null
-    turn_order: string[]
-    deck: DhCard[]
-    hands: Array<{ owner: string; cards: DhCard[] }>
-  }
-  map: {
-    cards: MapCard[]
-    connections: Connection[]
-    annotations: Annotation[]
-  }
-  library: {
-    imported_packs: RoomPackLibraryItem[]
-    selected_built_in_pack_ids: string[]
-    packs?: RoomPackLibraryItem[]
-    selected_pack_ids?: string[]
-  }
   settings: RoomSettings
-  resource_tracker?: ResourceTrackerState
   gm_panel?: GmPanelState
   mobile_panel?: MobilePanelState
   players: Array<Pick<Player, 'id' | 'nickname' | 'color' | 'is_host' | 'is_online'>>

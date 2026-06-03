@@ -6,9 +6,7 @@ import { useStore } from '@/store/useStore'
 
 function getModeLabel(roomType: string) {
   if (roomType === 'mobile-panel') return '手机角色码房间'
-  if (roomType === 'gm-panel') return 'GM 面板'
-  if (roomType === 'resource-tracker') return '资源追踪'
-  return '房间'
+  return 'GM 面板'
 }
 
 interface TopBarProps {
@@ -19,19 +17,20 @@ interface TopBarProps {
 export function TopBar({ onLeaveRoom, onHeightChange }: TopBarProps) {
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [isMobileActionsOpen, setIsMobileActionsOpen] = useState(false)
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mobileActionsRef = useRef<HTMLDivElement | null>(null)
   const {
     room,
     connectionStatus,
-    isExportMenuOpen,
-    toggleExportMenu,
     openImportModal,
     openRoomSettings,
     manualReconnect,
     leaveRoom,
     addToast,
   } = useStore()
+
+  const toggleExportMenu = () => setIsExportMenuOpen((prev) => !prev)
 
   if (!room) return null
   const currentRoom = room

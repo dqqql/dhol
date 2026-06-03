@@ -1,50 +1,19 @@
 import {
-  assertDhPack,
   assertDhRoomBackup,
-  createPackLibrary,
-  createDeckFromBuiltInPackIds,
-  createRoomPackLibraryItemFromPack,
   decodeMobilePanelCharacterCode,
-  getCardGridSize,
-  isBuiltInPackId,
-  normalizeCardDimensions,
-  normalizeBuiltInPackSelection,
-  normalizeImportedPackLibrary,
-  normalizeTerritoryRect,
   safeJsonParse,
-  snapToGrid,
   // utils re-exports
   applyHtmlResourceTracksToSheet,
-  assertSrdCharacterSheetHtml,
-  buildImportedExperiences,
-  buildRoleCard,
-  buildSheetFromImportedCharacterData,
   clamp,
-  cleanOptionalText,
   cleanText,
   cloneMobilePanelResourceValue,
   cloneTrackerResourceValue,
-  collectCheckboxIdsAfterLabel,
-  collectCheckboxIdsFromIndex,
-  collectCheckboxSnapshotsAfterLabel,
-  collectCheckboxSnapshotsFromIndex,
-  collectGmResourceElements,
-  collectGoldCheckboxes,
   compileGmSheetHtml,
   createEmptyGmPanelState,
   createEmptyMobilePanelState,
-  createEmptyMobilePanelTracker,
-  createEmptyResourceTrackerState,
   createGmSheetEntry,
   createMobilePanelCharacterEntry,
-  detectImportedPrimaryTrait,
-  escapeRegExp,
-  extractArmorSlotsFromHtml,
-  extractCharacterDataFromHtml,
   finiteNumber,
-  findCharacterDataAssignmentIndex,
-  findNearestFollowingLabelIndex,
-  findObjectLiteralEnd,
   formatMobilePanelResourceValue,
   formatTrackerResourceValue,
   generateInviteCode,
@@ -53,74 +22,40 @@ import {
   getMobilePanelResourceValue,
   getTrackerResourceLabel,
   getTrackerResourceValue,
-  getHtmlAttribute,
-  hasDarkBorderClass,
-  hasClassToken,
-  hasClassTokens,
-  hasFilledClass,
   id,
   isMobilePanelResourceValueEqual,
   isTrackerResourceValueEqual,
   makePlayer,
-  markElementById,
-  markHopeResourceElements,
-  markOpeningTag,
-  markResourceElement,
   messageFrom,
   normaliseInvite,
   normalizeBooleanTrack,
   normalizeGmPanelState,
   normalizeGmPanelStateWithHtml,
-  normalizeImportedCharacterData,
-  normalizeMobilePanelCharacterEntry,
   normalizeMobilePanelCustom,
-  normalizeMobilePanelExperiences,
   normalizeMobilePanelResourceValue,
   normalizeMobilePanelState,
   normalizeMobilePanelTracker,
-  normalizeResourceTrackerCountdown,
   normalizeResourceTrackerSheet,
-  normalizeResourceTrackerState,
   normalizeRoomType,
-  normalizeStoredCard,
-  normalizeStoredCustomTypeName,
-  normalizeStoredPackCard,
   repairKnownGmLogMessage,
-  sanitizeImportedHtml,
   setMobilePanelResourceValue,
   setTrackerResourceValue,
-  shuffle,
-  stripMapFields,
-  getImportedRefName,
-  getImportedText,
   normalizeTrackerResourceValue,
-  type CardType,
   type ClientMessage,
-  type DeckCardType,
-  type DhCard,
-  type DhPack,
   type DhRoomBackup,
   type GmPanelActivityLogItem,
   type GmPanelCharacterSheetEntry,
   type GmPanelResourceKey,
   type GmPanelState,
-  type ImportedCharacterData,
-  type MapCard,
   type MobilePanelActivityLogItem,
   type MobilePanelCharacterEntry,
   type MobilePanelExperience,
   type MobilePanelResourceKey,
   type MobilePanelState,
   type Player,
-  type ResourceTrackerActivityLogItem,
-  type ResourceTrackerCharacterColumn,
   type ResourceTrackerCountdown,
-  type ResourceTrackerResourceChangeRequest,
   type ResourceTrackerResourceKey,
   type ResourceTrackerSheet,
-  type ResourceTrackerState,
-  type RoleCardDetails,
-  type RoomPackLibraryItem,
   type RoomState,
   type RoomType,
 } from '../../../packages/shared/src/index'
@@ -132,10 +67,6 @@ export interface Env {
   PUBLIC_API_BASE?: string
   /** 生产环境应设置为前端域名，如 https://dhol.pages.dev。不设置则允许所有来源（仅开发环境可接受）。 */
   ALLOWED_ORIGIN?: string
-}
-
-type MapCardUpdateInput = Omit<Partial<MapCard>, 'territory'> & {
-  territory?: MapCard['territory'] | null
 }
 
 interface SessionPayload {
@@ -155,8 +86,6 @@ let _corsAllowedOrigin = '*'
 
 const PLAYER_COLORS = ['#f43f5e', '#2563eb', '#f59e0b', '#10b981', '#a855f7', '#06b6d4']
 const ROOM_TTL_MS = 3 * 24 * 60 * 60 * 1000
-const DRAW_TYPES: DeckCardType[] = ['Location', 'Feature', 'Hook']
-const STARTING_CARDS_PER_TYPE = 2
 const GM_SHEET_HTML_STORAGE_KEY_PREFIX = 'gm_sheet_html:'
 const GM_SHEET_COMPILED_HTML_STORAGE_KEY_PREFIX = 'gm_sheet_compiled_html:'
 
@@ -251,8 +180,6 @@ async function createRoom(request: Request, env: Env): Promise<Response> {
     room_name?: string
     nickname?: string
     room_type?: RoomType
-    selected_built_in_pack_ids?: string[]
-    selected_pack_ids?: string[]
   }
   const roomName = cleanText(body.room_name, 'Untitled Room', 60)
   const nickname = cleanText(body.nickname, '', 24)
@@ -271,7 +198,6 @@ async function createRoom(request: Request, env: Env): Promise<Response> {
         playerId,
         nickname,
         roomType,
-        selectedPackIds: body.selected_built_in_pack_ids ?? body.selected_pack_ids ?? [],
       }),
     }))
 
@@ -334,7 +260,6 @@ export class RoomDurableObject {
 
   private room: RoomState | null = null
   private sockets = new Map<WebSocket, SocketSession>()
-  private pendingDraws = new Map<string, DhCard[]>()
   // WebSocket 速率限制：每个连接每秒最多 30 条消息
   private wsRateLimitMap = new Map<WebSocket, { count: number; resetAt: number }>()
 
@@ -394,18 +319,11 @@ export class RoomDurableObject {
       playerId: string
       nickname: string
       roomType?: RoomType
-      selectedPackIds: string[]
     }
 
     const now = new Date()
     const host = makePlayer(body.playerId, body.nickname, PLAYER_COLORS[0], true, now)
     const roomType = normalizeRoomType(body.roomType)
-    const selectedPackIds = roomType !== 'co-creation'
-      ? []
-      : normalizeBuiltInPackSelection(body.selectedPackIds, true)
-    const deck = roomType !== 'co-creation'
-      ? []
-      : shuffle(createDeckFromBuiltInPackIds(selectedPackIds))
 
     this.room = {
       room_type: roomType,
@@ -414,26 +332,14 @@ export class RoomDurableObject {
       invite_code: body.inviteCode,
       created_at: now.toISOString(),
       expires_at: new Date(now.getTime() + ROOM_TTL_MS).toISOString(),
-      mode: 'free',
       host_player_id: host.id,
-      current_turn_player_id: null,
-      turn_order: [host.id],
       players: [host],
-      hands: { [host.id]: [] },
-      deck,
-      map_cards: [],
-      connections: [],
-      annotations: [],
-      imported_pack_library: [],
       settings: {
         imports_enabled: true,
         resource_change_requires_approval: false,
         battle_panel_visibility: 'shared',
         gm_panel_theme: 'gold-abyss',
       },
-      selected_built_in_pack_ids: selectedPackIds,
-      drawn_this_turn: {},
-      resource_tracker: roomType === 'resource-tracker' ? createEmptyResourceTrackerState() : undefined,
       gm_panel: roomType === 'gm-panel' ? createEmptyGmPanelState() : undefined,
       mobile_panel: roomType === 'mobile-panel' ? createEmptyMobilePanelState() : undefined,
       snapshot_version: 0,
@@ -473,8 +379,6 @@ export class RoomDurableObject {
     const player = makePlayer(body.playerId, nickname, color, false, now)
 
     room.players.push(player)
-    room.turn_order.push(player.id)
-    room.hands[player.id] = []
     await this.commit('player.joined')
 
     return json({ state: this.publicState(), player })
@@ -564,7 +468,7 @@ export class RoomDurableObject {
   }
 
   private async applyMessage(session: SocketSession, message: ClientMessage, socket: WebSocket): Promise<void> {
-    const room = await this.mustLoad()
+    await this.mustLoad()
     const player = this.requirePlayer(session.playerId)
 
     switch (message.type) {
@@ -572,84 +476,9 @@ export class RoomDurableObject {
         this.send(socket, { type: 'pong', requestId: message.requestId, payload: { server_time: new Date().toISOString() } })
         return
 
-      case 'room.startCoCreation':
-        this.startCoCreation()
-        await this.commit('room.startCoCreation')
-        return
-
-      case 'room.endCoCreation':
-        this.endCoCreation()
-        await this.commit('room.endCoCreation')
-        return
-
-      case 'room.updateSelectedPacks':
-        this.updateSelectedPacks(message.payload.selectedPackIds)
-        await this.commit('room.updateSelectedPacks')
-        return
-
       case 'room.updateSettings':
         this.updateSettings(message.payload)
         await this.commit('room.updateSettings')
-        return
-
-      case 'tracker.importCharacter':
-        this.requireResourceTrackerRoom()
-        this.importTrackerCharacter(player, message.payload.fileName, message.payload.sheet)
-        await this.commit('tracker.importCharacter')
-        return
-
-      case 'tracker.updateSheet':
-        this.requireResourceTrackerRoom()
-        this.updateTrackerSheet(player, message.payload.columnId, message.payload.sheet)
-        await this.commit('tracker.updateSheet')
-        return
-
-      case 'tracker.updateResource':
-        this.requireResourceTrackerRoom()
-        this.updateTrackerResource(player, message.payload.columnId, message.payload.resourceKey, message.payload.nextValue)
-        await this.commit('tracker.updateResource')
-        return
-
-      case 'tracker.updateFear':
-        this.requireResourceTrackerRoom()
-        this.updateTrackerFear(player, message.payload.value)
-        await this.commit('tracker.updateFear')
-        return
-
-      case 'tracker.createCountdown':
-        this.requireResourceTrackerRoom()
-        this.createTrackerCountdown(player, message.payload.name, message.payload.max)
-        await this.commit('tracker.createCountdown')
-        return
-
-      case 'tracker.updateCountdown':
-        this.requireResourceTrackerRoom()
-        this.updateTrackerCountdown(player, message.payload.countdownId, message.payload.value)
-        await this.commit('tracker.updateCountdown')
-        return
-
-      case 'tracker.deleteCountdown':
-        this.requireResourceTrackerRoom()
-        this.deleteTrackerCountdown(player, message.payload.countdownId)
-        await this.commit('tracker.deleteCountdown')
-        return
-
-      case 'tracker.moveColumn':
-        this.requireResourceTrackerRoom()
-        this.moveTrackerColumn(player, message.payload.columnId, message.payload.direction)
-        await this.commit('tracker.moveColumn')
-        return
-
-      case 'tracker.approveResourceChange':
-        this.requireResourceTrackerRoom()
-        this.resolveTrackerRequest(player, message.payload.requestIdToResolve, true)
-        await this.commit('tracker.approveResourceChange')
-        return
-
-      case 'tracker.rejectResourceChange':
-        this.requireResourceTrackerRoom()
-        this.resolveTrackerRequest(player, message.payload.requestIdToResolve, false)
-        await this.commit('tracker.rejectResourceChange')
         return
 
       case 'gm.importHtmlCharacter':
@@ -772,183 +601,6 @@ export class RoomDurableObject {
         await this.commit('mobile.deleteCountdown')
         return
 
-      case 'turn.end':
-        this.requireCoCreation()
-        this.advanceTurn()
-        await this.commit('turn.end')
-        return
-
-      case 'turn.forceSkip':
-        this.advanceTurn(message.payload.playerId)
-        await this.commit('turn.forceSkip')
-        return
-
-      case 'card.draw':
-        this.requireCurrentTurn(player)
-        if (room.drawn_this_turn[player.id]) throw new Error('本回合已经抽过牌了')
-        this.pendingDraws.set(player.id, this.buildDrawOptions())
-        this.send(socket, {
-          type: 'draw.options',
-          requestId: message.requestId,
-          payload: { cards: this.pendingDraws.get(player.id) ?? [] },
-        })
-        return
-
-      case 'card.draw.confirm': {
-        this.requireCurrentTurn(player)
-        const options = this.pendingDraws.get(player.id) ?? []
-        const selected = options.find(card => card.id === message.payload.cardId)
-        if (!selected) throw new Error('Selected card is not in draw options')
-        room.deck = room.deck.filter(card => card.id !== selected.id)
-        room.hands[player.id] = [...(room.hands[player.id] ?? []), selected]
-        room.drawn_this_turn[player.id] = true
-        this.pendingDraws.delete(player.id)
-        await this.commit('card.draw.confirm')
-        return
-      }
-
-      case 'card.create': {
-        if (message.payload.card.type === 'Role') {
-          throw new Error('Role cards are created automatically for each player')
-        }
-        if (message.payload.card.type === 'Custom' && !cleanOptionalText(message.payload.card.custom_type_name, 20)) {
-          throw new Error('Custom cards require a custom_type_name')
-        }
-        const card: DhCard = {
-          ...message.payload.card,
-          custom_type_name: normalizeStoredCustomTypeName(message.payload.card.type, message.payload.card.custom_type_name),
-          id: id('card'),
-          is_custom: true,
-        }
-        room.hands[player.id] = [...(room.hands[player.id] ?? []), card]
-        await this.commit('card.create')
-        return
-      }
-
-      case 'card.play':
-        this.requireCurrentTurn(player)
-        this.playCard(player, message.payload.cardId, message.payload.x, message.payload.y)
-        await this.commit('card.play')
-        return
-
-      case 'card.lock':
-        this.lockCard(player, message.payload.cardId)
-        await this.commit('card.lock')
-        return
-
-      case 'card.unlock':
-        this.unlockCard(player, message.payload.cardId)
-        await this.commit('card.unlock')
-        return
-
-      case 'card.move.commit':
-        this.requireUnlockedOrOwner(player, message.payload.cardId)
-        this.moveMapCard(message.payload.cardId, snapToGrid(message.payload.x), snapToGrid(message.payload.y))
-        this.unlockCard(player, message.payload.cardId)
-        await this.commit('card.move.commit')
-        return
-
-      case 'card.resize.commit': {
-        this.requireUnlockedOrOwner(player, message.payload.cardId)
-        const card = this.requireMapCard(message.payload.cardId)
-        this.resizeMapCard(card.id, message.payload.width, message.payload.height)
-        await this.commit('card.resize.commit')
-        return
-      }
-
-      case 'card.edit': {
-        this.requireUnlockedOrOwner(player, message.payload.cardId)
-        const card = this.requireMapCard(message.payload.cardId)
-        const updates: MapCardUpdateInput = { ...message.payload.updates }
-        const nextType = updates.type ?? card.type
-
-        if (nextType === 'Custom') {
-          const customTypeName = normalizeStoredCustomTypeName(nextType, updates.custom_type_name ?? card.custom_type_name)
-          if (!customTypeName) {
-            throw new Error('Custom cards require a custom_type_name')
-          }
-          updates.custom_type_name = customTypeName
-        } else if (Object.prototype.hasOwnProperty.call(updates, 'custom_type_name')) {
-          updates.custom_type_name = undefined
-        }
-
-        if (card.type === 'Location' && Object.prototype.hasOwnProperty.call(updates, 'territory')) {
-          if (updates.territory) {
-            updates.territory = normalizeTerritoryRect(updates.territory, card.width, card.height)
-          } else {
-            updates.territory = undefined
-          }
-        }
-
-        this.updateMapCard(message.payload.cardId, updates)
-        await this.commit('card.edit')
-        return
-      }
-
-      case 'card.delete':
-        if (room.mode === 'co-creation') throw new Error('Recycle cards during co-creation instead of deleting them')
-        room.map_cards = room.map_cards.filter(card => card.id !== message.payload.cardId)
-        room.connections = room.connections.filter(conn => (
-          conn.from_card_id !== message.payload.cardId && conn.to_card_id !== message.payload.cardId
-        ))
-        await this.commit('card.delete')
-        return
-
-      case 'card.recycle':
-        this.recycleCard(player, message.payload.cardId)
-        await this.commit('card.recycle')
-        return
-
-      case 'connection.add':
-        this.addConnection(message.payload)
-        await this.commit('connection.add')
-        return
-
-      case 'connection.update':
-        this.updateConnection(message.payload.connectionId, message.payload.updates)
-        await this.commit('connection.update')
-        return
-
-      case 'connection.remove':
-        room.connections = room.connections.filter(conn => conn.id !== message.payload.connectionId)
-        await this.commit('connection.remove')
-        return
-
-      case 'annotation.add':
-        this.addAnnotation(message.payload)
-        await this.commit('annotation.add')
-        return
-
-      case 'annotation.update':
-        this.updateAnnotation(message.payload.annotationId, message.payload.updates)
-        await this.commit('annotation.update')
-        return
-
-      case 'annotation.remove':
-        room.annotations = room.annotations.filter(ann => ann.id !== message.payload.annotationId)
-        await this.commit('annotation.remove')
-        return
-
-      case 'room.importPack': {
-        this.requireImportsEnabled()
-        const pack = assertDhPack(message.payload.pack)
-        this.importPack(pack)
-        await this.commit('room.importPack')
-        return
-      }
-
-      case 'room.importLibraryPack':
-        this.requireImportsEnabled()
-        this.importLibraryPack(message.payload.packId)
-        await this.commit('room.importLibraryPack')
-        return
-
-      case 'room.importCards':
-        this.requireImportsEnabled()
-        this.importCards(message.payload.packId, message.payload.cardIds)
-        await this.commit('room.importCards')
-        return
-
       case 'room.importRoomBackup': {
         this.requireImportsEnabled()
         const backup = assertDhRoomBackup(message.payload.backup)
@@ -957,158 +609,6 @@ export class RoomDurableObject {
         return
       }
     }
-  }
-
-  private startCoCreation(): void {
-    const room = this.requireRoom()
-    const onlinePlayers = room.players.filter(item => item.is_online)
-
-    room.mode = 'co-creation'
-    room.drawn_this_turn = {}
-    room.current_turn_player_id = this.nextOnlinePlayer(room.turn_order[0] ?? null)
-    this.pendingDraws.clear()
-
-    for (const playerId of Object.keys(room.hands)) {
-      room.hands[playerId] = []
-    }
-
-    for (const player of onlinePlayers) {
-      const openingHand = this.drawCardsForTypes(DRAW_TYPES.map((type) => ({ type, count: STARTING_CARDS_PER_TYPE })))
-      const roleCard = this.hasRoleCardOnMap(player.id) ? [] : [buildRoleCard(player)]
-      room.hands[player.id] = [...roleCard, ...openingHand]
-    }
-  }
-
-  private endCoCreation(): void {
-    const room = this.requireRoom()
-    const returned: DhCard[] = []
-    for (const playerId of Object.keys(room.hands)) {
-      returned.push(...room.hands[playerId].filter(card => !card.is_custom && card.type !== 'Role'))
-      room.hands[playerId] = []
-    }
-    room.deck = shuffle([...room.deck, ...returned])
-    room.mode = 'normal'
-    room.current_turn_player_id = null
-    room.drawn_this_turn = {}
-    this.pendingDraws.clear()
-  }
-
-  private buildDrawOptions(): DhCard[] {
-    const room = this.requireRoom()
-    const options: DhCard[] = []
-
-    for (const type of DRAW_TYPES) {
-      const candidate = room.deck.find((card) => card.type === type)
-      if (!candidate) {
-        throw new Error(`Not enough ${type} cards left in deck to draw`)
-      }
-      options.push(candidate)
-    }
-
-    return options
-  }
-
-  private drawCardsForTypes(requests: Array<{ type: DeckCardType; count: number }>): DhCard[] {
-    const room = this.requireRoom()
-    let remainingDeck = [...room.deck]
-    const drawn: DhCard[] = []
-
-    for (const request of requests) {
-      const selectedIndexes: number[] = []
-
-      for (let index = 0; index < remainingDeck.length && selectedIndexes.length < request.count; index += 1) {
-        if (remainingDeck[index].type === request.type) {
-          selectedIndexes.push(index)
-        }
-      }
-
-      if (selectedIndexes.length < request.count) {
-        throw new Error(`Not enough ${request.type} cards left in deck`)
-      }
-
-      const selectedIndexSet = new Set(selectedIndexes)
-      drawn.push(...selectedIndexes.map((index) => remainingDeck[index]))
-      remainingDeck = remainingDeck.filter((_, index) => !selectedIndexSet.has(index))
-    }
-
-    room.deck = remainingDeck
-    return drawn
-  }
-
-  private hasRoleCardOnMap(playerId: string): boolean {
-    return this.requireRoom().map_cards.some((card) => card.type === 'Role' && card.placed_by_player_id === playerId)
-  }
-
-  private playCard(player: Player, cardId: string, x: number, y: number): void {
-    const room = this.requireRoom()
-    const hand = room.hands[player.id] ?? []
-    const card = hand.find(item => item.id === cardId)
-    if (!card) throw new Error('Card is not in your hand')
-
-    const size = getCardGridSize(card.type)
-    const mapCard: MapCard = {
-      ...card,
-      ...size,
-      x: snapToGrid(x),
-      y: snapToGrid(y),
-      placed_by: player.nickname,
-      placed_by_player_id: player.id,
-      player_color: player.color,
-      is_expanded: false,
-    }
-
-    room.hands[player.id] = hand.filter(item => item.id !== cardId)
-    room.map_cards.push(mapCard)
-  }
-
-  private recycleCard(player: Player, cardId: string): void {
-    const room = this.requireRoom()
-    const card = this.requireMapCard(cardId)
-    if (room.mode !== 'co-creation') throw new Error('Recycle is only available during co-creation')
-    if (card.placed_by_player_id !== player.id) {
-      throw new Error('Only the owner can recycle this card')
-    }
-    room.map_cards = room.map_cards.filter(item => item.id !== cardId)
-    room.connections = room.connections.filter(conn => conn.from_card_id !== cardId && conn.to_card_id !== cardId)
-    room.hands[card.placed_by_player_id] = [...(room.hands[card.placed_by_player_id] ?? []), stripMapFields(card)]
-  }
-
-  private importPack(pack: DhPack): void {
-    const room = this.requireRoom()
-    const packId = id('pack')
-    const libraryPack = createRoomPackLibraryItemFromPack(pack, { id: packId, source: 'imported' })
-    const cards = this.instantiatePackCards(libraryPack)
-
-    room.imported_pack_library.push(libraryPack)
-    room.deck = shuffle([...room.deck, ...cards])
-  }
-
-  private importLibraryPack(packId: string): void {
-    const room = this.requireRoom()
-    const pack = this.requirePackLibraryItem(packId)
-    room.deck = shuffle([...room.deck, ...this.instantiatePackCards(pack, true)])
-  }
-
-  private importCards(packId: string, cardIds: string[]): void {
-    if (!cardIds.length) throw new Error('Select at least one card to import')
-
-    const room = this.requireRoom()
-    const pack = this.requirePackLibraryItem(packId)
-    const allowedCardIds = new Set(cardIds)
-    const selectedCards = pack.cards.filter((card) => allowedCardIds.has(card.id))
-
-    if (!selectedCards.length) throw new Error('Selected cards were not found in the pack')
-
-    room.deck = shuffle([...room.deck, ...selectedCards.map((card) => ({
-      id: id('card'),
-      type: card.type,
-      custom_type_name: card.custom_type_name,
-      title: card.title,
-      content: card.content,
-      style: card.style,
-      is_custom: false,
-      pack_id: this.resolveImportedDeckPackId(pack, true),
-    }))])
   }
 
   private importRoomBackup(backup: DhRoomBackup): void {
@@ -1124,56 +624,10 @@ export class RoomDurableObject {
     const remapPlayerId = (playerId?: string): string | undefined => (
       playerId ? oldPlayerIdToCurrentId.get(playerId) : undefined
     )
-    const hands: Record<string, DhCard[]> = Object.fromEntries(activePlayers.map((player) => [player.id, []]))
-    const fallbackDeck: DhCard[] = []
-
-    for (const hand of backup.session.hands) {
-      const player = nicknameToPlayer.get(hand.owner)
-      if (player) {
-        hands[player.id] = [...hands[player.id], ...structuredClone(hand.cards)]
-      } else {
-        fallbackDeck.push(...structuredClone(hand.cards))
-      }
-    }
-
-    const importedLibrary = normalizeImportedPackLibrary(structuredClone(
-      backup.library.imported_packs.length
-        ? backup.library.imported_packs
-        : backup.library.packs ?? [],
-    ))
-    const importedSelectedPackIds = backup.library.selected_built_in_pack_ids.length
-      ? [...backup.library.selected_built_in_pack_ids]
-      : [...room.selected_built_in_pack_ids]
-    const deck = structuredClone(backup.session.deck ?? [])
-    const turnOrder = backup.session.turn_order
-      .map((nickname) => nicknameToPlayer.get(nickname)?.id)
-      .filter((playerId): playerId is string => Boolean(playerId))
-
-    const turnOrderIds = new Set(turnOrder)
-    for (const player of activePlayers) {
-      if (!turnOrderIds.has(player.id)) {
-        turnOrder.push(player.id)
-        turnOrderIds.add(player.id)
-      }
-    }
-
-    const currentTurnPlayerId = backup.session.current_turn_player
-      ? nicknameToPlayer.get(backup.session.current_turn_player)?.id ?? null
-      : null
     const importedRoomType = normalizeRoomType(backup.room.room_type)
 
     room.room_type = importedRoomType
     room.room_name = backup.room.name || room.room_name
-    room.mode = backup.session.mode
-    room.current_turn_player_id = currentTurnPlayerId
-    room.turn_order = turnOrder
-    room.hands = hands
-    room.deck = shuffle([...deck, ...fallbackDeck])
-    room.map_cards = structuredClone(backup.map.cards)
-    room.connections = structuredClone(backup.map.connections)
-    room.annotations = structuredClone(backup.map.annotations)
-    room.imported_pack_library = importedLibrary
-    room.selected_built_in_pack_ids = normalizeBuiltInPackSelection(importedSelectedPackIds, true)
     room.settings = {
       ...room.settings,
       imports_enabled: backup.settings?.imports_enabled ?? true,
@@ -1182,29 +636,8 @@ export class RoomDurableObject {
       gm_panel_theme: backup.settings?.gm_panel_theme ?? room.settings.gm_panel_theme,
     }
 
-    if (importedRoomType === 'resource-tracker') {
-      const tracker = normalizeResourceTrackerState(structuredClone(backup.resource_tracker))
-      room.resource_tracker = {
-        ...tracker,
-        columns: tracker.columns.map((column) => ({
-          ...column,
-          owner_player_id: remapPlayerId(column.owner_player_id) ?? hostPlayerId,
-        })),
-        pending_resource_requests: tracker.pending_resource_requests.map((request) => ({
-          ...request,
-          owner_player_id: remapPlayerId(request.owner_player_id) ?? hostPlayerId,
-          requested_by_player_id: remapPlayerId(request.requested_by_player_id) ?? hostPlayerId,
-        })),
-        activity_log: tracker.activity_log.map((item) => ({
-          ...item,
-          actor_player_id: remapPlayerId(item.actor_player_id),
-        })),
-      }
-      room.gm_panel = undefined
-      room.mobile_panel = undefined
-    } else if (importedRoomType === 'gm-panel') {
+    if (importedRoomType === 'gm-panel') {
       const panel = normalizeGmPanelStateWithHtml(structuredClone(backup.gm_panel))
-      room.resource_tracker = undefined
       room.gm_panel = {
         ...panel,
         activity_log: panel.activity_log.map((item) => ({
@@ -1215,7 +648,6 @@ export class RoomDurableObject {
       room.mobile_panel = undefined
     } else if (importedRoomType === 'mobile-panel') {
       const panel = normalizeMobilePanelState(structuredClone(backup.mobile_panel))
-      room.resource_tracker = undefined
       room.gm_panel = undefined
       room.mobile_panel = {
         ...panel,
@@ -1225,7 +657,6 @@ export class RoomDurableObject {
         })),
       }
     } else {
-      room.resource_tracker = undefined
       room.gm_panel = undefined
       room.mobile_panel = undefined
     }
@@ -1234,23 +665,6 @@ export class RoomDurableObject {
       ...player,
       is_host: player.id === hostPlayerId,
     }))
-    room.drawn_this_turn = Object.fromEntries(activePlayers.map((player) => [player.id, false]))
-    this.pendingDraws.clear()
-  }
-
-  private updateSelectedPacks(nextBuiltInPackIds: string[]): void {
-    const room = this.requireRoom()
-    if (room.mode === 'co-creation') {
-      throw new Error('Cannot change selected packs during co-creation')
-    }
-
-    const selectedBuiltInPackIds = normalizeBuiltInPackSelection(nextBuiltInPackIds, false)
-    if (!selectedBuiltInPackIds.length) {
-      throw new Error('Select at least one built-in pack')
-    }
-
-    room.selected_built_in_pack_ids = selectedBuiltInPackIds
-    this.rebuildDeckFromSelectedPacks(selectedBuiltInPackIds)
   }
 
   private updateSettings(updates: {
@@ -1266,202 +680,6 @@ export class RoomDurableObject {
         ? { resource_change_requires_approval: updates.resourceChangeRequiresApproval }
         : {}),
       ...(updates.gmPanelTheme !== undefined ? { gm_panel_theme: updates.gmPanelTheme } : {}),
-    }
-  }
-
-  private importTrackerCharacter(player: Player, fileName: string, sheet: ResourceTrackerSheet): void {
-    const tracker = this.requireResourceTrackerState()
-    const now = new Date().toISOString()
-    const normalizedSheet = normalizeResourceTrackerSheet(sheet, fileName)
-    const existing = tracker.columns.find((column) => column.owner_player_id === player.id)
-
-    if (existing) {
-      existing.sheet = normalizedSheet
-      existing.updated_at = now
-      this.appendTrackerLog('sheet-change', `${player.nickname} 重新导入了角色卡`, player)
-      return
-    }
-
-    const column: ResourceTrackerCharacterColumn = {
-      id: id('tracker_col'),
-      owner_player_id: player.id,
-      imported_at: now,
-      updated_at: now,
-      sheet: normalizedSheet,
-    }
-
-    tracker.columns.push(column)
-    tracker.column_order.push(column.id)
-    this.appendTrackerLog('sheet-change', `${player.nickname} 导入了角色卡 ${normalizedSheet.character_name || normalizedSheet.file_name}`, player)
-  }
-
-  private updateTrackerSheet(player: Player, columnId: string, sheet: ResourceTrackerSheet): void {
-    const column = this.requireTrackerColumn(columnId)
-    this.requireTrackerColumnWritePermission(player, column)
-    column.sheet = normalizeResourceTrackerSheet(sheet, sheet.file_name)
-    column.updated_at = new Date().toISOString()
-    this.appendTrackerLog('sheet-change', `${player.nickname} 更新了 ${column.sheet.character_name} 的详细信息`, player)
-  }
-
-  private updateTrackerResource(
-    player: Player,
-    columnId: string,
-    resourceKey: ResourceTrackerResourceKey,
-    nextValue: number | boolean[],
-  ): void {
-    const tracker = this.requireResourceTrackerState()
-    const column = this.requireTrackerColumn(columnId)
-
-    const currentValue = cloneTrackerResourceValue(getTrackerResourceValue(column.sheet, resourceKey))
-    const normalizedValue = normalizeTrackerResourceValue(column.sheet, resourceKey, nextValue)
-
-    if (isTrackerResourceValueEqual(currentValue, normalizedValue)) {
-      return
-    }
-
-    if (this.requireRoom().settings.resource_change_requires_approval) {
-      tracker.pending_resource_requests.push({
-        id: id('tracker_req'),
-        column_id: column.id,
-        owner_player_id: column.owner_player_id,
-        requested_by_player_id: player.id,
-        requested_by_name: player.nickname,
-        resource_key: resourceKey,
-        current_value: currentValue,
-        next_value: cloneTrackerResourceValue(normalizedValue),
-        created_at: new Date().toISOString(),
-        status: 'pending',
-      })
-      this.appendTrackerLog(
-        'approval',
-        `${player.nickname} 申请将 ${column.sheet.character_name} 的${getTrackerResourceLabel(resourceKey)}从 ${formatTrackerResourceValue(currentValue)} 调整为 ${formatTrackerResourceValue(normalizedValue)}`,
-        player,
-      )
-      return
-    }
-
-    setTrackerResourceValue(column.sheet, resourceKey, normalizedValue)
-    column.updated_at = new Date().toISOString()
-    this.appendTrackerLog(
-      'resource-change',
-      `${player.nickname} 将 ${column.sheet.character_name} 的${getTrackerResourceLabel(resourceKey)}从 ${formatTrackerResourceValue(currentValue)} 调整为 ${formatTrackerResourceValue(normalizedValue)}`,
-      player,
-    )
-  }
-
-  private updateTrackerFear(player: Player, value: number): void {
-    const tracker = this.requireResourceTrackerState()
-    const previous = tracker.fear.value
-    tracker.fear.value = clamp(Math.round(finiteNumber(value, previous)), 0, tracker.fear.max)
-    if (previous !== tracker.fear.value) {
-      this.appendTrackerLog('resource-change', `${player.nickname} 将恐惧点从 ${previous} 调整为 ${tracker.fear.value}`, player)
-    }
-  }
-
-  private createTrackerCountdown(player: Player, name: string, max: number): void {
-    const tracker = this.requireResourceTrackerState()
-    const normalizedMax = clamp(Math.round(finiteNumber(max, 4)), 2, 12)
-    const normalizedName = cleanText(name, `倒计时 ${tracker.countdowns.length + 1}`, 40)
-    const now = new Date().toISOString()
-
-    tracker.countdowns.push({
-      id: id('tracker_clock'),
-      name: normalizedName,
-      value: 0,
-      max: normalizedMax,
-      created_at: now,
-      updated_at: now,
-    })
-
-    this.appendTrackerLog('system', `${player.nickname} 新增了倒计时「${normalizedName}」(0/${normalizedMax})`, player)
-  }
-
-  private updateTrackerCountdown(player: Player, countdownId: string, value: number): void {
-    const countdown = this.requireTrackerCountdown(countdownId)
-    const previous = countdown.value
-    countdown.value = clamp(Math.round(finiteNumber(value, previous)), 0, countdown.max)
-
-    if (previous === countdown.value) {
-      return
-    }
-
-    countdown.updated_at = new Date().toISOString()
-    this.appendTrackerLog(
-      'resource-change',
-      `${player.nickname} 将倒计时「${countdown.name}」从 ${previous}/${countdown.max} 调整为 ${countdown.value}/${countdown.max}`,
-      player,
-    )
-  }
-
-  private deleteTrackerCountdown(player: Player, countdownId: string): void {
-    const tracker = this.requireResourceTrackerState()
-    const countdownIndex = tracker.countdowns.findIndex((item) => item.id === countdownId)
-    if (countdownIndex < 0) throw new Error('Unknown countdown')
-
-    const [countdown] = tracker.countdowns.splice(countdownIndex, 1)
-    this.appendTrackerLog('system', `${player.nickname} 删除了倒计时「${countdown.name}」`, player)
-  }
-
-  private moveTrackerColumn(player: Player, columnId: string, direction: 'left' | 'right'): void {
-    const tracker = this.requireResourceTrackerState()
-    const currentIndex = tracker.column_order.indexOf(columnId)
-    if (currentIndex < 0) throw new Error('Unknown character column')
-
-    const targetIndex = direction === 'left' ? currentIndex - 1 : currentIndex + 1
-    if (targetIndex < 0 || targetIndex >= tracker.column_order.length) return
-
-    const [column] = tracker.column_order.splice(currentIndex, 1)
-    tracker.column_order.splice(targetIndex, 0, column)
-
-    const movedColumn = this.requireTrackerColumn(columnId)
-    this.appendTrackerLog('system', `${player.nickname} 调整了 ${movedColumn.sheet.character_name} 的列位置`, player)
-  }
-
-  private resolveTrackerRequest(player: Player, requestIdToResolve: string, approved: boolean): void {
-    const tracker = this.requireResourceTrackerState()
-    const requestIndex = tracker.pending_resource_requests.findIndex((request) => request.id === requestIdToResolve)
-    if (requestIndex < 0) throw new Error('Unknown resource change request')
-
-    const request = tracker.pending_resource_requests[requestIndex]
-    tracker.pending_resource_requests.splice(requestIndex, 1)
-
-    const column = this.requireTrackerColumn(request.column_id)
-    if (approved) {
-      const normalizedValue = normalizeTrackerResourceValue(column.sheet, request.resource_key, request.next_value)
-      setTrackerResourceValue(column.sheet, request.resource_key, normalizedValue)
-      column.updated_at = new Date().toISOString()
-      this.appendTrackerLog(
-        'approval',
-        `${player.nickname} 批准了 ${request.requested_by_name} 对 ${column.sheet.character_name} 的${getTrackerResourceLabel(request.resource_key)}修改：${formatTrackerResourceValue(request.current_value)} -> ${formatTrackerResourceValue(normalizedValue)}`,
-        player,
-      )
-      return
-    }
-
-    this.appendTrackerLog(
-      'approval',
-      `${player.nickname} 拒绝了 ${request.requested_by_name} 对 ${column.sheet.character_name} 的${getTrackerResourceLabel(request.resource_key)}修改申请`,
-      player,
-    )
-  }
-
-  private appendTrackerLog(
-    kind: ResourceTrackerActivityLogItem['kind'],
-    message: string,
-    actor?: Player,
-  ): void {
-    const tracker = this.requireResourceTrackerState()
-    tracker.activity_log.push({
-      id: id('tracker_log'),
-      created_at: new Date().toISOString(),
-      actor_player_id: actor?.id,
-      actor_name: actor?.nickname ?? '系统',
-      kind,
-      message,
-    })
-
-    if (tracker.activity_log.length > 120) {
-      tracker.activity_log = tracker.activity_log.slice(-120)
     }
   }
 
@@ -1767,188 +985,6 @@ export class RoomDurableObject {
     }
   }
 
-  private rebuildDeckFromSelectedPacks(selectedBuiltInPackIds: string[]): void {
-    const room = this.requireRoom()
-    const reservedBuiltInCardIds = new Set<string>()
-
-    for (const card of room.map_cards) {
-      if (card.pack_id && isBuiltInPackId(card.pack_id)) {
-        reservedBuiltInCardIds.add(card.id)
-      }
-    }
-
-    for (const hand of Object.values(room.hands)) {
-      for (const card of hand) {
-        if (card.pack_id && isBuiltInPackId(card.pack_id)) {
-          reservedBuiltInCardIds.add(card.id)
-        }
-      }
-    }
-
-    const builtInDeck = createDeckFromBuiltInPackIds(selectedBuiltInPackIds)
-      .filter((card) => !reservedBuiltInCardIds.has(card.id))
-    const importedAndCustomDeck = room.deck.filter((card) => !card.pack_id || !isBuiltInPackId(card.pack_id))
-
-    room.deck = shuffle([...builtInDeck, ...importedAndCustomDeck])
-  }
-
-  private instantiatePackCards(pack: RoomPackLibraryItem, manualImport = false): DhCard[] {
-    return pack.cards.map((card) => ({
-      id: id('card'),
-      type: card.type,
-      custom_type_name: card.custom_type_name,
-      title: card.title,
-      content: card.content,
-      style: card.style,
-      is_custom: false,
-      pack_id: this.resolveImportedDeckPackId(pack, manualImport),
-    }))
-  }
-
-  private resolveImportedDeckPackId(pack: RoomPackLibraryItem, manualImport: boolean): string {
-    if (!manualImport || pack.source !== 'built-in') return pack.id
-    return `manual:${pack.id}`
-  }
-
-  private addConnection(connection: { from_card_id: string; to_card_id: string; color: 'red' | 'green' | 'gray'; label?: string }): void {
-    const room = this.requireRoom()
-    this.assertConnectionEndpoints(connection.from_card_id, connection.to_card_id)
-
-    const exists = room.connections.some((item) => (
-      item.from_card_id === connection.from_card_id && item.to_card_id === connection.to_card_id
-    ))
-    if (exists) {
-      throw new Error('Connection already exists between these cards')
-    }
-
-    room.connections.push({
-      id: id('conn'),
-      from_card_id: connection.from_card_id,
-      to_card_id: connection.to_card_id,
-      color: connection.color,
-      label: cleanOptionalText(connection.label, 40),
-    })
-  }
-
-  private updateConnection(connectionId: string, updates: Partial<{ color: 'red' | 'green' | 'gray'; label?: string }>): void {
-    const room = this.requireRoom()
-    const index = room.connections.findIndex((item) => item.id === connectionId)
-    if (index < 0) throw new Error('Unknown connection')
-
-    const existing = room.connections[index]
-    room.connections[index] = {
-      ...existing,
-      ...(updates.color ? { color: updates.color } : {}),
-      ...(Object.prototype.hasOwnProperty.call(updates, 'label')
-        ? { label: cleanOptionalText(updates.label, 40) }
-        : {}),
-    }
-  }
-
-  private lockCard(player: Player, cardId: string): void {
-    const card = this.requireMapCard(cardId)
-    if (card.locked_by_player_id && card.locked_by_player_id !== player.id) throw new Error('Card is locked by another player')
-    card.locked_by = player.nickname
-    card.locked_by_player_id = player.id
-    card.locked_until = new Date(Date.now() + 30_000).toISOString()
-  }
-
-  private unlockCard(player: Player, cardId: string): void {
-    const card = this.requireMapCard(cardId)
-    if (card.locked_by_player_id && card.locked_by_player_id !== player.id) return
-    delete card.locked_by
-    delete card.locked_by_player_id
-    delete card.locked_until
-  }
-
-  private updateMapCard(cardId: string, updates: MapCardUpdateInput): void {
-    const room = this.requireRoom()
-    room.map_cards = room.map_cards.map((card) => {
-      if (card.id !== cardId) return card
-
-      const { territory, ...restUpdates } = updates
-      const nextCard: MapCard = { ...card, ...restUpdates }
-
-      if (!Object.prototype.hasOwnProperty.call(updates, 'territory')) {
-        return nextCard
-      }
-
-      if (territory) {
-        return { ...nextCard, territory }
-      }
-
-      delete nextCard.territory
-      return nextCard
-    })
-  }
-
-  private moveMapCard(cardId: string, x: number, y: number): void {
-    this.updateMapCard(cardId, { x, y })
-  }
-
-  private addAnnotation(annotation: { id?: string; text: string; x: number; y: number; font_size: number }): void {
-    const room = this.requireRoom()
-    const annotationId = typeof annotation.id === 'string' && annotation.id.trim() ? annotation.id.trim() : id('ann')
-    const exists = room.annotations.some((item) => item.id === annotationId)
-    if (exists) {
-      throw new Error('Annotation id already exists')
-    }
-
-    room.annotations.push({
-      id: annotationId,
-      text: cleanText(annotation.text, '新标注', 280),
-      x: finiteNumber(annotation.x, 0),
-      y: finiteNumber(annotation.y, 0),
-      font_size: clamp(Math.round(finiteNumber(annotation.font_size, 18)), 12, 48),
-    })
-  }
-
-  private updateAnnotation(annotationId: string, updates: Partial<{ text: string; x: number; y: number; font_size: number }>): void {
-    const annotation = this.requireAnnotation(annotationId)
-
-    if (typeof updates.text === 'string') {
-      annotation.text = cleanText(updates.text, annotation.text, 280)
-    }
-    if (typeof updates.x === 'number') {
-      annotation.x = finiteNumber(updates.x, annotation.x)
-    }
-    if (typeof updates.y === 'number') {
-      annotation.y = finiteNumber(updates.y, annotation.y)
-    }
-    if (typeof updates.font_size === 'number') {
-      annotation.font_size = clamp(Math.round(finiteNumber(updates.font_size, annotation.font_size)), 12, 48)
-    }
-  }
-
-  private resizeMapCard(cardId: string, width: number, height: number): void {
-    const card = this.requireMapCard(cardId)
-    this.updateMapCard(cardId, normalizeCardDimensions(card.type, width, height))
-  }
-
-  private advanceTurn(skipPlayerId?: string): void {
-    const room = this.requireRoom()
-    const onlineOrder = room.turn_order.filter(id => (
-      id !== skipPlayerId && room.players.find(player => player.id === id)?.is_online
-    ))
-    if (!onlineOrder.length) {
-      room.current_turn_player_id = null
-      return
-    }
-
-    const current = room.current_turn_player_id
-    const currentIndex = current ? onlineOrder.indexOf(current) : -1
-    const nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % onlineOrder.length
-    room.current_turn_player_id = onlineOrder[nextIndex]
-    room.drawn_this_turn[room.current_turn_player_id] = false
-  }
-
-  private nextOnlinePlayer(preferred: string | null): string | null {
-    const room = this.requireRoom()
-    const online = room.turn_order.filter(id => room.players.find(player => player.id === id)?.is_online)
-    if (!online.length) return null
-    return preferred && online.includes(preferred) ? preferred : online[0]
-  }
-
   private async disconnect(socket: WebSocket): Promise<void> {
     const session = this.sockets.get(socket)
     if (!session) return
@@ -1978,8 +1014,6 @@ export class RoomDurableObject {
 
   private async exportDhRoom(): Promise<Response> {
     const room = await this.mustLoad()
-    const host = room.players.find(player => player.id === room.host_player_id)
-    const currentTurn = room.players.find(player => player.id === room.current_turn_player_id)
     const backup: DhRoomBackup = {
       format: 'dhroom',
       version: 1,
@@ -1991,30 +1025,7 @@ export class RoomDurableObject {
         created_at: room.created_at,
         expires_at: room.expires_at,
       },
-      session: {
-        mode: room.mode,
-        current_host: host?.nickname ?? '',
-        current_turn_player: currentTurn?.nickname ?? null,
-        turn_order: room.turn_order
-          .map(id => room.players.find(player => player.id === id)?.nickname)
-          .filter((name): name is string => Boolean(name)),
-        deck: room.deck,
-        hands: Object.entries(room.hands).map(([ownerId, cards]) => ({
-          owner: room.players.find(player => player.id === ownerId)?.nickname ?? ownerId,
-          cards,
-        })),
-      },
-      map: {
-        cards: room.map_cards,
-        connections: room.connections,
-        annotations: room.annotations,
-      },
-      library: {
-        imported_packs: room.imported_pack_library,
-        selected_built_in_pack_ids: room.selected_built_in_pack_ids,
-      },
       settings: room.settings,
-      resource_tracker: room.resource_tracker,
       gm_panel: room.gm_panel,
       mobile_panel: room.mobile_panel,
       players: room.players.map(player => ({
@@ -2195,7 +1206,6 @@ export class RoomDurableObject {
     }
 
     this.sockets.clear()
-    this.pendingDraws.clear()
     this.room = null
     await this.ctx.storage.deleteAlarm()
     await this.ctx.storage.deleteAll()
@@ -2209,63 +1219,30 @@ export class RoomDurableObject {
   private migrateRoomState(room: RoomState): RoomState {
     const migrated = room as RoomState & {
       room_type?: RoomType
-      resource_tracker?: ResourceTrackerState
       gm_panel?: GmPanelState
       mobile_panel?: MobilePanelState
-      imported_pack_library?: RoomPackLibraryItem[]
-      selected_built_in_pack_ids?: string[]
-      pack_library?: RoomPackLibraryItem[]
       settings?: {
         imports_enabled?: boolean
         resource_change_requires_approval?: boolean
         gm_panel_theme?: 'gold-abyss' | 'jade-hex' | 'amethyst-ember'
       }
-      selected_pack_ids?: string[]
     }
-    const importedPackLibrary = normalizeImportedPackLibrary(
-      migrated.imported_pack_library?.length ? migrated.imported_pack_library : migrated.pack_library ?? [],
-    )
-    const selectedBuiltInPackIds = normalizeBuiltInPackSelection(
-      migrated.selected_built_in_pack_ids?.length ? migrated.selected_built_in_pack_ids : migrated.selected_pack_ids,
-      true,
-    )
-    const {
-      imported_pack_library: _currentImportedPackLibrary,
-      selected_built_in_pack_ids: _currentSelectedBuiltInPackIds,
-      pack_library: _legacyPackLibrary,
-      selected_pack_ids: _legacySelectedPackIds,
-      ...baseRoom
-    } = migrated
 
     return {
-      ...baseRoom,
-      deck: room.deck.map((card) => normalizeStoredCard(card)),
-      hands: Object.fromEntries(
-        Object.entries(room.hands).map(([playerId, cards]) => [playerId, cards.map((card) => normalizeStoredCard(card))]),
-      ),
-      map_cards: room.map_cards.map((card) => normalizeStoredCard(card) as MapCard),
+      ...migrated,
       settings: {
         imports_enabled: migrated.settings?.imports_enabled ?? true,
         resource_change_requires_approval: migrated.settings?.resource_change_requires_approval ?? false,
         battle_panel_visibility: 'shared',
         gm_panel_theme: migrated.settings?.gm_panel_theme ?? 'gold-abyss',
       },
-      room_type: migrated.room_type ?? 'co-creation',
-      resource_tracker: (migrated.room_type ?? 'co-creation') === 'resource-tracker'
-        ? normalizeResourceTrackerState(migrated.resource_tracker)
-        : undefined,
-      gm_panel: (migrated.room_type ?? 'co-creation') === 'gm-panel'
+      room_type: normalizeRoomType(migrated.room_type),
+      gm_panel: normalizeRoomType(migrated.room_type) === 'gm-panel'
         ? normalizeGmPanelState(migrated.gm_panel)
         : undefined,
-      mobile_panel: (migrated.room_type ?? 'co-creation') === 'mobile-panel'
+      mobile_panel: normalizeRoomType(migrated.room_type) === 'mobile-panel'
         ? normalizeMobilePanelState(migrated.mobile_panel)
         : undefined,
-      imported_pack_library: importedPackLibrary.map((pack) => ({
-        ...pack,
-        source: 'imported',
-        cards: pack.cards.map((card) => normalizeStoredPackCard(card)),
-      })),
-      selected_built_in_pack_ids: Array.from(new Set(selectedBuiltInPackIds)),
     }
   }
 
@@ -2273,33 +1250,6 @@ export class RoomDurableObject {
     const player = this.requireRoom().players.find(item => item.id === playerId)
     if (!player) throw new Error('Unknown player')
     return player
-  }
-
-  private requireMapCard(cardId: string): MapCard {
-    const card = this.requireRoom().map_cards.find(item => item.id === cardId)
-    if (!card) throw new Error('Unknown map card')
-    return card
-  }
-
-  private requirePackLibraryItem(packId: string): RoomPackLibraryItem {
-    const pack = createPackLibrary(this.requireRoom().imported_pack_library).find((item) => item.id === packId)
-    if (!pack) throw new Error('Unknown pack')
-    return pack
-  }
-
-  private requireResourceTrackerRoom(): void {
-    if (this.requireRoom().room_type !== 'resource-tracker') {
-      throw new Error('Resource tracker room required')
-    }
-  }
-
-  private requireResourceTrackerState(): ResourceTrackerState {
-    const room = this.requireRoom()
-    if (room.room_type !== 'resource-tracker') {
-      throw new Error('Resource tracker room required')
-    }
-    room.resource_tracker ??= createEmptyResourceTrackerState()
-    return room.resource_tracker
   }
 
   private requireGmPanelRoom(): void {
@@ -2360,53 +1310,10 @@ export class RoomDurableObject {
     return countdown
   }
 
-  private requireTrackerColumn(columnId: string): ResourceTrackerCharacterColumn {
-    const tracker = this.requireResourceTrackerState()
-    const column = tracker.columns.find((item) => item.id === columnId)
-    if (!column) throw new Error('Unknown character column')
-    return column
-  }
-
-  private requireTrackerCountdown(countdownId: string): ResourceTrackerCountdown {
-    const tracker = this.requireResourceTrackerState()
-    const countdown = tracker.countdowns.find((item) => item.id === countdownId)
-    if (!countdown) throw new Error('Unknown countdown')
-    return countdown
-  }
-
-  private requireTrackerColumnWritePermission(_player: Player, _column: ResourceTrackerCharacterColumn): void {
-    return
-  }
-
   private requireImportsEnabled(): void {
     if (!this.requireRoom().settings.imports_enabled) {
       throw new Error('Import feature is disabled in room settings')
     }
-  }
-
-  private requireCoCreation(): void {
-    if (this.requireRoom().mode !== 'co-creation') throw new Error('Co-creation mode required')
-  }
-
-  private requireCurrentTurn(player: Player): void {
-    this.requireCoCreation()
-    if (this.requireRoom().current_turn_player_id !== player.id) throw new Error('It is not your turn')
-  }
-
-  private requireUnlockedOrOwner(player: Player, cardId: string): void {
-    const card = this.requireMapCard(cardId)
-    if (card.locked_by_player_id && card.locked_by_player_id !== player.id) {
-      throw new Error('Card is locked by another player')
-    }
-  }
-
-  private assertConnectionEndpoints(fromCardId: string, toCardId: string): void {
-    if (fromCardId === toCardId) {
-      throw new Error('Cannot connect a card to itself')
-    }
-
-    this.requireMapCard(fromCardId)
-    this.requireMapCard(toCardId)
   }
 
   private send(socket: WebSocket, message: unknown): void {
@@ -2428,11 +1335,6 @@ export class RoomDurableObject {
     }
   }
 
-  private requireAnnotation(annotationId: string) {
-    const annotation = this.requireRoom().annotations.find((item) => item.id === annotationId)
-    if (!annotation) throw new Error('Unknown annotation')
-    return annotation
-  }
 }
 
 // _repairKnownGmLogMessage_STUB (('鍒犻櫎浜嗚鑹插崱', '删除了角色卡')

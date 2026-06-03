@@ -5,32 +5,19 @@
  */
 
 import { decodeMobilePanelCharacterCode } from './mobile-panel-code'
-import { normalizeCardType } from './validators'
 import type {
-  CardType,
-  DeckCardType,
-  DhCard,
-  GmPanelActivityLogItem,
   GmPanelCharacterSheetEntry,
   GmPanelResourceKey,
   GmPanelState,
   ImportedCharacterData,
-  MapCard,
-  MobilePanelActivityLogItem,
   MobilePanelCharacterEntry,
   MobilePanelExperience,
   MobilePanelResourceKey,
   MobilePanelState,
   Player,
-  ResourceTrackerActivityLogItem,
-  ResourceTrackerCharacterColumn,
   ResourceTrackerCountdown,
   ResourceTrackerResourceKey,
   ResourceTrackerSheet,
-  ResourceTrackerState,
-  RoleCardDetails,
-  RoomPackLibraryItem,
-  RoomState,
   RoomType,
 } from './types'
 
@@ -87,65 +74,6 @@ export function generateInviteCode(): string {
   return Array.from(bytes, byte => alphabet[byte % alphabet.length]).join('')
 }
 
-// ---------------------------------------------------------------------------
-// Card utilities
-// ---------------------------------------------------------------------------
-
-export function normalizeStoredCustomTypeName(type: CardType, customTypeName: unknown): string | undefined {
-  if (type !== 'Custom') return undefined
-  return cleanOptionalText(customTypeName, 20)
-}
-
-export function normalizeStoredCard<T extends { type: CardType; custom_type_name?: string; role_details?: RoleCardDetails }>(card: T): T {
-  const normalizedType = normalizeCardType(card.type) ?? (card.role_details ? 'Role' : 'Hook')
-  return {
-    ...card,
-    type: normalizedType,
-    custom_type_name: normalizeStoredCustomTypeName(normalizedType, card.custom_type_name),
-    ...(normalizedType === 'Role' ? {} : { role_details: undefined }),
-  }
-}
-
-export function normalizeStoredPackCard<T extends { type: DeckCardType; custom_type_name?: string }>(card: T): T {
-  const normalizedType = normalizeCardType(card.type)
-  const nextType = normalizedType === 'Role' || !normalizedType ? 'Hook' : normalizedType
-  return {
-    ...card,
-    type: nextType,
-    custom_type_name: normalizeStoredCustomTypeName(nextType, card.custom_type_name),
-  }
-}
-
-export function stripMapFields(card: MapCard): DhCard {
-  return {
-    id: card.id,
-    type: card.type,
-    custom_type_name: card.custom_type_name,
-    title: card.title,
-    content: card.content,
-    style: card.style,
-    is_custom: card.is_custom,
-    pack_id: card.pack_id,
-    role_details: card.role_details,
-  }
-}
-
-export function buildRoleCard(player: Player): DhCard {
-  return {
-    id: id('role'),
-    type: 'Role',
-    title: `${player.nickname}的角色`,
-    content: '记录角色从创建到与他人相聚前最重要的经历、目标或秘密。',
-    style: '#f59e0b',
-    is_custom: false,
-    role_details: {
-      player_name: player.nickname,
-      profession: '',
-      ancestry: '',
-      community: '',
-    },
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Player utilities
@@ -168,27 +96,13 @@ export function makePlayer(idValue: string, nickname: string, color: string, isH
 // ---------------------------------------------------------------------------
 
 export function normalizeRoomType(value: RoomType | undefined): RoomType {
-  if (value === 'resource-tracker' || value === 'gm-panel' || value === 'mobile-panel') return value
-  return 'co-creation'
+  if (value === 'mobile-panel') return value
+  return 'gm-panel'
 }
 
 // ---------------------------------------------------------------------------
-// Resource tracker state factories and normalizers
+// Shared countdown normalizer (used by gm-panel and mobile-panel)
 // ---------------------------------------------------------------------------
-
-export function createEmptyResourceTrackerState(): ResourceTrackerState {
-  return {
-    fear: {
-      value: 0,
-      max: 12,
-    },
-    countdowns: [],
-    columns: [],
-    column_order: [],
-    pending_resource_requests: [],
-    activity_log: [],
-  }
-}
 
 export function normalizeResourceTrackerCountdown(
   countdown: Partial<ResourceTrackerCountdown> | undefined,
@@ -203,29 +117,6 @@ export function normalizeResourceTrackerCountdown(
     max,
     created_at: cleanText(countdown?.created_at, now, 80),
     updated_at: cleanText(countdown?.updated_at, countdown?.created_at || now, 80),
-  }
-}
-
-export function normalizeResourceTrackerState(value: ResourceTrackerState | undefined): ResourceTrackerState {
-  if (!value) return createEmptyResourceTrackerState()
-
-  return {
-    fear: {
-      value: clamp(Math.round(finiteNumber(value.fear?.value, 0)), 0, 12),
-      max: 12,
-    },
-    countdowns: Array.isArray(value.countdowns)
-      ? value.countdowns.map((countdown, index) => normalizeResourceTrackerCountdown(countdown, index))
-      : [],
-    columns: Array.isArray(value.columns)
-      ? value.columns.map((column) => ({
-        ...column,
-        sheet: normalizeResourceTrackerSheet(column.sheet, column.sheet?.file_name),
-      }))
-      : [],
-    column_order: Array.isArray(value.column_order) ? value.column_order.filter((item) => typeof item === 'string') : [],
-    pending_resource_requests: Array.isArray(value.pending_resource_requests) ? value.pending_resource_requests : [],
-    activity_log: Array.isArray(value.activity_log) ? value.activity_log.slice(-120) : [],
   }
 }
 
