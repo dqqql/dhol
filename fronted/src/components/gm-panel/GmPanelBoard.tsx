@@ -189,6 +189,7 @@ export function GmPanelBoard() {
       const iframe = iframeRefs.current[entry.id]
       if (!iframe?.contentWindow) return
 
+      // srcDoc iframes have a null origin, so '*' is the only valid target here
       iframe.contentWindow.postMessage({
         type: 'dhol-gm-sync-resources',
         sheetId: entry.id,

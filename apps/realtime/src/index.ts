@@ -50,6 +50,8 @@ export interface Env {
   DHGC_DB?: D1Database
   SESSION_SECRET: string
   PUBLIC_API_BASE?: string
+  /** 生产环境应设置为前端域名，如 https://dhol.pages.dev。不设置则允许所有来源（仅开发环境可接受）。 */
+  ALLOWED_ORIGIN?: string
 }
 
 type MapCardUpdateInput = Omit<Partial<MapCard>, 'territory'> & {
@@ -69,6 +71,8 @@ interface SocketSession {
   nickname: string
 }
 
+let _corsAllowedOrigin = '*'
+
 const PLAYER_COLORS = ['#f43f5e', '#2563eb', '#f59e0b', '#10b981', '#a855f7', '#06b6d4']
 const ROOM_TTL_MS = 3 * 24 * 60 * 60 * 1000
 const DRAW_TYPES: DeckCardType[] = ['Location', 'Feature', 'Hook']
@@ -79,6 +83,7 @@ const SRD_CHARACTER_SHEET_ERROR = '请使用srd车卡器导出的角色卡'
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    _corsAllowedOrigin = env.ALLOWED_ORIGIN ?? '*'
     if (request.method === 'OPTIONS') return emptyCors()
 
     const url = new URL(request.url)
@@ -206,11 +211,14 @@ async function roomSessionResponse(request: Request, env: Env, state: RoomState,
 }
 
 export class RoomDurableObject {
+
   private room: RoomState | null = null
   private sockets = new Map<WebSocket, SocketSession>()
   private pendingDraws = new Map<string, DhCard[]>()
 
-  constructor(private readonly ctx: DurableObjectState, private readonly env: Env) {}
+  constructor(private readonly ctx: DurableObjectState, private readonly env: Env) {
+    _corsAllowedOrigin = env.ALLOWED_ORIGIN ?? '*'
+  }
 
   async fetch(request: Request): Promise<Response> {
     try {
@@ -3659,7 +3667,7 @@ function emptyCors(): Response {
 
 function withCors(response: Response): Response {
   const next = new Response(response.body, response)
-  next.headers.set('access-control-allow-origin', '*')
+  next.headers.set('access-control-allow-origin', _corsAllowedOrigin)
   next.headers.set('access-control-allow-methods', 'GET,POST,OPTIONS')
   next.headers.set('access-control-allow-headers', 'content-type,authorization')
   return next

@@ -6,13 +6,16 @@ import { ImportModal } from '@/components/ui/ImportModal'
 import { RoomSettingsModal } from '@/components/ui/RoomSettingsModal'
 import { ToastContainer } from '@/components/ui/Toast'
 import { useStore } from '@/store/useStore'
+import { useShallow } from 'zustand/react/shallow'
 
 interface RoomPageProps {
   onLeaveRoom: () => void
 }
 
 export function RoomPage({ onLeaveRoom }: RoomPageProps) {
-  const { room, connectionStatus, manualReconnect } = useStore()
+  const { room, connectionStatus, manualReconnect } = useStore(
+    useShallow((s) => ({ room: s.room, connectionStatus: s.connectionStatus, manualReconnect: s.manualReconnect }))
+  )
   const [topBarHeight, setTopBarHeight] = useState(52)
 
   if (!room) {

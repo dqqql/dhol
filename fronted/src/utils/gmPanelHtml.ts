@@ -66,8 +66,8 @@ export function getGmSheetResourceSnapshot(entry: GmPanelCharacterSheetEntry): G
   }
 }
 
-export function buildGmSheetSrcDoc(sheetId: string, html: string, initialResources?: GmSheetResourceSnapshot): string {
-  const bridgeScript = createBridgeScript(sheetId, initialResources)
+export function buildGmSheetSrcDoc(sheetId: string, html: string, initialResources?: GmSheetResourceSnapshot, parentOrigin = window.location.origin): string {
+  const bridgeScript = createBridgeScript(sheetId, initialResources, parentOrigin)
   const withStyles = injectIntoDocument(html, '</head>', BRIDGE_STYLES)
   return injectIntoDocument(withStyles, '</body>', bridgeScript)
 }
@@ -84,7 +84,7 @@ function injectIntoDocument(source: string, closingTag: string, injection: strin
   return `${source.slice(0, index)}${injection}${source.slice(index)}`
 }
 
-function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceSnapshot) {
+function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceSnapshot, parentOrigin = '*') {
   const normalizedInitialResources: GmSheetResourceSnapshot = {
     hope: initialResources?.hope ?? 0,
     proficiency: [...(initialResources?.proficiency ?? [])],
@@ -98,6 +98,7 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
     <script>
       (function () {
         var SHEET_ID = ${JSON.stringify(sheetId)};
+        var PARENT_ORIGIN = ${JSON.stringify(parentOrigin)};
         var INITIAL_RESOURCES = ${JSON.stringify(normalizedInitialResources)};
         var RESOURCE_KEYS = ['hope', 'proficiency', 'hp', 'stress', 'armor_slots', 'gold'];
         var resourceMap = createEmptyResourceMap();
@@ -260,14 +261,14 @@ function createBridgeScript(sheetId: string, initialResources?: GmSheetResourceS
             sheetId: SHEET_ID,
             resourceKey: resourceKey,
             value: value,
-          }, '*');
+          }, PARENT_ORIGIN);
         }
 
         function postReplayFailure() {
           parent.postMessage({
             type: 'dhol-gm-resource-replay-failed',
             sheetId: SHEET_ID,
-          }, '*');
+          }, PARENT_ORIGIN);
         }
 
         function wireResourceClicks() {
