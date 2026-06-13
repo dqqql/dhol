@@ -86,15 +86,42 @@ describe('rollDicePool', () => {
     })
   })
 
-  it('returns one result per repeat for a visual multi-roll', () => {
+  it('sums every repeated roll into a single total, counting the modifier once', () => {
     const rolled = rollDicePool({
       mode: 'standard',
-      modifier_mode: 'advantage',
-      repeat: 2,
-      modifier: 3,
-      dice: [{ sides: 20, count: 1 }],
-    }, sequence([0, 0.5, 0.25, 0.75]))
+      modifier_mode: 'normal',
+      repeat: 3,
+      modifier: 2,
+      dice: [{ sides: 6, count: 2 }],
+    }, sequence([0, 0.5, 0.5, 0.999, 0.999, 0]))
 
-    expect(rolled.results.map((result) => result.total)).toEqual([14, 19])
+    // 三次掷出 2d6：[1,4] [4,6] [6,1] → 骰子合计 22，再加固定加值 2
+    expect(rolled.results).toHaveLength(1)
+    expect(rolled.results[0]).toMatchObject({
+      total: 24,
+      critical: false,
+      terms: [{ notation: '6d6', sides: 6, count: 6, subtotal: 22 }],
+    })
+    expect(rolled.results[0].terms[0].rolls).toEqual([1, 4, 4, 6, 6, 1])
+  })
+
+  it('merges repeated duality rolls and recomputes the outcome from the summed dice', () => {
+    const rolled = rollDicePool({
+      mode: 'dual',
+      modifier_mode: 'normal',
+      repeat: 2,
+      modifier: 1,
+      dice: [],
+    }, sequence([0.74, 0.24, 0.1, 0.9]))
+
+    // 两次匕首之心：希望 9+2=11，恐惧 3+11=14 → 恐惧结果，总计 11+14+1
+    expect(rolled.results).toHaveLength(1)
+    expect(rolled.results[0]).toMatchObject({
+      hope: 11,
+      fear: 14,
+      outcome: 'fear',
+      total: 26,
+      critical: false,
+    })
   })
 })

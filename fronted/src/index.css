@@ -1264,28 +1264,6 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   line-height: 1.6;
 }
 
-.dice-stage__multi-results {
-  width: 100%;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-  gap: 10px;
-}
-
-.dice-stage__multi-result {
-  display: grid;
-  gap: 4px;
-  padding: 12px;
-  border: 1px solid rgba(255,245,214,0.16);
-  background: rgba(255,255,255,0.06);
-  text-align: center;
-}
-
-.dice-stage__multi-result span { color: rgba(255,245,214,0.56); font-size: 11px; }
-.dice-stage__multi-result strong { font-family: var(--font-display); font-size: 34px; }
-.dice-stage__multi-result--hope strong { color: #9CF0C2; }
-.dice-stage__multi-result--fear strong { color: #FFB0BC; }
-.dice-stage__multi-result--critical strong { color: #FFE270; }
-
 .dice-panel__workspace {
   min-height: 420px;
   display: grid;

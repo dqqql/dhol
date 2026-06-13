@@ -289,18 +289,7 @@ function LatestRollStage({ roll }: { roll?: DiceRollRecord }) {
       </div>
 
       <div className="dice-stage__result">
-        {roll.results.length === 1 ? (
-          <div className="dice-stage__total">{primary.total}</div>
-        ) : (
-          <div className="dice-stage__multi-results">
-            {roll.results.map((result, index) => (
-              <div key={`${roll.id}-${index}`} className={`dice-stage__multi-result dice-stage__multi-result--${getRollTone(result)}`}>
-                <span>第 {index + 1} 次</span>
-                <strong>{result.total}</strong>
-              </div>
-            ))}
-          </div>
-        )}
+        <div className="dice-stage__total">{primary.total}</div>
 
         {primary.hope !== undefined && primary.fear !== undefined && (
           <div className="duality-result">

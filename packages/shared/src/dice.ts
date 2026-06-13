@@ -49,13 +49,67 @@ export function normalizeDiceRollRequest(input: DiceRollRequest): DiceRollReques
 
 export function rollDicePool(input: DiceRollRequest, random: () => number = Math.random): RolledDicePool {
   const request = normalizeDiceRollRequest(input)
+  const rolls = Array.from({ length: request.repeat }, () => (
+    request.mode === 'dual' ? rollDual(request, random) : rollStandard(request, random)
+  ))
   return {
     request,
     normalizedFormula: formatDiceFormula(request),
-    results: Array.from({ length: request.repeat }, () => (
-      request.mode === 'dual' ? rollDual(request, random) : rollStandard(request, random)
-    )),
+    results: request.repeat > 1 ? [aggregateRolls(rolls, request)] : rolls,
   }
+}
+
+// 重复次数：把整个骰池掷出对应次数，全部骰子相加成一个总结果。固定加值只计一次。
+function aggregateRolls(rolls: DiceRollResult[], request: DiceRollRequest): DiceRollResult {
+  const modifier = request.modifier
+  const total = rolls.reduce((sum, roll) => sum + roll.total, 0) - modifier * (rolls.length - 1)
+  const terms = mergeTerms(rolls)
+  const primaryRolls = rolls.flatMap((roll) => roll.primary_rolls)
+
+  if (request.mode === 'dual') {
+    const hope = rolls.reduce((sum, roll) => sum + (roll.hope ?? 0), 0)
+    const fear = rolls.reduce((sum, roll) => sum + (roll.fear ?? 0), 0)
+    const advantageRolls = rolls.filter((roll) => roll.advantage_roll !== undefined)
+    const advantageRoll = advantageRolls.length
+      ? advantageRolls.reduce((sum, roll) => sum + (roll.advantage_roll ?? 0), 0)
+      : undefined
+    const outcome = hope === fear ? 'critical' : hope > fear ? 'hope' : 'fear'
+    return {
+      total,
+      critical: outcome === 'critical',
+      outcome,
+      hope,
+      fear,
+      primary_rolls: primaryRolls,
+      advantage_roll: advantageRoll,
+      terms,
+    }
+  }
+
+  return {
+    total,
+    critical: rolls.some((roll) => roll.critical),
+    primary_rolls: primaryRolls,
+    terms,
+  }
+}
+
+function mergeTerms(rolls: DiceRollResult[]): DiceTermRoll[] {
+  const bySides = new Map<number, DiceTermRoll>()
+  for (const roll of rolls) {
+    for (const term of roll.terms) {
+      const existing = bySides.get(term.sides)
+      if (existing) {
+        existing.count += term.count
+        existing.rolls.push(...term.rolls)
+        existing.subtotal += term.subtotal
+        existing.notation = `${existing.count}d${term.sides}`
+      } else {
+        bySides.set(term.sides, { ...term, rolls: [...term.rolls] })
+      }
+    }
+  }
+  return Array.from(bySides.values()).sort((left, right) => left.sides - right.sides)
 }
 
 export function formatDiceFormula(request: DiceRollRequest): string {
@@ -72,7 +126,7 @@ export function formatDiceFormula(request: DiceRollRequest): string {
     ? ' 优势'
     : request.modifier_mode === 'disadvantage' ? ' 劣势' : ''
   const formula = `${base}${bonusDice}${modifier}${advantage}`
-  return request.repeat > 1 ? `${request.repeat} 次：${formula}` : formula
+  return request.repeat > 1 ? `${request.repeat} 次合计：${formula}` : formula
 }
 
 function rollStandard(request: DiceRollRequest, random: () => number): DiceRollResult {
