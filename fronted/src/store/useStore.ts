@@ -284,6 +284,14 @@ export const useStore = create<AppStore>((set, get) => {
       sendMessage({ type: 'dice.roll', payload: request })
     },
 
+    raiseXCard: () => {
+      const sent = sendMessage({ type: 'xcard.raise', payload: {} })
+      if (sent) { get().addToast('已匿名打出 X 卡', 'success') }
+    },
+    acknowledgeXCard: () => {
+      sendMessage({ type: 'xcard.acknowledge', payload: {} })
+    },
+
     // ── Import actions ────────────────────────────────────────────────────────
     importRoomBackup: (value) => {
       try {

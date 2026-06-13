@@ -321,6 +321,12 @@ export interface MobilePanelState {
   activity_log: MobilePanelActivityLogItem[]
 }
 
+export interface XCardAlert {
+  id: string
+  created_at: string
+  acknowledged_player_ids: string[]
+}
+
 export interface RoomState {
   room_type: RoomType
   room_id: string
@@ -334,6 +340,7 @@ export interface RoomState {
   gm_panel?: GmPanelState
   mobile_panel?: MobilePanelState
   dice_rolls: DiceRollRecord[]
+  x_card?: XCardAlert | null
   snapshot_version: number
   updated_at: string
 }

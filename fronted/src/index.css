@@ -1013,11 +1013,11 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 }
 
 .gm-floating-tool--battle {
-  bottom: 78px;
+  bottom: 132px;
 }
 
 .gm-floating-tool--dice {
-  bottom: 132px;
+  bottom: 186px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -1033,7 +1033,23 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 }
 
 .gm-floating-tool--notebook {
+  bottom: 78px;
+}
+
+.gm-floating-tool--xcard {
   bottom: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid rgba(248, 113, 113, 0.55);
+  background: linear-gradient(135deg, #DC2626, #991B1B);
+  color: #FFF1F1;
+  box-shadow: 0 14px 28px rgba(120, 20, 20, 0.28);
+  cursor: pointer;
+  font-weight: 800;
+  font-family: var(--font-display);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .gm-floating-tool--dice:hover {
@@ -1041,9 +1057,164 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   box-shadow: 0 18px 34px rgba(92, 58, 16, 0.30);
 }
 
+.gm-floating-tool--xcard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 34px rgba(120, 20, 20, 0.34);
+}
+
+.gm-floating-tool--xcard__count {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #fff;
+  color: #991B1B;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 4px 10px rgba(120, 20, 20, 0.32);
+}
+
 .gm-floating-tool:focus-visible {
   outline: 2px solid var(--accent-cyan);
   outline-offset: 3px;
+}
+
+/* ── X 卡：醒目全屏提示 ───────────────────────────────────────── */
+@keyframes xcardOverlayIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes xcardDialogIn {
+  from { opacity: 0; transform: translateY(16px) scale(0.94); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes xcardIconPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.45); }
+  50%      { box-shadow: 0 0 0 18px rgba(220, 38, 38, 0); }
+}
+
+.xcard-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: radial-gradient(circle at 50% 40%, rgba(120, 20, 20, 0.55), rgba(20, 6, 6, 0.86));
+  backdrop-filter: blur(4px);
+  animation: xcardOverlayIn 160ms ease-out;
+}
+
+.xcard-dialog {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  padding: 32px 28px 24px;
+  text-align: center;
+  border: 2px solid rgba(248, 113, 113, 0.6);
+  border-radius: 18px;
+  background: linear-gradient(160deg, #2a1010 0%, #1a0a0a 100%);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(248, 113, 113, 0.18) inset;
+  animation: xcardDialogIn 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.xcard-dialog__icon {
+  width: 76px;
+  height: 76px;
+  margin: 0 auto 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(135deg, #DC2626, #991B1B);
+  animation: xcardIconPulse 1.6s ease-out infinite;
+}
+
+.xcard-dialog__title {
+  margin: 0 0 12px;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #FFE4E4;
+  font-family: var(--font-display);
+}
+
+.xcard-dialog__body {
+  margin: 0 0 20px;
+  font-size: 14px;
+  line-height: 1.8;
+  color: rgba(255, 224, 224, 0.85);
+}
+
+.xcard-dialog__body strong {
+  color: #fff;
+}
+
+.xcard-dialog__readers {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 18px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: #FFD7D7;
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.28);
+}
+
+.xcard-dialog__readers strong {
+  color: #fff;
+  font-size: 15px;
+}
+
+.xcard-dialog__btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 18px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 800;
+  color: #fff;
+  cursor: pointer;
+  background: linear-gradient(135deg, #DC2626, #B91C1C);
+  box-shadow: 0 12px 26px rgba(120, 20, 20, 0.4);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
+}
+
+.xcard-dialog__btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 32px rgba(120, 20, 20, 0.48);
+}
+
+.xcard-dialog__btn--waiting,
+.xcard-dialog__btn--waiting:hover {
+  cursor: default;
+  transform: none;
+  opacity: 0.72;
+  background: rgba(120, 40, 40, 0.55);
+  box-shadow: none;
+}
+
+.xcard-dialog__hint {
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: rgba(255, 215, 215, 0.55);
 }
 
 .dice-panel {
@@ -1701,15 +1872,20 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 
   .gm-floating-tool--battle {
     right: 12px;
-    bottom: 70px;
+    bottom: 122px;
   }
 
   .gm-floating-tool--dice {
     right: 12px;
-    bottom: 122px;
+    bottom: 174px;
   }
 
   .gm-floating-tool--notebook {
+    right: 12px;
+    bottom: 70px;
+  }
+
+  .gm-floating-tool--xcard {
     right: 12px;
     bottom: 18px;
   }

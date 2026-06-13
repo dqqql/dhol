@@ -11,6 +11,7 @@ import { GmHtmlSheetCard } from '@/components/gm-panel/GmHtmlSheetCard'
 import { GmImportPendingToast } from '@/components/gm-panel/GmImportPendingToast'
 import type { ImportPendingState, ResourceMessage, SheetDocState } from '@/components/gm-panel/gmPanelTypes'
 import { FloatingNotebook } from '@/components/notebook/FloatingNotebook'
+import { FloatingXCard } from '@/components/xcard/FloatingXCard'
 import { Modal } from '@/components/ui/Modal'
 import { fetchGmSheetHtml } from '@/lib/realtime'
 import { useStore } from '@/store/useStore'
@@ -439,6 +440,7 @@ export function GmPanelBoard() {
       <FloatingBattlePanel roomId={room.room_id} />
       <FloatingDicePanel />
       <FloatingNotebook roomId={room.room_id} />
+      <FloatingXCard />
       {pendingImport && <GmImportPendingToast pendingImport={pendingImport} theme={theme} />}
 
       <input ref={importInputRef} type="file" accept=".html,text/html" style={{ display: 'none' }} onChange={handleImportChange} />

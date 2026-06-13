@@ -346,6 +346,7 @@ export class RoomDurableObject {
       gm_panel: roomType === 'gm-panel' ? createEmptyGmPanelState() : undefined,
       mobile_panel: roomType === 'mobile-panel' ? createEmptyMobilePanelState() : undefined,
       dice_rolls: [],
+      x_card: null,
       snapshot_version: 0,
       updated_at: now.toISOString(),
     }
@@ -610,6 +611,16 @@ export class RoomDurableObject {
         await this.commit('dice.roll')
         return
 
+      case 'xcard.raise':
+        this.raiseXCard(player)
+        await this.commit('xcard.raise')
+        return
+
+      case 'xcard.acknowledge':
+        this.acknowledgeXCard(player)
+        await this.commit('xcard.acknowledge')
+        return
+
       case 'room.importRoomBackup': {
         this.requireImportsEnabled()
         const backup = assertDhRoomBackup(message.payload.backup)
@@ -676,6 +687,7 @@ export class RoomDurableObject {
       }))
       : []
     room.host_player_id = hostPlayerId
+    room.x_card = null
     room.players = activePlayers.map((player) => ({
       ...player,
       is_host: player.id === hostPlayerId,
@@ -714,6 +726,39 @@ export class RoomDurableObject {
     }
 
     room.dice_rolls = [...(Array.isArray(room.dice_rolls) ? room.dice_rolls : []), record].slice(-50)
+  }
+
+  private raiseXCard(player: Player): void {
+    const room = this.requireRoom()
+    // 匿名：不记录是谁打出的 X 卡。打出者自动计入已读，避免要求自己确认。
+    room.x_card = {
+      id: id('xcard'),
+      created_at: new Date().toISOString(),
+      acknowledged_player_ids: [player.id],
+    }
+    this.clearXCardIfAllAcknowledged()
+  }
+
+  private acknowledgeXCard(player: Player): void {
+    const room = this.requireRoom()
+    if (!room.x_card) return
+    if (!room.x_card.acknowledged_player_ids.includes(player.id)) {
+      room.x_card.acknowledged_player_ids.push(player.id)
+    }
+    this.clearXCardIfAllAcknowledged()
+  }
+
+  /** 当所有在线玩家都已点击「已读」后，关闭 X 卡提示。 */
+  private clearXCardIfAllAcknowledged(): void {
+    const room = this.requireRoom()
+    if (!room.x_card) return
+    const acknowledged = new Set(room.x_card.acknowledged_player_ids)
+    const onlinePlayers = room.players.filter((item) => item.is_online)
+    const allAcknowledged = onlinePlayers.length > 0
+      && onlinePlayers.every((item) => acknowledged.has(item.id))
+    if (allAcknowledged) {
+      room.x_card = null
+    }
   }
 
   private importGmCharacter(player: Player, fileName: string, html: string): void {
@@ -1030,6 +1075,8 @@ export class RoomDurableObject {
     player.is_online = false
     player.last_seen_at = new Date().toISOString()
     this.transferHostIfNeeded()
+    // 离线玩家不应再阻塞 X 卡：若剩余在线玩家均已确认则关闭提示。
+    this.clearXCardIfAllAcknowledged()
     await this.commit('player.offline')
   }
 
@@ -1261,10 +1308,12 @@ export class RoomDurableObject {
         gm_panel_theme?: 'gold-abyss' | 'jade-hex' | 'amethyst-ember'
       }
       dice_rolls?: DiceRollRecord[]
+      x_card?: RoomState['x_card']
     }
 
     return {
       ...migrated,
+      x_card: migrated.x_card ?? null,
       settings: {
         imports_enabled: migrated.settings?.imports_enabled ?? true,
         resource_change_requires_approval: migrated.settings?.resource_change_requires_approval ?? false,
