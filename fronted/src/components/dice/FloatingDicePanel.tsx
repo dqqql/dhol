@@ -10,7 +10,7 @@ import { Dices, History, Minus, Plus, RotateCcw, Sparkles } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { useStore } from '@/store/useStore'
 
-const DICE_SIDES = [4, 6, 8, 10, 12, 20, 100] as const
+const DICE_SIDES = [4, 6, 8, 10, 12, 20] as const
 
 type DiceCounts = Record<number, number>
 
@@ -210,7 +210,7 @@ export function FloatingDicePanel() {
 
 function DiceIcon({ sides }: { sides: number }) {
   const label = `d${sides}`
-  const textClass = sides === 100 ? 'dice-token__number dice-token__number--wide' : 'dice-token__number'
+  const textClass = 'dice-token__number'
 
   return (
     <svg className="dice-token__icon" viewBox="0 0 80 80" aria-hidden="true">
@@ -249,13 +249,6 @@ function DiceIcon({ sides }: { sides: number }) {
         <>
           <polygon className="dice-token__face" points="40,3 70,18 78,49 58,75 22,75 2,49 10,18" />
           <path className="dice-token__detail" d="M40 3L25 29 10 18M40 3l15 26 15-11M2 49l23-20h30l23 20M2 49l20 26 18-20 18 20 20-26M25 29l15 26 15-26" />
-        </>
-      )}
-      {sides === 100 && (
-        <>
-          <polygon className="dice-token__face" points="31,6 58,10 74,31 69,59 47,75 19,70 5,48 11,20" />
-          <path className="dice-token__detail" d="M31 6l9 23 18-19M11 20l29 9 34 2M5 48l35-19 29 30M19 70l21-41 7 46" />
-          <polygon className="dice-token__percentile" points="51,13 70,24 75,47 62,66 47,53 44,30" />
         </>
       )}
       <text className={textClass} x="40" y="42">{label}</text>
