@@ -1,5 +1,6 @@
 import type {
   DhRoomBackup,
+  DiceRollRequest,
   GmPanelResourceKey,
   MobilePanelExperience,
   MobilePanelResourceKey,
@@ -56,6 +57,7 @@ export type ClientMessage =
   | { type: 'mobile.createCountdown'; requestId?: string; payload: { name: string; max: number } }
   | { type: 'mobile.updateCountdown'; requestId?: string; payload: { countdownId: string; value: number } }
   | { type: 'mobile.deleteCountdown'; requestId?: string; payload: { countdownId: string } }
+  | { type: 'dice.roll'; requestId?: string; payload: DiceRollRequest }
   | { type: 'ping'; requestId?: string; payload?: Record<string, never> }
 
 export type ServerMessage =
@@ -87,4 +89,3 @@ export interface RoomJoinResponse {
   }
   state: RoomState
 }
-

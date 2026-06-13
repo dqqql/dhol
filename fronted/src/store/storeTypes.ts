@@ -1,4 +1,5 @@
 import type {
+  DiceRollRequest,
   GmPanelTheme,
   GmPanelResourceKey,
   MobilePanelExperience,
@@ -58,6 +59,7 @@ export interface AppStore extends UIState {
   createMobileCountdown: (name: string, max: number) => void
   updateMobileCountdown: (countdownId: string, value: number) => void
   deleteMobileCountdown: (countdownId: string) => void
+  rollDice: (request: DiceRollRequest) => void
 
   importRoomBackup: (value: unknown) => void
 

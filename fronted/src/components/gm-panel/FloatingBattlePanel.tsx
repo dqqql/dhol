@@ -266,12 +266,9 @@ export function FloatingBattlePanel({ roomId }: { roomId: string }) {
     <>
       <button
         type="button"
+        className="gm-floating-tool gm-floating-tool--battle"
         onClick={() => setIsOpen(true)}
         style={{
-          position: 'fixed',
-          right: 24,
-          bottom: 84,
-          zIndex: 60,
           display: 'inline-flex',
           alignItems: 'center',
           gap: 8,

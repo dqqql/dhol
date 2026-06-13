@@ -38,11 +38,14 @@ import {
   normalizeResourceTrackerSheet,
   normalizeRoomType,
   repairKnownGmLogMessage,
+  rollDicePool,
   setMobilePanelResourceValue,
   setTrackerResourceValue,
   normalizeTrackerResourceValue,
   type ClientMessage,
   type DhRoomBackup,
+  type DiceRollRecord,
+  type DiceRollRequest,
   type GmPanelActivityLogItem,
   type GmPanelCharacterSheetEntry,
   type GmPanelResourceKey,
@@ -342,6 +345,7 @@ export class RoomDurableObject {
       },
       gm_panel: roomType === 'gm-panel' ? createEmptyGmPanelState() : undefined,
       mobile_panel: roomType === 'mobile-panel' ? createEmptyMobilePanelState() : undefined,
+      dice_rolls: [],
       snapshot_version: 0,
       updated_at: now.toISOString(),
     }
@@ -601,6 +605,11 @@ export class RoomDurableObject {
         await this.commit('mobile.deleteCountdown')
         return
 
+      case 'dice.roll':
+        this.rollDice(player, message.payload)
+        await this.commit('dice.roll')
+        return
+
       case 'room.importRoomBackup': {
         this.requireImportsEnabled()
         const backup = assertDhRoomBackup(message.payload.backup)
@@ -660,6 +669,12 @@ export class RoomDurableObject {
       room.gm_panel = undefined
       room.mobile_panel = undefined
     }
+    room.dice_rolls = Array.isArray(backup.dice_rolls)
+      ? backup.dice_rolls.slice(-50).map((roll) => ({
+        ...roll,
+        actor_player_id: remapPlayerId(roll.actor_player_id) ?? roll.actor_player_id,
+      }))
+      : []
     room.host_player_id = hostPlayerId
     room.players = activePlayers.map((player) => ({
       ...player,
@@ -681,6 +696,24 @@ export class RoomDurableObject {
         : {}),
       ...(updates.gmPanelTheme !== undefined ? { gm_panel_theme: updates.gmPanelTheme } : {}),
     }
+  }
+
+  private rollDice(player: Player, request: DiceRollRequest): void {
+    const room = this.requireRoom()
+    const rolled = rollDicePool(request, secureRandom)
+    const record: DiceRollRecord = {
+      id: id('dice_roll'),
+      created_at: new Date().toISOString(),
+      actor_player_id: player.id,
+      actor_name: player.nickname,
+      normalized_formula: rolled.normalizedFormula,
+      request: rolled.request,
+      mode: rolled.request.mode,
+      modifier_mode: rolled.request.modifier_mode,
+      results: rolled.results,
+    }
+
+    room.dice_rolls = [...room.dice_rolls, record].slice(-50)
   }
 
   private importGmCharacter(player: Player, fileName: string, html: string): void {
@@ -1028,6 +1061,7 @@ export class RoomDurableObject {
       settings: room.settings,
       gm_panel: room.gm_panel,
       mobile_panel: room.mobile_panel,
+      dice_rolls: room.dice_rolls,
       players: room.players.map(player => ({
         id: player.id,
         nickname: player.nickname,
@@ -1226,6 +1260,7 @@ export class RoomDurableObject {
         resource_change_requires_approval?: boolean
         gm_panel_theme?: 'gold-abyss' | 'jade-hex' | 'amethyst-ember'
       }
+      dice_rolls?: DiceRollRecord[]
     }
 
     return {
@@ -1243,6 +1278,7 @@ export class RoomDurableObject {
       mobile_panel: normalizeRoomType(migrated.room_type) === 'mobile-panel'
         ? normalizeMobilePanelState(migrated.mobile_panel)
         : undefined,
+      dice_rolls: Array.isArray(migrated.dice_rolls) ? migrated.dice_rolls.slice(-50) : [],
     }
   }
 
@@ -1362,6 +1398,12 @@ function buildWebSocketUrl(request: Request, env: Env, inviteCode: string, token
   url.pathname = `/api/rooms/${inviteCode}/ws`
   url.search = new URLSearchParams({ token }).toString()
   return url.toString()
+}
+
+function secureRandom(): number {
+  const value = new Uint32Array(1)
+  crypto.getRandomValues(value)
+  return value[0] / 0x1_0000_0000
 }
 
 function getSessionSecret(env: Env): string {

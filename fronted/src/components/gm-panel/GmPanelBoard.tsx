@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import type { GmPanelCharacterSheetEntry } from '@dhgc/shared'
 import { ChevronLeft, ChevronRight, FileUp, Trash2 } from 'lucide-react'
 import { FloatingBattlePanel } from '@/components/gm-panel/FloatingBattlePanel'
+import { FloatingDicePanel } from '@/components/dice/FloatingDicePanel'
 import { getGmPanelTheme } from '@/components/gm-panel/gmPanelThemes'
 import { GmActivityLogPanel } from '@/components/gm-panel/GmActivityLogPanel'
 import { GmEmptySlotCard } from '@/components/gm-panel/GmEmptySlotCard'
@@ -436,6 +437,7 @@ export function GmPanelBoard() {
       </div>
 
       <FloatingBattlePanel roomId={room.room_id} />
+      <FloatingDicePanel />
       <FloatingNotebook roomId={room.room_id} />
       {pendingImport && <GmImportPendingToast pendingImport={pendingImport} theme={theme} />}
 

@@ -275,6 +275,10 @@ export const useStore = create<AppStore>((set, get) => {
     updateMobileCountdown: (countdownId, value) => { sendMessage({ type: 'mobile.updateCountdown', payload: { countdownId, value } }) },
     deleteMobileCountdown: (countdownId) => { sendMessage({ type: 'mobile.deleteCountdown', payload: { countdownId } }) },
 
+    rollDice: (request) => {
+      sendMessage({ type: 'dice.roll', payload: request })
+    },
+
     // ── Import actions ────────────────────────────────────────────────────────
     importRoomBackup: (value) => {
       try {

@@ -1,0 +1,184 @@
+import type {
+  DiceModifierMode,
+  DicePoolEntry,
+  DiceRollRequest,
+  DiceRollResult,
+  DiceTermRoll,
+} from './types'
+
+const ALLOWED_DICE = new Set([4, 6, 8, 10, 12, 20, 100])
+const MAX_REPEAT = 20
+const MAX_DICE_PER_TYPE = 100
+const MAX_MODIFIER = 100_000
+
+export interface RolledDicePool {
+  request: DiceRollRequest
+  normalizedFormula: string
+  results: DiceRollResult[]
+}
+
+export function normalizeDiceRollRequest(input: DiceRollRequest): DiceRollRequest {
+  const mode = input?.mode === 'dual' ? 'dual' : 'standard'
+  const repeat = boundedInteger(input?.repeat, 1, MAX_REPEAT, '重复次数')
+  const modifier = boundedInteger(input?.modifier, -MAX_MODIFIER, MAX_MODIFIER, '固定加值')
+  const modifierMode = normalizeModifierMode(input?.modifier_mode)
+  const dice = normalizeDicePool(input?.dice)
+
+  if (mode === 'standard' && dice.length === 0) {
+    throw new Error('请至少选择一枚骰子')
+  }
+
+  if (modifierMode !== 'normal') {
+    const isSingleD20 = mode === 'standard'
+      && dice.length === 1
+      && dice[0].sides === 20
+      && dice[0].count === 1
+    if (mode !== 'dual' && !isSingleD20) {
+      throw new Error('只有单枚 d20 和匕首之心二元骰支持优势或劣势')
+    }
+  }
+
+  return {
+    mode,
+    modifier_mode: modifierMode,
+    repeat,
+    modifier,
+    dice,
+  }
+}
+
+export function rollDicePool(input: DiceRollRequest, random: () => number = Math.random): RolledDicePool {
+  const request = normalizeDiceRollRequest(input)
+  return {
+    request,
+    normalizedFormula: formatDiceFormula(request),
+    results: Array.from({ length: request.repeat }, () => (
+      request.mode === 'dual' ? rollDual(request, random) : rollStandard(request, random)
+    )),
+  }
+}
+
+export function formatDiceFormula(request: DiceRollRequest): string {
+  const base = request.mode === 'dual'
+    ? '希望 d12 + 恐惧 d12'
+    : request.dice.map((entry) => `${entry.count}d${entry.sides}`).join(' + ')
+  const bonusDice = request.mode === 'dual' && request.dice.length
+    ? ` + ${request.dice.map((entry) => `${entry.count}d${entry.sides}`).join(' + ')}`
+    : ''
+  const modifier = request.modifier > 0
+    ? ` + ${request.modifier}`
+    : request.modifier < 0 ? ` - ${Math.abs(request.modifier)}` : ''
+  const advantage = request.modifier_mode === 'advantage'
+    ? ' 优势'
+    : request.modifier_mode === 'disadvantage' ? ' 劣势' : ''
+  const formula = `${base}${bonusDice}${modifier}${advantage}`
+  return request.repeat > 1 ? `${request.repeat} 次：${formula}` : formula
+}
+
+function rollStandard(request: DiceRollRequest, random: () => number): DiceRollResult {
+  const isD20Check = request.dice.length === 1
+    && request.dice[0].sides === 20
+    && request.dice[0].count === 1
+
+  if (isD20Check && request.modifier_mode !== 'normal') {
+    const rolls = rollMany(2, 20, random)
+    const keptPrimary = request.modifier_mode === 'advantage'
+      ? Math.max(...rolls)
+      : Math.min(...rolls)
+    return {
+      total: keptPrimary + request.modifier,
+      critical: keptPrimary === 20,
+      primary_rolls: rolls,
+      kept_primary: keptPrimary,
+      terms: [{
+        notation: '1d20',
+        sides: 20,
+        count: 1,
+        rolls,
+        subtotal: keptPrimary,
+      }],
+    }
+  }
+
+  const terms = request.dice.map((entry) => rollPoolEntry(entry, random))
+  const d20Term = terms.find((term) => term.sides === 20 && term.count === 1)
+  return {
+    total: terms.reduce((sum, term) => sum + term.subtotal, request.modifier),
+    critical: Boolean(d20Term?.rolls.includes(20)),
+    primary_rolls: d20Term?.rolls ?? [],
+    terms,
+  }
+}
+
+function rollDual(request: DiceRollRequest, random: () => number): DiceRollResult {
+  const hope = rollDie(12, random)
+  const fear = rollDie(12, random)
+  const advantageRoll = request.modifier_mode === 'normal' ? undefined : rollDie(6, random)
+  const terms = request.dice.map((entry) => rollPoolEntry(entry, random))
+  const bonusTotal = terms.reduce((sum, term) => sum + term.subtotal, 0)
+  const advantageTotal = advantageRoll === undefined
+    ? 0
+    : request.modifier_mode === 'advantage' ? advantageRoll : -advantageRoll
+  const outcome = hope === fear ? 'critical' : hope > fear ? 'hope' : 'fear'
+
+  return {
+    total: hope + fear + bonusTotal + request.modifier + advantageTotal,
+    critical: outcome === 'critical',
+    outcome,
+    hope,
+    fear,
+    primary_rolls: [hope, fear],
+    advantage_roll: advantageRoll,
+    terms,
+  }
+}
+
+function normalizeDicePool(value: DicePoolEntry[] | undefined): DicePoolEntry[] {
+  if (!Array.isArray(value)) throw new Error('骰池格式无效')
+
+  const totals = new Map<number, number>()
+  for (const entry of value) {
+    const sides = boundedInteger(entry?.sides, 2, 1000, '骰子面数')
+    if (!ALLOWED_DICE.has(sides)) throw new Error(`不支持 d${sides}`)
+    const count = boundedInteger(entry?.count, 0, MAX_DICE_PER_TYPE, '骰子数量')
+    if (count > 0) totals.set(sides, Math.min(MAX_DICE_PER_TYPE, (totals.get(sides) ?? 0) + count))
+  }
+
+  return Array.from(totals.entries())
+    .sort(([left], [right]) => left - right)
+    .map(([sides, count]) => ({ sides, count }))
+}
+
+function normalizeModifierMode(value: DiceModifierMode | undefined): DiceModifierMode {
+  if (value === 'advantage' || value === 'disadvantage') return value
+  return 'normal'
+}
+
+function rollPoolEntry(entry: DicePoolEntry, random: () => number): DiceTermRoll {
+  const rolls = rollMany(entry.count, entry.sides, random)
+  return {
+    notation: `${entry.count}d${entry.sides}`,
+    sides: entry.sides,
+    count: entry.count,
+    rolls,
+    subtotal: rolls.reduce((sum, value) => sum + value, 0),
+  }
+}
+
+function rollMany(count: number, sides: number, random: () => number): number[] {
+  return Array.from({ length: count }, () => rollDie(sides, random))
+}
+
+function rollDie(sides: number, random: () => number): number {
+  const value = random()
+  const normalized = Number.isFinite(value) ? Math.min(0.999999999999, Math.max(0, value)) : 0
+  return Math.floor(normalized * sides) + 1
+}
+
+function boundedInteger(value: unknown, min: number, max: number, label: string): number {
+  const parsed = typeof value === 'number' ? value : Number(value)
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
+    throw new Error(`${label}必须在 ${min} 到 ${max} 之间`)
+  }
+  return parsed
+}

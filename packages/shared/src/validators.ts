@@ -8,7 +8,7 @@ export function assertDhRoomBackup(value: unknown): DhRoomBackup {
   const backup = value as Partial<DhRoomBackup>
   if (backup.format !== 'dhroom') throw new Error('Room backup format must be "dhroom"')
   if (backup.version !== 1) throw new Error('Room backup version must be 1')
-  if (!backup.room || typeof backup.room !== 'object') throw new Error('Room metadata is required')
+  if (!backup.room || typeof backup.room !== 'object') throw new Error('room metadata is required')
   if (!Array.isArray(backup.players)) throw new Error('Room players must be an array')
 
   if (backup.settings) {
