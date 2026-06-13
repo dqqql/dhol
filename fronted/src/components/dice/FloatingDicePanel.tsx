@@ -22,7 +22,6 @@ export function FloatingDicePanel() {
   const [mode, setMode] = useState<'standard' | 'dual'>('standard')
   const [counts, setCounts] = useState<DiceCounts>({ ...EMPTY_COUNTS, 20: 1 })
   const [modifier, setModifier] = useState(0)
-  const [repeat, setRepeat] = useState(1)
   const [modifierMode, setModifierMode] = useState<DiceModifierMode>('normal')
 
   const dice = useMemo<DicePoolEntry[]>(() => (
@@ -37,7 +36,7 @@ export function FloatingDicePanel() {
   const request: DiceRollRequest = {
     mode,
     modifier_mode: effectiveModifierMode,
-    repeat,
+    repeat: 1,
     modifier,
     dice,
   }
@@ -75,7 +74,6 @@ export function FloatingDicePanel() {
   function resetPool() {
     setCounts(mode === 'standard' ? { ...EMPTY_COUNTS, 20: 1 } : { ...EMPTY_COUNTS })
     setModifier(0)
-    setRepeat(1)
     setModifierMode('normal')
   }
 
@@ -164,7 +162,7 @@ export function FloatingDicePanel() {
                 </div>
               </div>
 
-              <div className="dice-control-grid">
+              <div className="dice-control-row">
                 <Stepper
                   label="固定加值"
                   value={modifier}
@@ -173,14 +171,6 @@ export function FloatingDicePanel() {
                   max={100000}
                   format={(value) => value > 0 ? `+${value}` : String(value)}
                 />
-                <Stepper label="重复次数" value={repeat} onChange={setRepeat} min={1} max={20} />
-              </div>
-
-              <div>
-                <div className="dice-field-label">
-                  <span>优劣势</span>
-                  <span>{mode === 'dual' ? '额外加 / 减 1d6' : '仅单枚 d20 可用'}</span>
-                </div>
                 <div className="dice-advantage-switch">
                   <AdvantageButton mode="normal" value={effectiveModifierMode} disabled={false} onChange={setModifierMode}>
                     常规
@@ -196,7 +186,7 @@ export function FloatingDicePanel() {
 
               <button type="button" className="dice-roll-button" disabled={!canRoll} onClick={submitRoll}>
                 <Dices size={20} />
-                {repeat > 1 ? `掷出 ${repeat} 次` : '掷出骰子'}
+                掷出骰子
               </button>
             </section>
 

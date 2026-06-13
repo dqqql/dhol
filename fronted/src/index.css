@@ -1389,7 +1389,7 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 
 .dice-tray {
   display: grid;
-  grid-template-columns: repeat(7, minmax(58px, 1fr));
+  grid-template-columns: repeat(6, minmax(58px, 1fr));
   gap: 8px;
 }
 
@@ -1481,10 +1481,18 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   box-shadow: 0 3px 8px rgba(42,28,10,0.22);
 }
 
-.dice-control-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
+.dice-control-row {
+  display: flex;
+  align-items: stretch;
   gap: 10px;
+}
+
+.dice-control-row .dice-stepper {
+  flex: 0 0 auto;
+}
+
+.dice-control-row .dice-advantage-switch {
+  flex: 1;
 }
 
 .dice-stepper {
@@ -1737,9 +1745,13 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
     padding: 14px;
   }
 
-  .dice-mode-switch,
-  .dice-control-grid {
+  .dice-mode-switch {
     grid-template-columns: 1fr;
+  }
+
+  .dice-control-row {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 
