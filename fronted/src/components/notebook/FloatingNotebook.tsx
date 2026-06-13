@@ -195,12 +195,9 @@ export function FloatingNotebook({ roomId }: { roomId: string }) {
     return (
       <button
         type="button"
+        className="gm-floating-tool gm-floating-tool--notebook"
         onClick={toggleOpen}
         style={{
-          position: 'fixed',
-          right: 24,
-          bottom: 24,
-          zIndex: 60,
           display: 'inline-flex',
           alignItems: 'center',
           gap: 8,

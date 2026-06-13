@@ -1006,16 +1006,18 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 .gm-floating-tool {
   position: fixed;
   z-index: 60;
+  right: 24px;
+  width: 148px;
+  min-height: 44px;
+  justify-content: center;
 }
 
 .gm-floating-tool--battle {
-  right: 24px;
-  bottom: 84px;
+  bottom: 78px;
 }
 
 .gm-floating-tool--dice {
-  right: 170px;
-  bottom: 84px;
+  bottom: 132px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -1028,6 +1030,10 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   font-weight: 800;
   font-family: var(--font-display);
   transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.gm-floating-tool--notebook {
+  bottom: 24px;
 }
 
 .gm-floating-tool--dice:hover {
@@ -1378,37 +1384,90 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 }
 
 .dice-token {
+  --dice-fill: rgba(255, 252, 244, 0.96);
+  --dice-stroke: rgba(92, 58, 16, 0.46);
+  --dice-detail: rgba(92, 58, 16, 0.24);
+  --dice-number: #5C3A10;
   position: relative;
   aspect-ratio: 1;
   min-height: 58px;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(92,58,16,0.20);
-  background:
-    linear-gradient(145deg, rgba(255,255,255,0.94), rgba(240,232,210,0.88));
-  color: #5C3A10;
+  padding: 0;
+  border: none;
+  background: transparent;
   cursor: pointer;
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 900;
-  clip-path: polygon(50% 0, 92% 18%, 100% 68%, 72% 100%, 28% 100%, 0 68%, 8% 18%);
-  transition: transform var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
+  filter: drop-shadow(0 6px 8px rgba(92,58,16,0.10));
+  transition: transform var(--transition-fast), filter var(--transition-fast);
 }
 
 .dice-token:hover {
   transform: translateY(-3px) rotate(-1deg);
+  filter: drop-shadow(0 9px 10px rgba(92,58,16,0.16));
 }
 
 .dice-token.is-selected {
-  background: linear-gradient(145deg, #E0A830, #A96F18);
-  color: #1A0C04;
+  --dice-fill: #D7951E;
+  --dice-stroke: #5C3A10;
+  --dice-detail: rgba(60, 35, 6, 0.48);
+  --dice-number: #1A0C04;
   filter: drop-shadow(0 8px 8px rgba(92,58,16,0.20));
 }
 
-.dice-token strong {
+.dice-token__icon {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.dice-token__face {
+  fill: var(--dice-fill);
+  stroke: var(--dice-stroke);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  transition: fill var(--transition-fast), stroke var(--transition-fast);
+}
+
+.dice-token__detail {
+  fill: none;
+  stroke: var(--dice-detail);
+  stroke-width: 1.15;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.dice-token__detail--closed {
+  fill: rgba(255,255,255,0.10);
+}
+
+.dice-token__percentile {
+  fill: rgba(255,255,255,0.13);
+  stroke: var(--dice-detail);
+  stroke-width: 1;
+}
+
+.dice-token__number {
+  fill: var(--dice-number);
+  stroke: rgba(255,255,255,0.34);
+  stroke-width: 0.55;
+  paint-order: stroke fill;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 900;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+
+.dice-token__number--wide {
+  font-size: 12px;
+}
+
+.dice-token__count {
   position: absolute;
-  top: 5px;
-  right: 8px;
+  top: -2px;
+  right: -1px;
   min-width: 18px;
   height: 18px;
   display: grid;
@@ -1417,6 +1476,9 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   color: #FFF5D6;
   font-family: var(--font-body);
   font-size: 10px;
+  line-height: 1;
+  border: 1px solid rgba(255,245,214,0.72);
+  box-shadow: 0 3px 8px rgba(42,28,10,0.22);
 }
 
 .dice-control-grid {
@@ -1583,12 +1645,21 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 
   .gm-floating-tool--battle {
     right: 12px;
-    bottom: 72px;
+    bottom: 70px;
   }
 
   .gm-floating-tool--dice {
     right: 12px;
-    bottom: 124px;
+    bottom: 122px;
+  }
+
+  .gm-floating-tool--notebook {
+    right: 12px;
+    bottom: 18px;
+  }
+
+  .gm-floating-tool {
+    width: 148px;
   }
 
   .dice-stage {

@@ -16,7 +16,12 @@ let activeConnection: RoomSocketConnection | null = null
 // ── Unified store ────────────────────────────────────────────────────────────
 export const useStore = create<AppStore>((set, get) => {
   const applyRoomState = (room: RoomState) => {
-    set({ room })
+    set({
+      room: {
+        ...room,
+        dice_rolls: Array.isArray(room.dice_rolls) ? room.dice_rolls : [],
+      },
+    })
   }
 
   const disconnectConnection = () => {

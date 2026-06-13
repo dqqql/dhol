@@ -42,8 +42,9 @@ export function FloatingDicePanel() {
     dice,
   }
   const canRoll = mode === 'dual' || dice.length > 0
-  const latestRoll = room?.dice_rolls.at(-1)
-  const history = room?.dice_rolls.slice().reverse() ?? []
+  const roomRolls = Array.isArray(room?.dice_rolls) ? room.dice_rolls : []
+  const latestRoll = roomRolls.at(-1)
+  const history = roomRolls.slice().reverse()
 
   function changeDie(sides: number, delta: number) {
     const nextCounts = {
@@ -155,8 +156,8 @@ export function FloatingDicePanel() {
                         }}
                         aria-label={`d${sides}，当前 ${count} 枚。左键增加，右键减少`}
                       >
-                        <span>d{sides}</span>
-                        {count > 0 && <strong>{count}</strong>}
+                        <DiceIcon sides={sides} />
+                        {count > 0 && <strong className="dice-token__count">{count}</strong>}
                       </button>
                     )
                   })}
@@ -204,6 +205,61 @@ export function FloatingDicePanel() {
         </div>
       </Modal>
     </>
+  )
+}
+
+function DiceIcon({ sides }: { sides: number }) {
+  const label = `d${sides}`
+  const textClass = sides === 100 ? 'dice-token__number dice-token__number--wide' : 'dice-token__number'
+
+  return (
+    <svg className="dice-token__icon" viewBox="0 0 80 80" aria-hidden="true">
+      {sides === 4 && (
+        <>
+          <polygon className="dice-token__face" points="40,6 74,70 6,70" />
+          <path className="dice-token__detail" d="M40 6v45M6 70l34-19 34 19" />
+        </>
+      )}
+      {sides === 6 && (
+        <>
+          <polygon className="dice-token__face" points="40,5 71,22 71,58 40,75 9,58 9,22" />
+          <path className="dice-token__detail" d="M9 22l31 18 31-18M40 40v35" />
+        </>
+      )}
+      {sides === 8 && (
+        <>
+          <polygon className="dice-token__face" points="40,4 74,40 40,76 6,40" />
+          <path className="dice-token__detail" d="M40 4v72M6 40h68M6 40l34-18 34 18M6 40l34 18 34-18" />
+        </>
+      )}
+      {sides === 10 && (
+        <>
+          <polygon className="dice-token__face" points="40,4 70,22 75,52 56,75 24,75 5,52 10,22" />
+          <path className="dice-token__detail" d="M40 4L25 43l-15-21M40 4l15 39 15-21M5 52l20-9 15 32 15-32 20 9" />
+        </>
+      )}
+      {sides === 12 && (
+        <>
+          <polygon className="dice-token__face" points="28,5 52,5 72,20 78,44 66,68 40,77 14,68 2,44 8,20" />
+          <polygon className="dice-token__detail dice-token__detail--closed" points="40,18 58,31 51,53 29,53 22,31" />
+          <path className="dice-token__detail" d="M28 5l12 13L52 5M8 20l14 11L2 44M78 44L58 31l14-11M14 68l15-15 11 24 11-24 15 15" />
+        </>
+      )}
+      {sides === 20 && (
+        <>
+          <polygon className="dice-token__face" points="40,3 70,18 78,49 58,75 22,75 2,49 10,18" />
+          <path className="dice-token__detail" d="M40 3L25 29 10 18M40 3l15 26 15-11M2 49l23-20h30l23 20M2 49l20 26 18-20 18 20 20-26M25 29l15 26 15-26" />
+        </>
+      )}
+      {sides === 100 && (
+        <>
+          <polygon className="dice-token__face" points="31,6 58,10 74,31 69,59 47,75 19,70 5,48 11,20" />
+          <path className="dice-token__detail" d="M31 6l9 23 18-19M11 20l29 9 34 2M5 48l35-19 29 30M19 70l21-41 7 46" />
+          <polygon className="dice-token__percentile" points="51,13 70,24 75,47 62,66 47,53 44,30" />
+        </>
+      )}
+      <text className={textClass} x="40" y="42">{label}</text>
+    </svg>
   )
 }
 

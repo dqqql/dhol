@@ -713,7 +713,7 @@ export class RoomDurableObject {
       results: rolled.results,
     }
 
-    room.dice_rolls = [...room.dice_rolls, record].slice(-50)
+    room.dice_rolls = [...(Array.isArray(room.dice_rolls) ? room.dice_rolls : []), record].slice(-50)
   }
 
   private importGmCharacter(player: Player, fileName: string, html: string): void {
