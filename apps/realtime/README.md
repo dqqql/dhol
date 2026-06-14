@@ -18,6 +18,20 @@ The Worker exposes:
 - `POST /api/rooms/join`
 - `GET /api/rooms/:inviteCode/export/dhroom`
 - `GET /api/rooms/:inviteCode/ws?token=...`
+- `GET /api/admin/rooms/:inviteCode`
+- `PATCH /api/admin/rooms/:inviteCode`
+
+## Room administration
+
+Set the management key as a Worker secret:
+
+```powershell
+npx wrangler secret put ADMIN_SECRET
+```
+
+Then open `/admin` on the frontend. The key is sent as a Bearer token and is
+kept only in the page's memory. The admin API can query a room by invite code
+and reset its expiry to 1-365 days from the time of the request.
 
 ## D1
 

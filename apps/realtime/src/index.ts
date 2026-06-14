@@ -67,6 +67,7 @@ export interface Env {
   ROOMS: DurableObjectNamespace
   DHGC_DB?: D1Database
   SESSION_SECRET: string
+  ADMIN_SECRET?: string
   PUBLIC_API_BASE?: string
   /** 生产环境应设置为前端域名，如 https://dhol.pages.dev。不设置则允许所有来源（仅开发环境可接受）。 */
   ALLOWED_ORIGIN?: string
@@ -89,8 +90,22 @@ let _corsAllowedOrigin = '*'
 
 const PLAYER_COLORS = ['#f43f5e', '#2563eb', '#f59e0b', '#10b981', '#a855f7', '#06b6d4']
 const ROOM_TTL_MS = 3 * 24 * 60 * 60 * 1000
+const MIN_ROOM_DURATION_DAYS = 1
+const MAX_ROOM_DURATION_DAYS = 365
 const GM_SHEET_HTML_STORAGE_KEY_PREFIX = 'gm_sheet_html:'
 const GM_SHEET_COMPILED_HTML_STORAGE_KEY_PREFIX = 'gm_sheet_compiled_html:'
+
+interface AdminRoomSummary {
+  room_id: string
+  room_name: string
+  room_type: RoomType
+  invite_code: string
+  created_at: string
+  expires_at: string
+  updated_at: string
+  player_count: number
+  online_player_count: number
+}
 
 // ── 结构化错误码 ──────────────────────────────────────────────────────────────
 const ERR = {
@@ -140,6 +155,44 @@ export default {
 
       if (url.pathname === '/api/rooms/join' && request.method === 'POST') {
         return joinRoom(request, env)
+      }
+
+      const adminRoomMatch = url.pathname.match(/^\/api\/admin\/rooms\/([A-Z0-9]{6})$/i)
+      if (adminRoomMatch && (request.method === 'GET' || request.method === 'PATCH')) {
+        const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
+        if (!checkHttpRateLimit(ip)) {
+          return json({ error: 'rate_limited', code: ERR.RATE_LIMITED }, { status: 429 })
+        }
+
+        const authError = await authorizeAdmin(request, env)
+        if (authError) return withAdminHeaders(authError)
+
+        const inviteCode = normaliseInvite(adminRoomMatch[1])
+        const stub = roomStub(env, inviteCode)
+
+        if (request.method === 'GET') {
+          return withAdminHeaders(await stub.fetch(internalRequest('/internal/admin/summary')))
+        }
+
+        const body = await request.json() as { duration_days?: number }
+        const durationDays = body.duration_days
+        if (
+          typeof durationDays !== 'number'
+          || !Number.isInteger(durationDays)
+          || durationDays < MIN_ROOM_DURATION_DAYS
+          || durationDays > MAX_ROOM_DURATION_DAYS
+        ) {
+          return json({
+            error: 'invalid_duration_days',
+            code: ERR.VALIDATION_ERROR,
+            message: `duration_days must be an integer from ${MIN_ROOM_DURATION_DAYS} to ${MAX_ROOM_DURATION_DAYS}`,
+          }, { status: 400 })
+        }
+
+        return withAdminHeaders(await stub.fetch(internalRequest('/internal/admin/expiry', {
+          method: 'PATCH',
+          body: JSON.stringify({ durationDays }),
+        })))
       }
 
       const exportMatch = url.pathname.match(/^\/api\/rooms\/([A-Z0-9]{6})\/export\/dhroom$/i)
@@ -277,6 +330,8 @@ export class RoomDurableObject {
       if (url.pathname === '/internal/create' && request.method === 'POST') return this.create(request)
       if (url.pathname === '/internal/join' && request.method === 'POST') return this.join(request)
       if (url.pathname === '/internal/export/dhroom' && request.method === 'GET') return this.exportDhRoom()
+      if (url.pathname === '/internal/admin/summary' && request.method === 'GET') return this.adminSummary()
+      if (url.pathname === '/internal/admin/expiry' && request.method === 'PATCH') return this.updateExpiry(request)
       if (url.pathname.match(/^\/internal\/sheets\/[^/]+\/html$/) && request.method === 'GET') return this.exportSheetHtml(url)
 
       if (request.headers.get('Upgrade') === 'websocket') return this.connectWebSocket(request)
@@ -387,6 +442,37 @@ export class RoomDurableObject {
     await this.commit('player.joined')
 
     return json({ state: this.publicState(), player })
+  }
+
+  private async adminSummary(): Promise<Response> {
+    await this.mustLoad()
+    return json(this.getAdminSummary())
+  }
+
+  private async updateExpiry(request: Request): Promise<Response> {
+    const room = await this.mustLoad()
+    const body = await request.json() as { durationDays?: number }
+    const durationDays = body.durationDays
+
+    if (
+      typeof durationDays !== 'number'
+      || !Number.isInteger(durationDays)
+      || durationDays < MIN_ROOM_DURATION_DAYS
+      || durationDays > MAX_ROOM_DURATION_DAYS
+    ) {
+      return json({ error: 'invalid_duration_days' }, { status: 400 })
+    }
+
+    const now = new Date()
+    room.expires_at = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000).toISOString()
+    room.updated_at = now.toISOString()
+    room.snapshot_version += 1
+
+    await this.save()
+    await this.scheduleExpiryAlarm(room)
+    this.broadcast({ type: 'room.updated', payload: { state: this.publicState(), reason: 'admin.expiryUpdated' } })
+
+    return json(this.getAdminSummary())
   }
 
   private async connectWebSocket(request: Request): Promise<Response> {
@@ -1263,6 +1349,21 @@ export class RoomDurableObject {
     return snapshot
   }
 
+  private getAdminSummary(): AdminRoomSummary {
+    const room = this.requireRoom()
+    return {
+      room_id: room.room_id,
+      room_name: room.room_name,
+      room_type: room.room_type,
+      invite_code: room.invite_code,
+      created_at: room.created_at,
+      expires_at: room.expires_at,
+      updated_at: room.updated_at,
+      player_count: room.players.length,
+      online_player_count: room.players.filter((player) => player.is_online).length,
+    }
+  }
+
   private isExpired(room: Pick<RoomState, 'expires_at'>): boolean {
     return Date.parse(room.expires_at) <= Date.now()
   }
@@ -1459,6 +1560,40 @@ function getSessionSecret(env: Env): string {
   return env.SESSION_SECRET?.trim() || 'dhgc-local-dev-session-secret'
 }
 
+async function authorizeAdmin(request: Request, env: Env): Promise<Response | null> {
+  const expectedSecret = env.ADMIN_SECRET?.trim()
+  if (!expectedSecret) {
+    return json({
+      error: 'admin_not_configured',
+      code: ERR.INTERNAL_ERROR,
+      message: 'ADMIN_SECRET is not configured',
+    }, { status: 503 })
+  }
+
+  const authorization = request.headers.get('authorization') ?? ''
+  const providedSecret = authorization.startsWith('Bearer ')
+    ? authorization.slice('Bearer '.length).trim()
+    : ''
+
+  if (!providedSecret || !(await secretsMatch(expectedSecret, providedSecret))) {
+    return json({ error: 'unauthorized', code: ERR.UNAUTHORIZED }, {
+      status: 401,
+      headers: { 'www-authenticate': 'Bearer' },
+    })
+  }
+
+  return null
+}
+
+async function secretsMatch(expected: string, actual: string): Promise<boolean> {
+  const encoder = new TextEncoder()
+  const [expectedDigest, actualDigest] = await Promise.all([
+    crypto.subtle.digest('SHA-256', encoder.encode(expected)),
+    crypto.subtle.digest('SHA-256', encoder.encode(actual)),
+  ])
+  return crypto.subtle.timingSafeEqual(expectedDigest, actualDigest)
+}
+
 async function signSession(secret: string, payload: SessionPayload): Promise<string> {
   const body = base64UrlEncode(JSON.stringify(payload))
   const signature = await hmac(secret, body)
@@ -1522,8 +1657,14 @@ function emptyCors(): Response {
 function withCors(response: Response): Response {
   const next = new Response(response.body, response)
   next.headers.set('access-control-allow-origin', _corsAllowedOrigin)
-  next.headers.set('access-control-allow-methods', 'GET,POST,OPTIONS')
+  next.headers.set('access-control-allow-methods', 'GET,POST,PATCH,OPTIONS')
   next.headers.set('access-control-allow-headers', 'content-type,authorization')
+  return next
+}
+
+function withAdminHeaders(response: Response): Response {
+  const next = withCors(response)
+  next.headers.set('cache-control', 'no-store')
   return next
 }
 
