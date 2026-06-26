@@ -67,6 +67,31 @@ describe('rollDicePool', () => {
     })
   })
 
+  it('uses an integer random source when one is available', () => {
+    const integers = [11, 0]
+    const rolled = rollDicePool({
+      mode: 'dual',
+      modifier_mode: 'normal',
+      repeat: 1,
+      modifier: 0,
+      dice: [],
+    }, {
+      nextInt: (exclusiveMax) => {
+        expect(exclusiveMax).toBe(12)
+        return integers.shift() ?? 0
+      },
+      nextFloat: () => {
+        throw new Error('nextFloat should not be used')
+      },
+    })
+
+    expect(rolled.results[0]).toMatchObject({
+      hope: 12,
+      fear: 1,
+      outcome: 'hope',
+    })
+  })
+
   it('marks matching duality dice as a critical success', () => {
     const rolled = rollDicePool({
       mode: 'dual',

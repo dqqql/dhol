@@ -697,6 +697,11 @@ export class RoomDurableObject {
         await this.commit('dice.roll')
         return
 
+      case 'dice.clearHistory':
+        this.clearDiceHistory()
+        await this.commit('dice.clearHistory')
+        return
+
       case 'xcard.raise':
         this.raiseXCard(player)
         await this.commit('xcard.raise')
@@ -798,7 +803,7 @@ export class RoomDurableObject {
 
   private rollDice(player: Player, request: DiceRollRequest): void {
     const room = this.requireRoom()
-    const rolled = rollDicePool(request, secureRandom)
+    const rolled = rollDicePool(request, secureDiceRandom)
     const record: DiceRollRecord = {
       id: id('dice_roll'),
       created_at: new Date().toISOString(),
@@ -812,6 +817,11 @@ export class RoomDurableObject {
     }
 
     room.dice_rolls = [...(Array.isArray(room.dice_rolls) ? room.dice_rolls : []), record].slice(-50)
+  }
+
+  private clearDiceHistory(): void {
+    const room = this.requireRoom()
+    room.dice_rolls = []
   }
 
   private raiseXCard(player: Player): void {
@@ -1550,10 +1560,22 @@ function buildWebSocketUrl(request: Request, env: Env, inviteCode: string, token
   return url.toString()
 }
 
-function secureRandom(): number {
+const secureDiceRandom = {
+  nextInt: secureRandomInt,
+}
+
+function secureRandomInt(exclusiveMax: number): number {
+  if (!Number.isInteger(exclusiveMax) || exclusiveMax <= 0 || exclusiveMax > 0x1_0000_0000) {
+    throw new Error('随机上限必须是正整数')
+  }
+
   const value = new Uint32Array(1)
-  crypto.getRandomValues(value)
-  return value[0] / 0x1_0000_0000
+  const limit = Math.floor(0x1_0000_0000 / exclusiveMax) * exclusiveMax
+  do {
+    crypto.getRandomValues(value)
+  } while (value[0] >= limit)
+
+  return value[0] % exclusiveMax
 }
 
 function getSessionSecret(env: Env): string {

@@ -283,6 +283,10 @@ export const useStore = create<AppStore>((set, get) => {
     rollDice: (request) => {
       sendMessage({ type: 'dice.roll', payload: request })
     },
+    clearDiceHistory: () => {
+      const sent = sendMessage({ type: 'dice.clearHistory', payload: {} })
+      if (sent) { get().addToast('已清除掷骰记录', 'success') }
+    },
 
     raiseXCard: () => {
       const sent = sendMessage({ type: 'xcard.raise', payload: {} })

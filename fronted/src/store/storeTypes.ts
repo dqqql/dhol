@@ -60,6 +60,7 @@ export interface AppStore extends UIState {
   updateMobileCountdown: (countdownId: string, value: number) => void
   deleteMobileCountdown: (countdownId: string) => void
   rollDice: (request: DiceRollRequest) => void
+  clearDiceHistory: () => void
 
   raiseXCard: () => void
   acknowledgeXCard: () => void

@@ -17,6 +17,11 @@ export interface RolledDicePool {
   results: DiceRollResult[]
 }
 
+export type DiceRandomSource = (() => number) | {
+  nextFloat?: () => number
+  nextInt?: (exclusiveMax: number) => number
+}
+
 export function normalizeDiceRollRequest(input: DiceRollRequest): DiceRollRequest {
   const mode = input?.mode === 'dual' ? 'dual' : 'standard'
   const repeat = boundedInteger(input?.repeat, 1, MAX_REPEAT, '重复次数')
@@ -47,7 +52,7 @@ export function normalizeDiceRollRequest(input: DiceRollRequest): DiceRollReques
   }
 }
 
-export function rollDicePool(input: DiceRollRequest, random: () => number = Math.random): RolledDicePool {
+export function rollDicePool(input: DiceRollRequest, random: DiceRandomSource = Math.random): RolledDicePool {
   const request = normalizeDiceRollRequest(input)
   const rolls = Array.from({ length: request.repeat }, () => (
     request.mode === 'dual' ? rollDual(request, random) : rollStandard(request, random)
@@ -129,7 +134,7 @@ export function formatDiceFormula(request: DiceRollRequest): string {
   return request.repeat > 1 ? `${request.repeat} 次合计：${formula}` : formula
 }
 
-function rollStandard(request: DiceRollRequest, random: () => number): DiceRollResult {
+function rollStandard(request: DiceRollRequest, random: DiceRandomSource): DiceRollResult {
   const isD20Check = request.dice.length === 1
     && request.dice[0].sides === 20
     && request.dice[0].count === 1
@@ -164,7 +169,7 @@ function rollStandard(request: DiceRollRequest, random: () => number): DiceRollR
   }
 }
 
-function rollDual(request: DiceRollRequest, random: () => number): DiceRollResult {
+function rollDual(request: DiceRollRequest, random: DiceRandomSource): DiceRollResult {
   const hope = rollDie(12, random)
   const fear = rollDie(12, random)
   const advantageRoll = request.modifier_mode === 'normal' ? undefined : rollDie(6, random)
@@ -208,7 +213,7 @@ function normalizeModifierMode(value: DiceModifierMode | undefined): DiceModifie
   return 'normal'
 }
 
-function rollPoolEntry(entry: DicePoolEntry, random: () => number): DiceTermRoll {
+function rollPoolEntry(entry: DicePoolEntry, random: DiceRandomSource): DiceTermRoll {
   const rolls = rollMany(entry.count, entry.sides, random)
   return {
     notation: `${entry.count}d${entry.sides}`,
@@ -219,14 +224,31 @@ function rollPoolEntry(entry: DicePoolEntry, random: () => number): DiceTermRoll
   }
 }
 
-function rollMany(count: number, sides: number, random: () => number): number[] {
+function rollMany(count: number, sides: number, random: DiceRandomSource): number[] {
   return Array.from({ length: count }, () => rollDie(sides, random))
 }
 
-function rollDie(sides: number, random: () => number): number {
-  const value = random()
+function rollDie(sides: number, random: DiceRandomSource): number {
+  const integer = randomInteger(random, sides)
+  if (integer !== undefined) return integer + 1
+
+  const value = randomFloat(random)
   const normalized = Number.isFinite(value) ? Math.min(0.999999999999, Math.max(0, value)) : 0
   return Math.floor(normalized * sides) + 1
+}
+
+function randomInteger(random: DiceRandomSource, exclusiveMax: number): number | undefined {
+  if (typeof random === 'function' || typeof random.nextInt !== 'function') return undefined
+
+  const value = random.nextInt(exclusiveMax)
+  if (!Number.isInteger(value) || value < 0 || value >= exclusiveMax) {
+    throw new Error(`随机整数必须在 0 到 ${exclusiveMax - 1} 之间`)
+  }
+  return value
+}
+
+function randomFloat(random: DiceRandomSource): number {
+  return typeof random === 'function' ? random() : random.nextFloat?.() ?? Math.random()
 }
 
 function boundedInteger(value: unknown, min: number, max: number, label: string): number {

@@ -6,7 +6,7 @@ import type {
   DiceRollRequest,
   DiceRollResult,
 } from '@dhgc/shared'
-import { Dices, History, Minus, Plus, RotateCcw, Sparkles, UserRound, X } from 'lucide-react'
+import { Dices, History, Minus, Plus, RotateCcw, Sparkles, Trash2, UserRound, X } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 
 const DICE_SIDES = [4, 6, 8, 10, 12, 20] as const
@@ -24,7 +24,7 @@ type DicePreset = {
 const EMPTY_COUNTS: DiceCounts = Object.fromEntries(DICE_SIDES.map((sides) => [sides, 0]))
 
 export function FloatingDicePanel() {
-  const { room, rollDice } = useStore()
+  const { room, rollDice, clearDiceHistory } = useStore()
   const [isOpen, setIsOpen] = useState(false)
   const [mode, setMode] = useState<'standard' | 'dual'>('dual')
   const [counts, setCounts] = useState<DiceCounts>({ ...EMPTY_COUNTS })
@@ -398,7 +398,7 @@ export function FloatingDicePanel() {
 
               <LatestRollStage roll={latestRoll} />
 
-              <RollHistory rolls={history} />
+              <RollHistory rolls={history} onClear={clearDiceHistory} />
             </div>
           </div>
         </div>
@@ -595,7 +595,7 @@ function OutcomeBackdrop({ tone }: { tone: RollTone }) {
   return <div className="outcome-backdrop outcome-backdrop--standard" aria-hidden="true" />
 }
 
-function RollHistory({ rolls }: { rolls: DiceRollRecord[] }) {
+function RollHistory({ rolls, onClear }: { rolls: DiceRollRecord[]; onClear: () => void }) {
   return (
     <section className="dice-history dice-light-card">
       <div className="dice-section-heading">
@@ -603,7 +603,16 @@ function RollHistory({ rolls }: { rolls: DiceRollRecord[] }) {
           <div className="dice-section-heading__eyebrow">ROOM HISTORY</div>
           <h3>掷骰记录</h3>
         </div>
-        <History size={18} />
+        <button
+          type="button"
+          className="dice-history__clear"
+          onClick={onClear}
+          disabled={rolls.length === 0}
+          aria-label="清除掷骰记录"
+        >
+          {rolls.length === 0 ? <History size={16} /> : <Trash2 size={15} />}
+          清空
+        </button>
       </div>
 
       <div className="dice-history__list">
