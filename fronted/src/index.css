@@ -1944,6 +1944,603 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   }
 }
 
+/* ── Ritual dice panel refresh ─────────────────────────────────── */
+.dice-panel--ritual {
+  min-height: min(68vh, 680px);
+  display: grid;
+  grid-template-columns: minmax(17rem, 20rem) minmax(22rem, 1fr) minmax(14rem, 16rem);
+  gap: 16px;
+  overflow: hidden;
+}
+
+.dice-panel--ritual .dice-light-card,
+.dice-panel--ritual .dice-result-card {
+  border-radius: 12px;
+  border: 1px solid rgba(181, 141, 42, 0.34);
+  background:
+    linear-gradient(180deg, rgba(255, 252, 242, 0.94), rgba(239, 226, 195, 0.88)),
+    #fff8e8;
+  box-shadow:
+    0 22px 48px -28px rgba(55, 37, 12, 0.58),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.dice-panel--ritual .dice-builder,
+.dice-panel--ritual .dice-history {
+  min-height: 0;
+  padding: 16px;
+}
+
+.dice-panel--ritual .dice-builder {
+  align-content: start;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.dice-panel--ritual .dice-section-heading h3 {
+  color: #49361a;
+  letter-spacing: 0.06em;
+}
+
+.dice-panel--ritual .dice-section-heading__eyebrow,
+.dice-panel--ritual .dice-stage__eyebrow {
+  color: #8a6d18;
+  font-family: var(--font-display);
+  letter-spacing: 0.2em;
+}
+
+.dice-panel--ritual .dice-result-card {
+  position: relative;
+  min-height: 460px;
+  overflow: hidden;
+}
+
+.dice-panel--ritual .dice-stage {
+  min-height: 0;
+  height: 100%;
+  padding: 22px;
+  border-color: rgba(181, 141, 42, 0.36);
+  background:
+    radial-gradient(circle at 50% 110%, rgba(219, 171, 45, 0.22), transparent 45%),
+    linear-gradient(180deg, #fffaf0, #ead9b6);
+  color: #332716;
+  box-shadow:
+    0 18px 38px -24px rgba(55, 37, 12, 0.56),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.58);
+}
+
+.dice-panel--ritual .dice-stage::after {
+  inset: 9px;
+  border-color: rgba(122, 89, 28, 0.12);
+  border-radius: 9px;
+}
+
+.dice-panel--ritual .dice-stage--empty {
+  flex-direction: column;
+  text-align: center;
+  color: rgba(90, 68, 32, 0.72);
+}
+
+.dice-panel--ritual .dice-stage--empty h3 {
+  color: #584321;
+  letter-spacing: 0.2em;
+}
+
+.dice-panel--ritual .dice-stage--empty p {
+  color: #79684e;
+}
+
+.dice-panel--ritual .dice-stage__sigil {
+  border-radius: 22%;
+  border-color: rgba(181, 141, 42, 0.56);
+  background: rgba(255, 247, 215, 0.74);
+  color: #725410;
+}
+
+.dice-panel--ritual .dice-stage__header {
+  isolation: isolate;
+}
+
+.dice-panel--ritual .dice-stage__owner {
+  width: max-content;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+  padding: 6px 9px;
+  border: 1px solid rgba(181, 141, 42, 0.32);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.48);
+  color: #49361a;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.dice-panel--ritual .dice-stage__formula {
+  max-width: 36rem;
+  color: #79684e;
+  font-size: 12px;
+}
+
+.dice-panel--ritual .dice-outcome-badge {
+  border-radius: 999px;
+  border-color: rgba(181, 141, 42, 0.34);
+  background: rgba(255, 255, 255, 0.5);
+  color: #6e4c08;
+}
+
+.dice-panel--ritual .dice-outcome-badge--fear {
+  color: #5e3387;
+  border-color: rgba(129, 82, 180, 0.38);
+}
+
+.dice-panel--ritual .dice-outcome-badge--critical {
+  color: #7a570d;
+  border-color: rgba(185, 135, 21, 0.48);
+  box-shadow: 0 0 22px rgba(219, 171, 45, 0.22);
+}
+
+.dice-panel--ritual .dice-stage__result {
+  min-height: 0;
+  height: calc(100% - 116px);
+  padding: 18px 0 10px;
+}
+
+.dice-panel--ritual .dice-stage__details {
+  color: rgba(80, 61, 36, 0.62);
+}
+
+.duality-result-shell,
+.standard-result-shell {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  gap: 22px;
+}
+
+.duality-result {
+  gap: 18px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.standard-result-dice {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+.standard-result-total {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+.standard-result-total span,
+.roll-result__banner > span {
+  color: #79684e;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.28em;
+}
+
+.standard-result-total strong {
+  color: #3f321f;
+  font-family: var(--font-display);
+  font-size: clamp(58px, 8vw, 82px);
+  line-height: 0.9;
+  text-shadow: 0 0 22px rgba(201, 162, 39, 0.25);
+  animation: diceResultArrival 560ms cubic-bezier(.2,.9,.2,1);
+}
+
+.animated-die {
+  --die-fill: linear-gradient(155deg, #fffdf8, #e8dcc3);
+  --die-stroke: #a77d22;
+  --die-ink: #4a3820;
+  --die-glow: rgba(201, 162, 39, 0.28);
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  color: var(--die-stroke);
+}
+
+.animated-die--hope {
+  --die-fill: linear-gradient(155deg, #fffdf6, #f3df9a);
+  --die-stroke: #b98715;
+  --die-ink: #6e4c08;
+  --die-glow: rgba(219, 171, 45, 0.38);
+}
+
+.animated-die--fear {
+  --die-fill: linear-gradient(155deg, #fbf5ff, #d9c3f3);
+  --die-stroke: #8152b4;
+  --die-ink: #4e2778;
+  --die-glow: rgba(122, 59, 214, 0.32);
+}
+
+.animated-die--advantage {
+  --die-fill: linear-gradient(155deg, #f4fff5, #ccebd4);
+  --die-stroke: #398557;
+  --die-ink: #245f3b;
+  --die-glow: rgba(95, 208, 138, 0.3);
+}
+
+.animated-die--disadvantage {
+  --die-fill: linear-gradient(155deg, #fff7f7, #ecc8cf);
+  --die-stroke: #aa4052;
+  --die-ink: #7c2938;
+  --die-glow: rgba(208, 85, 106, 0.3);
+}
+
+.animated-die__face {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--die-stroke);
+  border-radius: 22%;
+  background: var(--die-fill);
+  box-shadow:
+    0 8px 18px -10px rgba(79, 55, 23, 0.5),
+    inset 0 0 10px rgba(255, 255, 255, 0.55);
+  animation: ritualDieRoll 640ms cubic-bezier(.34, 1.56, .64, 1);
+}
+
+.animated-die--small .animated-die__face {
+  width: 58px;
+  height: 58px;
+}
+
+.animated-die.is-critical .animated-die__face {
+  box-shadow:
+    0 0 22px 2px var(--die-glow),
+    inset 0 0 18px rgba(255, 240, 190, 0.25);
+  animation: ritualDieRoll 640ms cubic-bezier(.34, 1.56, .64, 1), criticalDiePulse 1.4s ease-in-out 650ms infinite;
+}
+
+.animated-die__face strong {
+  color: var(--die-ink);
+  font-family: var(--font-display);
+  font-size: 36px;
+  line-height: 1;
+  text-shadow: 0 0 12px var(--die-glow);
+}
+
+.animated-die--small .animated-die__face strong {
+  font-size: 24px;
+}
+
+.animated-die__label {
+  color: var(--die-stroke);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+}
+
+.animated-die__tooltip {
+  pointer-events: none;
+  position: absolute;
+  left: 50%;
+  top: -30px;
+  z-index: 3;
+  transform: translateX(-50%);
+  border-radius: 4px;
+  background: rgba(51, 39, 22, 0.92);
+  padding: 4px 7px;
+  color: #fff8e8;
+  font-size: 10px;
+  font-weight: 800;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.animated-die__face:hover .animated-die__tooltip {
+  opacity: 1;
+}
+
+.roll-result__banner {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+  animation: diceResultArrival 620ms cubic-bezier(.2,.9,.2,1);
+}
+
+.roll-result__banner h3 {
+  color: #6f4d08;
+  font-family: var(--font-display);
+  font-size: clamp(30px, 5vw, 42px);
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 0 24px rgba(111, 77, 8, 0.2);
+}
+
+.roll-result__banner--fear h3 {
+  color: #6c3a9b;
+  text-shadow: 0 0 24px rgba(122, 59, 214, 0.28);
+}
+
+.roll-result__banner--critical h3 {
+  color: #7a570d;
+  background: linear-gradient(90deg, #79520a, #f4d36d, #fff7c8, #b98715);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+  animation: criticalBurst 760ms cubic-bezier(.18, 1.2, .3, 1);
+}
+
+.roll-result__line {
+  width: min(14rem, 70%);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, currentColor, transparent);
+  opacity: 0.6;
+}
+
+.roll-result__banner strong {
+  color: #332716;
+  font-family: var(--font-display);
+  font-size: clamp(68px, 9vw, 92px);
+  line-height: 0.9;
+  text-shadow: 0 4px 24px rgba(219, 171, 45, 0.28);
+}
+
+.roll-result__banner small {
+  color: rgba(121, 104, 78, 0.78);
+  font-size: 12px;
+}
+
+.outcome-backdrop {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.outcome-backdrop--standard {
+  background:
+    radial-gradient(circle at 50% 16%, rgba(201, 162, 39, 0.18), transparent 32%),
+    radial-gradient(circle at 50% 110%, rgba(122, 89, 28, 0.16), transparent 45%);
+}
+
+.outcome-backdrop__hope-rays,
+.outcome-backdrop__crit-rays {
+  position: absolute;
+  inset: -35%;
+  opacity: 0.5;
+  background: conic-gradient(from 20deg, transparent, rgba(219, 171, 45, 0.38), transparent 18%, rgba(255, 247, 199, 0.44), transparent 34%);
+  animation: diceAurora 8s linear infinite;
+}
+
+.outcome-backdrop__hope-ring,
+.outcome-backdrop__crit-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16rem;
+  height: 16rem;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(185, 135, 21, 0.42);
+  border-radius: 50%;
+  box-shadow: 0 0 44px rgba(219, 171, 45, 0.18);
+  animation: outcomeRing 1.2s ease-out both;
+}
+
+.outcome-backdrop__fear-vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 48%, rgba(129, 82, 180, 0.18), transparent 34%),
+    radial-gradient(circle at 50% 100%, rgba(76, 39, 120, 0.22), transparent 54%);
+}
+
+.outcome-backdrop__ink {
+  position: absolute;
+  width: 14rem;
+  height: 14rem;
+  border-radius: 46% 54% 57% 43%;
+  background: rgba(100, 53, 148, 0.12);
+  filter: blur(2px);
+  animation: inkDrift 3.8s ease-in-out infinite alternate;
+}
+
+.outcome-backdrop__ink--one { left: -3rem; top: 14%; }
+.outcome-backdrop__ink--two { right: -4rem; top: 28%; animation-delay: -1s; }
+.outcome-backdrop__ink--three { left: 42%; bottom: -6rem; animation-delay: -1.8s; }
+
+.outcome-backdrop__fear-ripple {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7rem;
+  height: 7rem;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(129, 82, 180, 0.38);
+  border-radius: 50%;
+  animation: fearRipple 1s ease-out both;
+}
+
+.outcome-backdrop--crit {
+  background: radial-gradient(circle at 50% 46%, rgba(240, 210, 100, 0.32), transparent 38%);
+}
+
+.outcome-backdrop__crit-ring--two {
+  width: 22rem;
+  height: 22rem;
+  animation-delay: 120ms;
+}
+
+.outcome-mote {
+  position: absolute;
+  left: var(--mote-x);
+  bottom: 8%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #f0d264;
+  box-shadow: 0 0 10px rgba(240, 210, 100, 0.8);
+  animation: hopeMote var(--mote-duration) ease-out var(--mote-delay) both;
+}
+
+.dice-panel--ritual .dice-token {
+  min-height: 48px;
+}
+
+.dice-panel--ritual .dice-tray {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dice-panel--ritual .dice-control-row {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.dice-panel--ritual .dice-token__count {
+  top: -4px;
+  right: -4px;
+  border-radius: 999px;
+  background: #fff;
+  color: #332716;
+}
+
+.dice-panel--ritual .dice-mode-switch button,
+.dice-panel--ritual .dice-advantage-switch button,
+.dice-panel--ritual .dice-stepper,
+.dice-panel--ritual .dice-stepper button {
+  border-radius: 9px;
+}
+
+.dice-panel--ritual .dice-roll-button {
+  border-radius: 10px;
+  background: linear-gradient(90deg, #9f771e, #f0d264, #9f771e);
+  background-size: 200% auto;
+  animation: rollButtonSheen 4s linear infinite;
+}
+
+.dice-panel--ritual .dice-history {
+  overflow: hidden;
+}
+
+.dice-panel--ritual .dice-history__list {
+  flex: 1;
+  max-height: none;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.dice-panel--ritual .dice-history-item {
+  border: 1px solid #d2c09d;
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.48);
+}
+
+.dice-panel--ritual .dice-history-item__actor {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #4d3d29;
+}
+
+.dice-panel--ritual .dice-history-item__actor strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes ritualDieRoll {
+  0% { opacity: 0; transform: translateY(-14px) rotate(-16deg) scale(0.86); filter: blur(5px); }
+  52% { opacity: 1; transform: translateY(4px) rotate(10deg) scale(1.08); filter: none; }
+  72% { transform: translateY(0) rotate(-5deg) scale(0.98); }
+  100% { opacity: 1; transform: none; filter: none; }
+}
+
+@keyframes criticalDiePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08) rotate(2deg); }
+}
+
+@keyframes outcomeRing {
+  from { opacity: 0.8; transform: translate(-50%, -50%) scale(0.35); }
+  to { opacity: 0; transform: translate(-50%, -50%) scale(1.55); }
+}
+
+@keyframes inkDrift {
+  from { transform: translate3d(-8px, -5px, 0) rotate(-6deg); }
+  to { transform: translate3d(10px, 8px, 0) rotate(8deg); }
+}
+
+@keyframes fearRipple {
+  from { opacity: 0.75; transform: translate(-50%, -50%) scale(0.2); }
+  to { opacity: 0; transform: translate(-50%, -50%) scale(3.2); }
+}
+
+@keyframes hopeMote {
+  from { opacity: 0; transform: translateY(16px) scale(0.5); }
+  30% { opacity: 1; }
+  to { opacity: 0; transform: translateY(-150px) scale(1.25); }
+}
+
+@keyframes rollButtonSheen {
+  to { background-position: 200% center; }
+}
+
+@media (max-width: 1080px) {
+  .dice-panel--ritual {
+    min-height: 0;
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  .dice-panel--ritual .dice-result-card {
+    min-height: 420px;
+  }
+
+  .dice-panel--ritual .dice-history__list {
+    max-height: 280px;
+  }
+}
+
+@media (max-width: 520px) {
+  .dice-panel--ritual .dice-stage {
+    padding: 18px 14px;
+  }
+
+  .dice-panel--ritual .dice-stage__header {
+    display: grid;
+  }
+
+  .dice-panel--ritual .dice-stage__result {
+    height: auto;
+  }
+
+  .animated-die__face {
+    width: 68px;
+    height: 68px;
+  }
+
+  .animated-die__face strong {
+    font-size: 30px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dice-panel--ritual *,
+  .dice-panel--ritual *::before,
+  .dice-panel--ritual *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
+
 /* Room administration */
 .admin-page {
   width: 100%;

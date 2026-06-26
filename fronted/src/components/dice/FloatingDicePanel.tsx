@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 import type {
   DiceModifierMode,
   DicePoolEntry,
@@ -6,13 +6,15 @@ import type {
   DiceRollRequest,
   DiceRollResult,
 } from '@dhgc/shared'
-import { Dices, History, Minus, Plus, RotateCcw, Sparkles } from 'lucide-react'
+import { Dices, History, Minus, Plus, RotateCcw, Sparkles, UserRound } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { useStore } from '@/store/useStore'
 
 const DICE_SIDES = [4, 6, 8, 10, 12, 20] as const
 
 type DiceCounts = Record<number, number>
+type RollTone = 'standard' | 'hope' | 'fear' | 'critical'
+type DieTone = 'neutral' | 'hope' | 'fear' | 'advantage' | 'disadvantage'
 
 const EMPTY_COUNTS: DiceCounts = Object.fromEntries(DICE_SIDES.map((sides) => [sides, 0]))
 
@@ -93,105 +95,103 @@ export function FloatingDicePanel() {
         掷骰
       </button>
 
-      <Modal open={isOpen} onClose={() => setIsOpen(false)} title="掷骰台" maxWidth={1180}>
-        <div className="dice-panel">
-          <LatestRollStage roll={latestRoll} />
-
-          <div className="dice-panel__workspace">
-            <section className="dice-builder" aria-label="骰盘">
-              <div className="dice-section-heading">
-                <div>
-                  <div className="dice-section-heading__eyebrow">ROLL SETUP</div>
-                  <h3>准备骰池</h3>
-                </div>
-                <button type="button" className="dice-reset" onClick={resetPool}>
-                  <RotateCcw size={14} /> 重置
-                </button>
-              </div>
-
-              <div className="dice-mode-switch" aria-label="掷骰模式">
-                <button
-                  type="button"
-                  className={mode === 'standard' ? 'is-active' : ''}
-                  onClick={() => changeMode('standard')}
-                >
-                  普通骰池
-                  <span>所选骰子相加</span>
-                </button>
-                <button
-                  type="button"
-                  className={mode === 'dual' ? 'is-active is-dual' : ''}
-                  onClick={() => changeMode('dual')}
-                >
-                  匕首之心
-                  <span>希望 d12 + 恐惧 d12</span>
-                </button>
-              </div>
-
+      <Modal open={isOpen} onClose={() => setIsOpen(false)} title="掷骰面板" maxWidth={1152}>
+        <div className="dice-panel dice-panel--ritual">
+          <section className="dice-builder dice-light-card" aria-label="骰盘">
+            <div className="dice-section-heading">
               <div>
-                <div className="dice-field-label">
-                  <span>{mode === 'dual' ? '附加骰' : '骰盘'}</span>
-                  <span>左键增加，右键减少</span>
-                </div>
-                <div className="dice-tray">
-                  {DICE_SIDES.map((sides) => {
-                    const count = counts[sides] ?? 0
-                    return (
-                      <button
-                        key={sides}
-                        type="button"
-                        className={`dice-token ${count ? 'is-selected' : ''}`}
-                        onClick={() => changeDie(sides, 1)}
-                        onContextMenu={(event) => {
+                <div className="dice-section-heading__eyebrow">ROLL SETUP</div>
+                <h3>准备骰池</h3>
+              </div>
+              <button type="button" className="dice-reset" onClick={resetPool}>
+                <RotateCcw size={14} /> 重置
+              </button>
+            </div>
+
+            <div className="dice-mode-switch" aria-label="掷骰模式">
+              <button
+                type="button"
+                className={mode === 'standard' ? 'is-active' : ''}
+                onClick={() => changeMode('standard')}
+              >
+                普通骰池
+                <span>所选骰子相加</span>
+              </button>
+              <button
+                type="button"
+                className={mode === 'dual' ? 'is-active is-dual' : ''}
+                onClick={() => changeMode('dual')}
+              >
+                匕首之心
+                <span>希望 d12 + 恐惧 d12</span>
+              </button>
+            </div>
+
+            <div>
+              <div className="dice-field-label">
+                <span>{mode === 'dual' ? '附加骰' : '骰盘'}</span>
+                <span>左键增加，右键减少</span>
+              </div>
+              <div className="dice-tray">
+                {DICE_SIDES.map((sides) => {
+                  const count = counts[sides] ?? 0
+                  return (
+                    <button
+                      key={sides}
+                      type="button"
+                      className={`dice-token ${count ? 'is-selected' : ''}`}
+                      onClick={() => changeDie(sides, 1)}
+                      onContextMenu={(event) => {
+                        event.preventDefault()
+                        changeDie(sides, -1)
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Backspace' || event.key === 'Delete' || event.key === 'ArrowDown') {
                           event.preventDefault()
                           changeDie(sides, -1)
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Backspace' || event.key === 'Delete' || event.key === 'ArrowDown') {
-                            event.preventDefault()
-                            changeDie(sides, -1)
-                          }
-                        }}
-                        aria-label={`d${sides}，当前 ${count} 枚。左键增加，右键减少`}
-                      >
-                        <DiceIcon sides={sides} />
-                        {count > 0 && <strong className="dice-token__count">{count}</strong>}
-                      </button>
-                    )
-                  })}
-                </div>
+                        }
+                      }}
+                      aria-label={`d${sides}，当前 ${count} 枚。左键增加，右键减少`}
+                    >
+                      <DiceIcon sides={sides} />
+                      <strong className="dice-token__count">{count}</strong>
+                    </button>
+                  )
+                })}
               </div>
+            </div>
 
-              <div className="dice-control-row">
-                <Stepper
-                  label="固定加值"
-                  value={modifier}
-                  onChange={setModifier}
-                  min={-100000}
-                  max={100000}
-                  format={(value) => value > 0 ? `+${value}` : String(value)}
-                />
-                <div className="dice-advantage-switch">
-                  <AdvantageButton mode="normal" value={effectiveModifierMode} disabled={false} onChange={setModifierMode}>
-                    常规
-                  </AdvantageButton>
-                  <AdvantageButton mode="advantage" value={effectiveModifierMode} disabled={!canUseAdvantage} onChange={setModifierMode}>
-                    优势
-                  </AdvantageButton>
-                  <AdvantageButton mode="disadvantage" value={effectiveModifierMode} disabled={!canUseAdvantage} onChange={setModifierMode}>
-                    劣势
-                  </AdvantageButton>
-                </div>
+            <div className="dice-control-row">
+              <Stepper
+                label="固定加值"
+                value={modifier}
+                onChange={setModifier}
+                min={-100000}
+                max={100000}
+                format={(value) => value > 0 ? `+${value}` : String(value)}
+              />
+              <div className="dice-advantage-switch">
+                <AdvantageButton mode="normal" value={effectiveModifierMode} disabled={false} onChange={setModifierMode}>
+                  常规
+                </AdvantageButton>
+                <AdvantageButton mode="advantage" value={effectiveModifierMode} disabled={!canUseAdvantage} onChange={setModifierMode}>
+                  优势
+                </AdvantageButton>
+                <AdvantageButton mode="disadvantage" value={effectiveModifierMode} disabled={!canUseAdvantage} onChange={setModifierMode}>
+                  劣势
+                </AdvantageButton>
               </div>
+            </div>
 
-              <button type="button" className="dice-roll-button" disabled={!canRoll} onClick={submitRoll}>
-                <Dices size={20} />
-                掷出骰子
-              </button>
-            </section>
+            <button type="button" className="dice-roll-button" disabled={!canRoll} onClick={submitRoll}>
+              <Dices size={20} />
+              掷出骰子
+            </button>
+          </section>
 
-            <RollHistory rolls={history} />
-          </div>
+          <LatestRollStage roll={latestRoll} />
+
+          <RollHistory rolls={history} />
         </div>
       </Modal>
     </>
@@ -200,7 +200,6 @@ export function FloatingDicePanel() {
 
 function DiceIcon({ sides }: { sides: number }) {
   const label = `d${sides}`
-  const textClass = 'dice-token__number'
 
   return (
     <svg className="dice-token__icon" viewBox="0 0 80 80" aria-hidden="true">
@@ -241,7 +240,7 @@ function DiceIcon({ sides }: { sides: number }) {
           <path className="dice-token__detail" d="M40 3L25 29 10 18M40 3l15 26 15-11M2 49l23-20h30l23 20M2 49l20 26 18-20 18 20 20-26M25 29l15 26 15-26" />
         </>
       )}
-      <text className={textClass} x="40" y="42">{label}</text>
+      <text className="dice-token__number" x="40" y="42">{label}</text>
     </svg>
   )
 }
@@ -249,12 +248,12 @@ function DiceIcon({ sides }: { sides: number }) {
 function LatestRollStage({ roll }: { roll?: DiceRollRecord }) {
   if (!roll) {
     return (
-      <section className="dice-stage dice-stage--empty">
+      <section className="dice-stage dice-stage--empty dice-result-card">
         <div className="dice-stage__sigil"><Dices size={30} /></div>
         <div>
-          <div className="dice-stage__eyebrow">LAST ROLL</div>
-          <h3>骰声尚未响起</h3>
-          <p>从下方骰盘选择骰子，第一次结果会在这里成为全场焦点。</p>
+          <div className="dice-stage__eyebrow">WAITING</div>
+          <h3>等待掷骰</h3>
+          <p>选择骰池后，最新结果会在这里展开。</p>
         </div>
       </section>
     )
@@ -265,11 +264,15 @@ function LatestRollStage({ roll }: { roll?: DiceRollRecord }) {
   const outcomeLabel = getOutcomeLabel(primary)
 
   return (
-    <section key={roll.id} className={`dice-stage dice-stage--${tone}`} aria-live="polite">
-      <div className="dice-stage__aurora" />
+    <section key={roll.id} className={`dice-stage dice-stage--${tone} dice-result-card`} aria-live="polite">
+      <OutcomeBackdrop tone={tone} />
       <div className="dice-stage__header">
         <div>
-          <div className="dice-stage__eyebrow">LAST ROLL · {roll.actor_name}</div>
+          <div className="dice-stage__eyebrow">最新掷骰结果</div>
+          <div className="dice-stage__owner">
+            <UserRound size={14} />
+            <span>{roll.actor_name}</span>
+          </div>
           <div className="dice-stage__formula">{roll.normalized_formula}</div>
         </div>
         <div className={`dice-outcome-badge dice-outcome-badge--${tone}`}>
@@ -279,20 +282,10 @@ function LatestRollStage({ roll }: { roll?: DiceRollRecord }) {
       </div>
 
       <div className="dice-stage__result">
-        <div className="dice-stage__total">{primary.total}</div>
-
-        {primary.hope !== undefined && primary.fear !== undefined && (
-          <div className="duality-result">
-            <div className="duality-die duality-die--hope">
-              <span>希望</span>
-              <strong>{primary.hope}</strong>
-            </div>
-            <div className="duality-result__divider">+</div>
-            <div className="duality-die duality-die--fear">
-              <span>恐惧</span>
-              <strong>{primary.fear}</strong>
-            </div>
-          </div>
+        {primary.hope !== undefined && primary.fear !== undefined ? (
+          <DualityRollResult result={primary} modifier={roll.request.modifier} modifierMode={roll.request.modifier_mode} />
+        ) : (
+          <StandardRollResult result={primary} />
         )}
       </div>
 
@@ -303,27 +296,167 @@ function LatestRollStage({ roll }: { roll?: DiceRollRecord }) {
   )
 }
 
+function DualityRollResult(props: {
+  result: DiceRollResult
+  modifier: number
+  modifierMode: DiceModifierMode
+}) {
+  const { result, modifier, modifierMode } = props
+  const advantageTone: DieTone = modifierMode === 'advantage' ? 'advantage' : 'disadvantage'
+
+  return (
+    <div className="duality-result-shell">
+      <div className="duality-result">
+        <AnimatedDie value={result.hope ?? 0} sides={12} tone="hope" label="希望" critical={result.critical} />
+        <AnimatedDie value={result.fear ?? 0} sides={12} tone="fear" label="恐惧" critical={result.critical} />
+        {result.advantage_roll !== undefined && (
+          <AnimatedDie
+            value={result.advantage_roll}
+            sides={6}
+            tone={advantageTone}
+            label={modifierMode === 'advantage' ? '优势' : '劣势'}
+            size="small"
+          />
+        )}
+      </div>
+      <ResultBanner result={result} modifier={modifier} />
+    </div>
+  )
+}
+
+function StandardRollResult({ result }: { result: DiceRollResult }) {
+  const dice = result.terms.flatMap((term) => (
+    term.rolls.map((value, index) => ({
+      key: `${term.sides}-${index}-${value}`,
+      sides: term.sides,
+      value,
+    }))
+  ))
+
+  return (
+    <div className="standard-result-shell">
+      <div className="standard-result-dice">
+        {dice.map((die) => (
+          <AnimatedDie key={die.key} value={die.value} sides={die.sides} tone="neutral" />
+        ))}
+      </div>
+      <div className="standard-result-total">
+        <span>总点数</span>
+        <strong>{result.total}</strong>
+      </div>
+    </div>
+  )
+}
+
+function ResultBanner({ result, modifier }: { result: DiceRollResult, modifier: number }) {
+  const tone = getRollTone(result)
+  const details: string[] = []
+  if (result.hope !== undefined) details.push(String(result.hope))
+  if (result.fear !== undefined) details.push(String(result.fear))
+  if (result.advantage_roll !== undefined) details.push(`${result.advantage_roll > 0 ? '+' : ''}${result.advantage_roll}`)
+  if (modifier !== 0) details.push(`${modifier > 0 ? '+' : ''}${modifier}`)
+
+  return (
+    <div className={`roll-result__banner roll-result__banner--${tone}`}>
+      <h3>{getOutcomeLabel(result)}</h3>
+      <div className="roll-result__line" />
+      <span>总点数</span>
+      <strong>{result.total}</strong>
+      {details.length > 0 && <small>({details.join(' + ')})</small>}
+    </div>
+  )
+}
+
+function AnimatedDie(props: {
+  value: number
+  sides: number
+  tone?: DieTone
+  label?: string
+  critical?: boolean
+  size?: 'small' | 'normal'
+}) {
+  const { value, sides, tone = 'neutral', label, critical = false, size = 'normal' } = props
+  return (
+    <div className={`animated-die animated-die--${tone} ${critical ? 'is-critical' : ''} animated-die--${size}`}>
+      <div className="animated-die__face" title={`d${sides}`}>
+        <span className="animated-die__tooltip">d{sides}</span>
+        <strong>{value}</strong>
+      </div>
+      {label && <span className="animated-die__label">{label}</span>}
+    </div>
+  )
+}
+
+function OutcomeBackdrop({ tone }: { tone: RollTone }) {
+  if (tone === 'hope') {
+    return (
+      <div className="outcome-backdrop outcome-backdrop--hope" aria-hidden="true">
+        <span className="outcome-backdrop__hope-rays" />
+        <span className="outcome-backdrop__hope-ring" />
+        {Array.from({ length: 14 }).map((_, index) => (
+          <span
+            key={index}
+            className="outcome-mote"
+            style={{
+              '--mote-x': `${10 + (index * 31) % 80}%`,
+              '--mote-delay': `${(index % 7) * 0.11}s`,
+              '--mote-duration': `${1.15 + (index % 5) * 0.13}s`,
+            } as CSSProperties}
+          />
+        ))}
+      </div>
+    )
+  }
+
+  if (tone === 'fear') {
+    return (
+      <div className="outcome-backdrop outcome-backdrop--fear" aria-hidden="true">
+        <span className="outcome-backdrop__fear-vignette" />
+        <span className="outcome-backdrop__ink outcome-backdrop__ink--one" />
+        <span className="outcome-backdrop__ink outcome-backdrop__ink--two" />
+        <span className="outcome-backdrop__ink outcome-backdrop__ink--three" />
+        <span className="outcome-backdrop__fear-ripple" />
+      </div>
+    )
+  }
+
+  if (tone === 'critical') {
+    return (
+      <div className="outcome-backdrop outcome-backdrop--crit" aria-hidden="true">
+        <span className="outcome-backdrop__crit-rays" />
+        <span className="outcome-backdrop__crit-ring outcome-backdrop__crit-ring--one" />
+        <span className="outcome-backdrop__crit-ring outcome-backdrop__crit-ring--two" />
+      </div>
+    )
+  }
+
+  return <div className="outcome-backdrop outcome-backdrop--standard" aria-hidden="true" />
+}
+
 function RollHistory({ rolls }: { rolls: DiceRollRecord[] }) {
   return (
-    <section className="dice-history">
+    <section className="dice-history dice-light-card">
       <div className="dice-section-heading">
         <div>
           <div className="dice-section-heading__eyebrow">ROOM HISTORY</div>
-          <h3>掷骰历史</h3>
+          <h3>掷骰记录</h3>
         </div>
         <History size={18} />
       </div>
 
       <div className="dice-history__list">
         {rolls.length === 0 ? (
-          <div className="dice-history__empty">房间中还没有掷骰记录。</div>
+          <div className="dice-history__empty">尚无掷骰记录。</div>
         ) : rolls.map((roll) => {
           const primary = roll.results[0]
           const tone = getRollTone(primary)
           return (
             <article key={roll.id} className={`dice-history-item dice-history-item--${tone}`}>
               <div className="dice-history-item__top">
-                <strong>{roll.actor_name}</strong>
+                <span className="dice-history-item__actor">
+                  <UserRound size={12} />
+                  <strong>{roll.actor_name}</strong>
+                </span>
                 <time>{formatTime(roll.created_at)}</time>
               </div>
               <div className="dice-history-item__formula">{roll.normalized_formula}</div>
@@ -388,7 +521,7 @@ function AdvantageButton(props: {
   )
 }
 
-function getRollTone(result: DiceRollResult) {
+function getRollTone(result: DiceRollResult): RollTone {
   if (result.critical) return 'critical'
   if (result.outcome === 'hope') return 'hope'
   if (result.outcome === 'fear') return 'fear'
