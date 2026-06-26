@@ -11,6 +11,12 @@ import { Modal } from '@/components/ui/Modal'
 import { useStore } from '@/store/useStore'
 
 const DICE_SIDES = [4, 6, 8, 10, 12, 20] as const
+const DICE_GROUP_PRESETS = [
+  { label: 'd20', formula: '1d20' },
+  { label: '2d6', formula: '2d6' },
+  { label: '3d6', formula: '3d6' },
+  { label: '2d12+2', formula: '2d12 + 2' },
+] as const
 
 type DiceCounts = Record<number, number>
 type RollTone = 'standard' | 'hope' | 'fear' | 'critical'
@@ -25,6 +31,8 @@ export function FloatingDicePanel() {
   const [counts, setCounts] = useState<DiceCounts>({ ...EMPTY_COUNTS, 20: 1 })
   const [modifier, setModifier] = useState(0)
   const [modifierMode, setModifierMode] = useState<DiceModifierMode>('normal')
+  const [diceGroupFormula, setDiceGroupFormula] = useState('1d20')
+  const [diceGroupError, setDiceGroupError] = useState('')
 
   const dice = useMemo<DicePoolEntry[]>(() => (
     DICE_SIDES
@@ -77,11 +85,27 @@ export function FloatingDicePanel() {
     setCounts(mode === 'standard' ? { ...EMPTY_COUNTS, 20: 1 } : { ...EMPTY_COUNTS })
     setModifier(0)
     setModifierMode('normal')
+    setDiceGroupFormula('1d20')
+    setDiceGroupError('')
   }
 
   function submitRoll() {
     if (!canRoll) return
     rollDice(request)
+  }
+
+  function applyDiceGroup(formula = diceGroupFormula) {
+    try {
+      const parsed = parseDiceGroupFormula(formula)
+      setMode('standard')
+      setCounts(parsed.counts)
+      setModifier(parsed.modifier)
+      setModifierMode('normal')
+      setDiceGroupFormula(parsed.normalized)
+      setDiceGroupError('')
+    } catch (error) {
+      setDiceGroupError(error instanceof Error ? error.message : '骰组格式无效')
+    }
   }
 
   return (
@@ -161,6 +185,45 @@ export function FloatingDicePanel() {
               </div>
             </div>
 
+            {mode === 'standard' && (
+              <div className="dice-group-box">
+                <div className="dice-field-label">
+                  <span>骰组</span>
+                  <span>例：2d6 + d8 + 3</span>
+                </div>
+                <div className="dice-group-input-row">
+                  <input
+                    className="dice-group-input"
+                    value={diceGroupFormula}
+                    onChange={(event) => {
+                      setDiceGroupFormula(event.target.value)
+                      if (diceGroupError) setDiceGroupError('')
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') applyDiceGroup()
+                    }}
+                    aria-label="骰组公式"
+                    placeholder="2d6 + d8 + 3"
+                  />
+                  <button type="button" className="dice-group-apply" onClick={() => applyDiceGroup()}>
+                    应用
+                  </button>
+                </div>
+                <div className="dice-group-presets" aria-label="骰组快捷项">
+                  {DICE_GROUP_PRESETS.map((preset) => (
+                    <button
+                      key={preset.formula}
+                      type="button"
+                      onClick={() => applyDiceGroup(preset.formula)}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+                {diceGroupError && <div className="dice-group-error">{diceGroupError}</div>}
+              </div>
+            )}
+
             <div className="dice-control-row">
               <Stepper
                 label="固定加值"
@@ -205,39 +268,39 @@ function DiceIcon({ sides }: { sides: number }) {
     <svg className="dice-token__icon" viewBox="0 0 80 80" aria-hidden="true">
       {sides === 4 && (
         <>
-          <polygon className="dice-token__face" points="40,6 74,70 6,70" />
-          <path className="dice-token__detail" d="M40 6v45M6 70l34-19 34 19" />
+          <polygon className="dice-token__face" points="40,5 75,70 5,70" />
+          <path className="dice-token__detail" d="M40 5L22 70M40 5l18 65M12 58h56M22 70l18-30 18 30" />
         </>
       )}
       {sides === 6 && (
         <>
-          <polygon className="dice-token__face" points="40,5 71,22 71,58 40,75 9,58 9,22" />
-          <path className="dice-token__detail" d="M9 22l31 18 31-18M40 40v35" />
+          <polygon className="dice-token__face" points="40,6 72,24 72,58 40,74 8,58 8,24" />
+          <path className="dice-token__detail" d="M8 24l32 18 32-18M40 42v32M8 58l32-16 32 16M40 6v36" />
         </>
       )}
       {sides === 8 && (
         <>
           <polygon className="dice-token__face" points="40,4 74,40 40,76 6,40" />
-          <path className="dice-token__detail" d="M40 4v72M6 40h68M6 40l34-18 34 18M6 40l34 18 34-18" />
+          <path className="dice-token__detail" d="M40 4v72M6 40h68M6 40l34-20 34 20M6 40l34 20 34-20M22 40l18-36 18 36M22 40l18 36 18-36" />
         </>
       )}
       {sides === 10 && (
         <>
-          <polygon className="dice-token__face" points="40,4 70,22 75,52 56,75 24,75 5,52 10,22" />
-          <path className="dice-token__detail" d="M40 4L25 43l-15-21M40 4l15 39 15-21M5 52l20-9 15 32 15-32 20 9" />
+          <polygon className="dice-token__face" points="40,4 68,18 76,52 58,74 22,74 4,52 12,18" />
+          <path className="dice-token__detail" d="M40 4L22 38 12 18M40 4l18 34 10-20M4 52l18-14 18 36 18-36 18 14M22 74l18-36 18 36M22 38h36" />
         </>
       )}
       {sides === 12 && (
         <>
           <polygon className="dice-token__face" points="28,5 52,5 72,20 78,44 66,68 40,77 14,68 2,44 8,20" />
-          <polygon className="dice-token__detail dice-token__detail--closed" points="40,18 58,31 51,53 29,53 22,31" />
-          <path className="dice-token__detail" d="M28 5l12 13L52 5M8 20l14 11L2 44M78 44L58 31l14-11M14 68l15-15 11 24 11-24 15 15" />
+          <polygon className="dice-token__detail dice-token__detail--closed" points="40,16 59,30 52,54 28,54 21,30" />
+          <path className="dice-token__detail" d="M28 5l12 11L52 5M8 20l13 10L2 44M78 44L59 30l13-10M14 68l14-14 12 23 12-23 14 14M21 30l19-14 19 14M28 54l-26-10M52 54l26-10M28 54L14 68M52 54l14 14" />
         </>
       )}
       {sides === 20 && (
         <>
-          <polygon className="dice-token__face" points="40,3 70,18 78,49 58,75 22,75 2,49 10,18" />
-          <path className="dice-token__detail" d="M40 3L25 29 10 18M40 3l15 26 15-11M2 49l23-20h30l23 20M2 49l20 26 18-20 18 20 20-26M25 29l15 26 15-26" />
+          <polygon className="dice-token__face" points="40,4 69,17 78,48 60,72 22,75 2,50 11,18" />
+          <path className="dice-token__detail" d="M40 4L25 28 11 18M40 4l15 25 14-12M2 50l23-22h30l23 20M2 50l20 25 18-20 20 17 18-24M25 28l15 27 15-26M11 18l14 10-23 22M69 17L55 29l23 19M22 75l18-20 20 17M25 28l-3 47M55 29l5 43" />
         </>
       )}
       <text className="dice-token__number" x="40" y="42">{label}</text>
@@ -557,6 +620,83 @@ function formatResultDetails(result: DiceRollResult, modifier: number) {
   }
 
   return parts.join(' · ')
+}
+
+function parseDiceGroupFormula(formula: string): {
+  counts: DiceCounts
+  modifier: number
+  normalized: string
+} {
+  const cleaned = formula
+    .trim()
+    .toLowerCase()
+    .replace(/[−–—]/g, '-')
+    .replace(/\s+/g, '')
+
+  if (!cleaned) throw new Error('请输入骰组公式')
+
+  const pattern = /([+-]?)(?:(\d*)d(\d+)|(\d+))/gy
+  const allowedSides = new Set<number>(DICE_SIDES)
+  const totals = new Map<number, number>()
+  let modifier = 0
+  let cursor = 0
+  let totalDice = 0
+
+  while (cursor < cleaned.length) {
+    pattern.lastIndex = cursor
+    const match = pattern.exec(cleaned)
+    if (!match || match.index !== cursor) {
+      throw new Error('公式格式无效，请使用如 2d6 + d8 + 3')
+    }
+
+    const [token, sign, countText, sidesText, modifierText] = match
+    if (cursor > 0 && !sign) throw new Error('骰组各项之间需要使用 + 或 -')
+
+    if (sidesText) {
+      if (sign === '-') throw new Error('暂不支持从结果中减去骰子')
+      const count = countText ? Number(countText) : 1
+      const sides = Number(sidesText)
+
+      if (!Number.isInteger(count) || count < 1 || count > 20) {
+        throw new Error('每种骰子的数量需为 1 到 20')
+      }
+      if (!allowedSides.has(sides)) {
+        throw new Error(`当前骰组仅支持 d${DICE_SIDES.join('、d')}`)
+      }
+
+      totalDice += count
+      if (totalDice > 60) throw new Error('单个骰组最多包含 60 颗骰子')
+      totals.set(sides, (totals.get(sides) ?? 0) + count)
+    } else {
+      const value = Number(modifierText)
+      modifier += sign === '-' ? -value : value
+      if (Math.abs(modifier) > 100000) throw new Error('固定加值范围需在 -100000 到 +100000 之间')
+    }
+
+    cursor += token.length
+  }
+
+  if (totals.size === 0) throw new Error('公式中至少需要一颗骰子')
+
+  const counts = { ...EMPTY_COUNTS }
+  for (const [sides, count] of totals.entries()) {
+    counts[sides] = Math.min(100, count)
+  }
+
+  const diceText = DICE_SIDES
+    .map((sides) => {
+      const count = counts[sides] ?? 0
+      return count > 0 ? `${count}d${sides}` : ''
+    })
+    .filter(Boolean)
+    .join(' + ')
+  const modifierText = modifier > 0 ? ` + ${modifier}` : modifier < 0 ? ` - ${Math.abs(modifier)}` : ''
+
+  return {
+    counts,
+    modifier,
+    normalized: `${diceText}${modifierText}`,
+  }
 }
 
 function formatTime(value: string) {
