@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import type {
   DiceModifierMode,
   DicePoolEntry,
@@ -6,8 +6,7 @@ import type {
   DiceRollRequest,
   DiceRollResult,
 } from '@dhgc/shared'
-import { Dices, History, Minus, Plus, RotateCcw, Sparkles, UserRound } from 'lucide-react'
-import { Modal } from '@/components/ui/Modal'
+import { Dices, History, Minus, Plus, RotateCcw, Sparkles, UserRound, X } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 
 const DICE_SIDES = [4, 6, 8, 10, 12, 20] as const
@@ -27,8 +26,8 @@ const EMPTY_COUNTS: DiceCounts = Object.fromEntries(DICE_SIDES.map((sides) => [s
 export function FloatingDicePanel() {
   const { room, rollDice } = useStore()
   const [isOpen, setIsOpen] = useState(false)
-  const [mode, setMode] = useState<'standard' | 'dual'>('standard')
-  const [counts, setCounts] = useState<DiceCounts>({ ...EMPTY_COUNTS, 20: 1 })
+  const [mode, setMode] = useState<'standard' | 'dual'>('dual')
+  const [counts, setCounts] = useState<DiceCounts>({ ...EMPTY_COUNTS })
   const [modifier, setModifier] = useState(0)
   const [modifierMode, setModifierMode] = useState<DiceModifierMode>('normal')
   const [diceGroupFormula, setDiceGroupFormula] = useState('1d20')
@@ -54,6 +53,17 @@ export function FloatingDicePanel() {
   const roomRolls = Array.isArray(room?.dice_rolls) ? room.dice_rolls : []
   const latestRoll = roomRolls.at(-1)
   const history = roomRolls.slice().reverse()
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsOpen(false)
+    }
+
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [isOpen])
 
   function changeDie(sides: number, delta: number) {
     const nextCounts = {
@@ -119,192 +129,171 @@ export function FloatingDicePanel() {
         掷骰
       </button>
 
-      <Modal open={isOpen} onClose={() => setIsOpen(false)} title="掷骰面板" maxWidth={1152}>
-        <div className="dice-panel dice-panel--ritual">
-          <section className="dice-builder dice-light-card" aria-label="骰盘">
-            <div className="dice-section-heading">
-              <div>
-                <div className="dice-section-heading__eyebrow">ROLL SETUP</div>
-                <h3>准备骰池</h3>
-              </div>
-              <button type="button" className="dice-reset" onClick={resetPool}>
-                <RotateCcw size={14} /> 重置
-              </button>
-            </div>
-
-            <div className="dice-mode-switch" aria-label="掷骰模式">
+      {isOpen && (
+        <div
+          className="dice-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="dice-modal-title"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setIsOpen(false)
+          }}
+        >
+          <div className="dice-modal-backdrop" aria-hidden="true" />
+          <div className="dice-modal-frame">
+            <div className="dice-modal-topbar">
+              <h3 id="dice-modal-title">掷骰面板</h3>
               <button
                 type="button"
-                className={mode === 'standard' ? 'is-active' : ''}
-                onClick={() => changeMode('standard')}
+                className="dice-modal-close"
+                onClick={() => setIsOpen(false)}
+                aria-label="关闭"
               >
-                普通骰池
-                <span>所选骰子相加</span>
-              </button>
-              <button
-                type="button"
-                className={mode === 'dual' ? 'is-active is-dual' : ''}
-                onClick={() => changeMode('dual')}
-              >
-                匕首之心
-                <span>希望 d12 + 恐惧 d12</span>
+                <X size={16} />
               </button>
             </div>
+            <div className="dice-hairline" />
 
-            <div>
-              <div className="dice-field-label">
-                <span>{mode === 'dual' ? '附加骰' : '骰盘'}</span>
-                <span>左键增加，右键减少</span>
-              </div>
-              <div className="dice-tray">
-                {DICE_SIDES.map((sides) => {
-                  const count = counts[sides] ?? 0
-                  return (
-                    <button
-                      key={sides}
-                      type="button"
-                      className={`dice-token ${count ? 'is-selected' : ''}`}
-                      onClick={() => changeDie(sides, 1)}
-                      onContextMenu={(event) => {
-                        event.preventDefault()
-                        changeDie(sides, -1)
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Backspace' || event.key === 'Delete' || event.key === 'ArrowDown') {
-                          event.preventDefault()
-                          changeDie(sides, -1)
-                        }
-                      }}
-                      aria-label={`d${sides}，当前 ${count} 枚。左键增加，右键减少`}
-                    >
-                      <DiceIcon sides={sides} />
-                      <strong className="dice-token__count">{count}</strong>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            {mode === 'standard' && (
-              <div className="dice-group-box">
-                <div className="dice-field-label">
-                  <span>骰组</span>
-                  <span>例：2d6 + d8 + 3</span>
-                </div>
-                <div className="dice-group-input-row">
-                  <input
-                    className="dice-group-input"
-                    value={diceGroupFormula}
-                    onChange={(event) => {
-                      setDiceGroupFormula(event.target.value)
-                      if (diceGroupError) setDiceGroupError('')
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') applyDiceGroup()
-                    }}
-                    aria-label="骰组公式"
-                    placeholder="2d6 + d8 + 3"
-                  />
-                  <button type="button" className="dice-group-apply" onClick={() => applyDiceGroup()}>
-                    应用
+            <div className="dice-panel dice-panel--ritual">
+              <section className="dice-builder dice-light-card" aria-label="骰盘">
+                <div className="dice-mode-switch dice-mode-switch--tabs" aria-label="掷骰模式">
+                  <button
+                    type="button"
+                    className={mode === 'dual' ? 'is-active is-dual' : ''}
+                    onClick={() => changeMode('dual')}
+                  >
+                    二元骰
+                    <span>希望 d12 + 恐惧 d12</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={mode === 'standard' ? 'is-active' : ''}
+                    onClick={() => changeMode('standard')}
+                  >
+                    普通骰
+                    <span>骰池与固定加值</span>
                   </button>
                 </div>
-                <div className="dice-group-presets" aria-label="骰组快捷项">
-                  {DICE_GROUP_PRESETS.map((preset) => (
-                    <button
-                      key={preset.formula}
-                      type="button"
-                      onClick={() => applyDiceGroup(preset.formula)}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
+
+                <div className="dice-section-heading">
+                  <div>
+                    <div className="dice-section-heading__eyebrow">ROLL SETUP</div>
+                    <h3>{mode === 'dual' ? '二元骰设定' : '普通骰组'}</h3>
+                  </div>
+                  <button type="button" className="dice-reset" onClick={resetPool}>
+                    <RotateCcw size={14} /> 重置
+                  </button>
                 </div>
-                {diceGroupError && <div className="dice-group-error">{diceGroupError}</div>}
-              </div>
-            )}
 
-            <div className="dice-control-row">
-              <Stepper
-                label="固定加值"
-                value={modifier}
-                onChange={setModifier}
-                min={-100000}
-                max={100000}
-                format={(value) => value > 0 ? `+${value}` : String(value)}
-              />
-              <div className="dice-advantage-switch">
-                <AdvantageButton mode="normal" value={effectiveModifierMode} disabled={false} onChange={setModifierMode}>
-                  常规
-                </AdvantageButton>
-                <AdvantageButton mode="advantage" value={effectiveModifierMode} disabled={!canUseAdvantage} onChange={setModifierMode}>
-                  优势
-                </AdvantageButton>
-                <AdvantageButton mode="disadvantage" value={effectiveModifierMode} disabled={!canUseAdvantage} onChange={setModifierMode}>
-                  劣势
-                </AdvantageButton>
-              </div>
+                <div>
+                  <div className="dice-field-label">
+                    <span>{mode === 'dual' ? '附加骰' : '骰盘'}</span>
+                    <span>左键增加，右键减少</span>
+                  </div>
+                  <div className="dice-tray">
+                    {DICE_SIDES.map((sides) => {
+                      const count = counts[sides] ?? 0
+                      return (
+                        <button
+                          key={sides}
+                          type="button"
+                          className={`dice-token ${count ? 'is-selected' : ''}`}
+                          onClick={() => changeDie(sides, 1)}
+                          onContextMenu={(event) => {
+                            event.preventDefault()
+                            changeDie(sides, -1)
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Backspace' || event.key === 'Delete' || event.key === 'ArrowDown') {
+                              event.preventDefault()
+                              changeDie(sides, -1)
+                            }
+                          }}
+                          aria-label={`d${sides}，当前 ${count} 枚。左键增加，右键减少`}
+                        >
+                          <span className="dice-token__label">d{sides}</span>
+                          {count > 0 && <strong className="dice-token__count">{count}</strong>}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {mode === 'standard' && (
+                  <div className="dice-group-box">
+                    <div className="dice-field-label">
+                      <span>骰组</span>
+                      <span>例：2d6 + d8 + 3</span>
+                    </div>
+                    <div className="dice-group-input-row">
+                      <input
+                        className="dice-group-input"
+                        value={diceGroupFormula}
+                        onChange={(event) => {
+                          setDiceGroupFormula(event.target.value)
+                          if (diceGroupError) setDiceGroupError('')
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') applyDiceGroup()
+                        }}
+                        aria-label="骰组公式"
+                        placeholder="2d6 + d8 + 3"
+                      />
+                      <button type="button" className="dice-group-apply" onClick={() => applyDiceGroup()}>
+                        应用
+                      </button>
+                    </div>
+                    <div className="dice-group-presets" aria-label="骰组快捷项">
+                      {DICE_GROUP_PRESETS.map((preset) => (
+                        <button
+                          key={preset.formula}
+                          type="button"
+                          onClick={() => applyDiceGroup(preset.formula)}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                    {diceGroupError && <div className="dice-group-error">{diceGroupError}</div>}
+                  </div>
+                )}
+
+                <div className="dice-control-row">
+                  <Stepper
+                    label="修正值"
+                    value={modifier}
+                    onChange={setModifier}
+                    min={-100000}
+                    max={100000}
+                    format={(value) => value > 0 ? `+${value}` : String(value)}
+                  />
+                  <div className="dice-advantage-switch">
+                    <AdvantageButton mode="normal" value={effectiveModifierMode} disabled={false} onChange={setModifierMode}>
+                      常规
+                    </AdvantageButton>
+                    <AdvantageButton mode="advantage" value={effectiveModifierMode} disabled={!canUseAdvantage} onChange={setModifierMode}>
+                      优势
+                    </AdvantageButton>
+                    <AdvantageButton mode="disadvantage" value={effectiveModifierMode} disabled={!canUseAdvantage} onChange={setModifierMode}>
+                      劣势
+                    </AdvantageButton>
+                  </div>
+                </div>
+
+                <button type="button" className="dice-roll-button" disabled={!canRoll} onClick={submitRoll}>
+                  <Dices size={20} />
+                  掷出骰子
+                </button>
+              </section>
+
+              <LatestRollStage roll={latestRoll} />
+
+              <RollHistory rolls={history} />
             </div>
-
-            <button type="button" className="dice-roll-button" disabled={!canRoll} onClick={submitRoll}>
-              <Dices size={20} />
-              掷出骰子
-            </button>
-          </section>
-
-          <LatestRollStage roll={latestRoll} />
-
-          <RollHistory rolls={history} />
+          </div>
         </div>
-      </Modal>
+      )}
     </>
-  )
-}
-
-function DiceIcon({ sides }: { sides: number }) {
-  const label = `d${sides}`
-
-  return (
-    <svg className="dice-token__icon" viewBox="0 0 80 80" aria-hidden="true">
-      {sides === 4 && (
-        <>
-          <polygon className="dice-token__face" points="40,5 75,70 5,70" />
-          <path className="dice-token__detail" d="M40 5L22 70M40 5l18 65M12 58h56M22 70l18-30 18 30" />
-        </>
-      )}
-      {sides === 6 && (
-        <>
-          <polygon className="dice-token__face" points="40,6 72,24 72,58 40,74 8,58 8,24" />
-          <path className="dice-token__detail" d="M8 24l32 18 32-18M40 42v32M8 58l32-16 32 16M40 6v36" />
-        </>
-      )}
-      {sides === 8 && (
-        <>
-          <polygon className="dice-token__face" points="40,4 74,40 40,76 6,40" />
-          <path className="dice-token__detail" d="M40 4v72M6 40h68M6 40l34-20 34 20M6 40l34 20 34-20M22 40l18-36 18 36M22 40l18 36 18-36" />
-        </>
-      )}
-      {sides === 10 && (
-        <>
-          <polygon className="dice-token__face" points="40,4 68,18 76,52 58,74 22,74 4,52 12,18" />
-          <path className="dice-token__detail" d="M40 4L22 38 12 18M40 4l18 34 10-20M4 52l18-14 18 36 18-36 18 14M22 74l18-36 18 36M22 38h36" />
-        </>
-      )}
-      {sides === 12 && (
-        <>
-          <polygon className="dice-token__face" points="28,5 52,5 72,20 78,44 66,68 40,77 14,68 2,44 8,20" />
-          <polygon className="dice-token__detail dice-token__detail--closed" points="40,16 59,30 52,54 28,54 21,30" />
-          <path className="dice-token__detail" d="M28 5l12 11L52 5M8 20l13 10L2 44M78 44L59 30l13-10M14 68l14-14 12 23 12-23 14 14M21 30l19-14 19 14M28 54l-26-10M52 54l26-10M28 54L14 68M52 54l14 14" />
-        </>
-      )}
-      {sides === 20 && (
-        <>
-          <polygon className="dice-token__face" points="40,4 69,17 78,48 60,72 22,75 2,50 11,18" />
-          <path className="dice-token__detail" d="M40 4L25 28 11 18M40 4l15 25 14-12M2 50l23-22h30l23 20M2 50l20 25 18-20 20 17 18-24M25 28l15 27 15-26M11 18l14 10-23 22M69 17L55 29l23 19M22 75l18-20 20 17M25 28l-3 47M55 29l5 43" />
-        </>
-      )}
-      <text className="dice-token__number" x="40" y="42">{label}</text>
-    </svg>
   )
 }
 
@@ -559,6 +548,15 @@ function Stepper(props: {
         <strong>{format(value)}</strong>
         <button type="button" onClick={() => onChange(Math.min(max, value + 1))} aria-label={`${label}加一`}>
           <Plus size={15} />
+        </button>
+        <button type="button" className="dice-stepper__quick" onClick={() => onChange(Math.min(max, value + 2))}>
+          +2
+        </button>
+        <button type="button" className="dice-stepper__quick" onClick={() => onChange(Math.min(max, value + 3))}>
+          +3
+        </button>
+        <button type="button" className="dice-stepper__quick" onClick={() => onChange(Math.min(max, value + 5))}>
+          +5
         </button>
       </div>
     </div>

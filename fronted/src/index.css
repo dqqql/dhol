@@ -1945,6 +1945,109 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 }
 
 /* ── Ritual dice panel refresh ─────────────────────────────────── */
+.dice-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  animation: fadeIn var(--transition-fast);
+}
+
+.dice-modal-backdrop {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background: rgba(90, 70, 48, 0.35);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+}
+
+.dice-modal-frame {
+  position: relative;
+  z-index: 1;
+  width: min(96vw, 72rem);
+  height: 88vh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin: auto;
+  border: 1px solid rgba(158, 118, 30, 0.54);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 14% 0%, rgba(240, 210, 100, 0.22), transparent 26%),
+    radial-gradient(circle at 90% 5%, rgba(129, 82, 180, 0.16), transparent 28%),
+    linear-gradient(180deg, #fff8e8 0%, #e8d4aa 100%);
+  box-shadow:
+    0 30px 80px -26px rgba(39, 25, 8, 0.68),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.64),
+    inset 0 0 44px rgba(118, 80, 18, 0.12);
+  overflow: hidden;
+  animation: slideUp var(--transition-normal);
+}
+
+.dice-modal-frame::before {
+  content: '';
+  pointer-events: none;
+  position: absolute;
+  inset: 8px;
+  z-index: 2;
+  border: 1px solid rgba(122, 89, 28, 0.16);
+  border-radius: 13px;
+}
+
+.dice-modal-topbar {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px 12px;
+}
+
+.dice-modal-topbar h3 {
+  color: #49361a;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+}
+
+.dice-modal-close {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #b58d2a;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.52);
+  color: #725410;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast);
+}
+
+.dice-modal-close:hover {
+  transform: translateY(-1px);
+  border-color: #725410;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.dice-modal-close:focus-visible {
+  outline: 2px solid #725410;
+  outline-offset: 3px;
+}
+
+.dice-hairline {
+  position: relative;
+  z-index: 3;
+  height: 1px;
+  margin: 0 24px;
+  background: linear-gradient(90deg, transparent, rgba(181, 141, 42, 0.62), transparent);
+}
+
 .modal-content:has(.dice-panel--ritual) {
   display: flex;
   max-height: 90vh;
@@ -1961,6 +2064,15 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   overflow: hidden;
 }
 
+.dice-modal-frame .dice-panel--ritual {
+  position: relative;
+  z-index: 3;
+  flex: 1;
+  height: auto;
+  padding: 24px;
+  grid-template-columns: minmax(17rem, 20rem) minmax(22rem, 1fr) minmax(14rem, 16rem);
+}
+
 .dice-panel--ritual .dice-light-card,
 .dice-panel--ritual .dice-result-card {
   min-height: 0;
@@ -1972,6 +2084,20 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   box-shadow:
     0 22px 48px -28px rgba(55, 37, 12, 0.58),
     inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.dice-panel--ritual .dice-light-card {
+  position: relative;
+}
+
+.dice-panel--ritual .dice-light-card::after,
+.dice-panel--ritual .dice-result-card::after {
+  content: '';
+  pointer-events: none;
+  position: absolute;
+  inset: 8px;
+  border: 1px solid rgba(122, 89, 28, 0.11);
+  border-radius: 8px;
 }
 
 .dice-panel--ritual .dice-builder,
@@ -1989,6 +2115,34 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 .dice-panel--ritual .dice-section-heading h3 {
   color: #49361a;
   letter-spacing: 0.06em;
+}
+
+.dice-panel--ritual .dice-mode-switch--tabs {
+  padding: 4px;
+  border: 1px solid #cdbb98;
+  border-radius: 10px;
+  background: #e7d8b9;
+}
+
+.dice-panel--ritual .dice-mode-switch--tabs button {
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  text-align: center;
+  color: #6d5a3f;
+}
+
+.dice-panel--ritual .dice-mode-switch--tabs button:hover {
+  background: rgba(255, 242, 189, 0.55);
+  color: #332716;
+}
+
+.dice-panel--ritual .dice-mode-switch--tabs button.is-active,
+.dice-panel--ritual .dice-mode-switch--tabs button.is-dual {
+  border: 0;
+  background: linear-gradient(180deg, #f4d36d, #c9a227);
+  color: #332716;
+  box-shadow: 0 5px 12px -8px rgba(91, 65, 31, 0.88), inset 0 1px 0 rgba(255,255,255,0.52);
 }
 
 .dice-panel--ritual .dice-section-heading__eyebrow,
@@ -2397,7 +2551,35 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 }
 
 .dice-panel--ritual .dice-token {
-  min-height: 48px;
+  min-height: 54px;
+  border: 1px solid #cdbb98;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.5);
+  filter: none;
+  color: #3f321f;
+}
+
+.dice-panel--ritual .dice-token:hover {
+  border-color: #c9a227;
+  background: rgba(255, 242, 189, 0.76);
+  filter: none;
+}
+
+.dice-panel--ritual .dice-token.is-selected {
+  border-color: #c9a227;
+  background: #fff2bd;
+  box-shadow:
+    0 0 20px rgba(240, 210, 100, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  filter: none;
+}
+
+.dice-token__label {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+  color: inherit;
 }
 
 .dice-panel--ritual .dice-tray {
@@ -2496,6 +2678,34 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   border-radius: 9px;
 }
 
+.dice-panel--ritual .dice-stepper {
+  display: grid;
+  gap: 8px;
+}
+
+.dice-panel--ritual .dice-stepper > div {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 6px;
+}
+
+.dice-panel--ritual .dice-stepper__quick {
+  width: auto;
+  min-width: 32px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border-color: #c5a45d;
+  background: rgba(255, 255, 255, 0.45);
+  color: #725410;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.dice-panel--ritual .dice-stepper__quick:hover {
+  border-color: #8a6d18;
+  background: #fff2bd;
+}
+
 .dice-panel--ritual .dice-roll-button {
   border-radius: 10px;
   background: linear-gradient(90deg, #9f771e, #f0d264, #9f771e);
@@ -2575,6 +2785,16 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 }
 
 @media (max-width: 1080px) {
+  .dice-modal-overlay {
+    align-items: flex-end;
+  }
+
+  .dice-modal-frame {
+    width: min(100vw, 48rem);
+    height: 92vh;
+    border-radius: 18px 18px 0 0;
+  }
+
   .modal-content:has(.dice-panel--ritual) {
     overflow-y: auto;
   }
@@ -2583,11 +2803,24 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
     height: auto;
     min-height: 0;
     grid-template-columns: 1fr;
-    overflow: visible;
+    overflow-y: auto;
+  }
+
+  .dice-modal-frame .dice-panel--ritual {
+    display: block;
+    padding: 18px;
+  }
+
+  .dice-modal-frame .dice-panel--ritual > * + * {
+    margin-top: 16px;
   }
 
   .dice-panel--ritual .dice-result-card {
     min-height: 420px;
+  }
+
+  .dice-panel--ritual .dice-builder {
+    overflow: visible;
   }
 
   .dice-panel--ritual .dice-history__list {
@@ -2596,6 +2829,22 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 }
 
 @media (max-width: 520px) {
+  .dice-modal-topbar {
+    padding: 14px 16px 10px;
+  }
+
+  .dice-modal-topbar h3 {
+    font-size: 17px;
+  }
+
+  .dice-hairline {
+    margin: 0 16px;
+  }
+
+  .dice-modal-frame .dice-panel--ritual {
+    padding: 14px;
+  }
+
   .dice-panel--ritual .dice-stage {
     padding: 18px 14px;
   }
