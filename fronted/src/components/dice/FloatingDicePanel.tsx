@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react'
 import type {
   DiceModifierMode,
   DicePoolEntry,
@@ -10,16 +10,16 @@ import { Dices, History, Minus, Plus, RotateCcw, Sparkles, UserRound, X } from '
 import { useStore } from '@/store/useStore'
 
 const DICE_SIDES = [4, 6, 8, 10, 12, 20] as const
-const DICE_GROUP_PRESETS = [
-  { label: 'd20', formula: '1d20' },
-  { label: '2d6', formula: '2d6' },
-  { label: '3d6', formula: '3d6' },
-  { label: '2d12+2', formula: '2d12 + 2' },
-] as const
+const DICE_PRESETS_STORAGE_KEY = 'dhgc:dice-presets:v1'
 
 type DiceCounts = Record<number, number>
 type RollTone = 'standard' | 'hope' | 'fear' | 'critical'
 type DieTone = 'neutral' | 'hope' | 'fear' | 'advantage' | 'disadvantage'
+type DicePreset = {
+  id: string
+  name: string
+  formula: string
+}
 
 const EMPTY_COUNTS: DiceCounts = Object.fromEntries(DICE_SIDES.map((sides) => [sides, 0]))
 
@@ -30,8 +30,11 @@ export function FloatingDicePanel() {
   const [counts, setCounts] = useState<DiceCounts>({ ...EMPTY_COUNTS })
   const [modifier, setModifier] = useState(0)
   const [modifierMode, setModifierMode] = useState<DiceModifierMode>('normal')
-  const [diceGroupFormula, setDiceGroupFormula] = useState('1d20')
-  const [diceGroupError, setDiceGroupError] = useState('')
+  const [presetName, setPresetName] = useState('')
+  const [presetFormula, setPresetFormula] = useState('')
+  const [presetError, setPresetError] = useState('')
+  const [editingPresetId, setEditingPresetId] = useState<string | null>(null)
+  const [dicePresets, setDicePresets] = useState<DicePreset[]>(() => loadDicePresets())
 
   const dice = useMemo<DicePoolEntry[]>(() => (
     DICE_SIDES
@@ -50,6 +53,7 @@ export function FloatingDicePanel() {
     dice,
   }
   const canRoll = mode === 'dual' || dice.length > 0
+  const currentFormula = useMemo(() => formatDiceGroup(counts, modifier), [counts, modifier])
   const roomRolls = Array.isArray(room?.dice_rolls) ? room.dice_rolls : []
   const latestRoll = roomRolls.at(-1)
   const history = roomRolls.slice().reverse()
@@ -95,8 +99,7 @@ export function FloatingDicePanel() {
     setCounts(mode === 'standard' ? { ...EMPTY_COUNTS, 20: 1 } : { ...EMPTY_COUNTS })
     setModifier(0)
     setModifierMode('normal')
-    setDiceGroupFormula('1d20')
-    setDiceGroupError('')
+    setPresetError('')
   }
 
   function submitRoll() {
@@ -104,18 +107,94 @@ export function FloatingDicePanel() {
     rollDice(request)
   }
 
-  function applyDiceGroup(formula = diceGroupFormula) {
+  function applyDiceGroup(formula: string, shouldRoll = false) {
     try {
       const parsed = parseDiceGroupFormula(formula)
       setMode('standard')
       setCounts(parsed.counts)
       setModifier(parsed.modifier)
       setModifierMode('normal')
-      setDiceGroupFormula(parsed.normalized)
-      setDiceGroupError('')
+      setPresetError('')
+      if (shouldRoll) {
+        rollDice({
+          mode: 'standard',
+          modifier_mode: 'normal',
+          repeat: 1,
+          modifier: parsed.modifier,
+          dice: diceFromCounts(parsed.counts),
+        })
+      }
     } catch (error) {
-      setDiceGroupError(error instanceof Error ? error.message : '骰组格式无效')
+      setPresetError(error instanceof Error ? error.message : '骰组格式无效')
     }
+  }
+
+  function savePreset(event: FormEvent) {
+    event.preventDefault()
+    const name = presetName.trim()
+    const formula = presetFormula.trim()
+
+    if (!name) {
+      setPresetError('请输入预设名称')
+      return
+    }
+    if (!formula) {
+      setPresetError('请输入骰组公式')
+      return
+    }
+
+    try {
+      const parsed = parseDiceGroupFormula(formula)
+      const nextPreset = {
+        id: editingPresetId ?? createPresetId(),
+        name,
+        formula: parsed.normalized,
+      }
+      const nextPresets = editingPresetId
+        ? dicePresets.map((preset) => preset.id === editingPresetId ? nextPreset : preset)
+        : [...dicePresets, nextPreset]
+
+      setDicePresets(nextPresets)
+      persistDicePresets(nextPresets)
+      setPresetName('')
+      setPresetFormula('')
+      setEditingPresetId(null)
+      setPresetError('')
+    } catch (error) {
+      setPresetError(error instanceof Error ? error.message : '骰组格式无效')
+    }
+  }
+
+  function editPreset(preset: DicePreset) {
+    setEditingPresetId(preset.id)
+    setPresetName(preset.name)
+    setPresetFormula(preset.formula)
+    setPresetError('')
+  }
+
+  function deletePreset(id: string) {
+    const nextPresets = dicePresets.filter((preset) => preset.id !== id)
+    setDicePresets(nextPresets)
+    persistDicePresets(nextPresets)
+    if (editingPresetId === id) {
+      setEditingPresetId(null)
+      setPresetName('')
+      setPresetFormula('')
+      setPresetError('')
+    }
+  }
+
+  function cancelPresetEdit() {
+    setEditingPresetId(null)
+    setPresetName('')
+    setPresetFormula('')
+    setPresetError('')
+  }
+
+  function clearStandardDiceGroup() {
+    setCounts({ ...EMPTY_COUNTS })
+    setModifier(0)
+    setModifierMode('normal')
   }
 
   return (
@@ -155,7 +234,7 @@ export function FloatingDicePanel() {
             <div className="dice-hairline" />
 
             <div className="dice-panel dice-panel--ritual">
-              <section className="dice-builder dice-light-card" aria-label="骰盘">
+              <section className={`dice-builder dice-light-card ${mode === 'standard' ? 'dice-builder--standard' : ''}`} aria-label="骰盘">
                 <div className="dice-mode-switch dice-mode-switch--tabs" aria-label="掷骰模式">
                   <button
                     type="button"
@@ -219,45 +298,6 @@ export function FloatingDicePanel() {
                   </div>
                 </div>
 
-                {mode === 'standard' && (
-                  <div className="dice-group-box">
-                    <div className="dice-field-label">
-                      <span>骰组</span>
-                      <span>例：2d6 + d8 + 3</span>
-                    </div>
-                    <div className="dice-group-input-row">
-                      <input
-                        className="dice-group-input"
-                        value={diceGroupFormula}
-                        onChange={(event) => {
-                          setDiceGroupFormula(event.target.value)
-                          if (diceGroupError) setDiceGroupError('')
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') applyDiceGroup()
-                        }}
-                        aria-label="骰组公式"
-                        placeholder="2d6 + d8 + 3"
-                      />
-                      <button type="button" className="dice-group-apply" onClick={() => applyDiceGroup()}>
-                        应用
-                      </button>
-                    </div>
-                    <div className="dice-group-presets" aria-label="骰组快捷项">
-                      {DICE_GROUP_PRESETS.map((preset) => (
-                        <button
-                          key={preset.formula}
-                          type="button"
-                          onClick={() => applyDiceGroup(preset.formula)}
-                        >
-                          {preset.label}
-                        </button>
-                      ))}
-                    </div>
-                    {diceGroupError && <div className="dice-group-error">{diceGroupError}</div>}
-                  </div>
-                )}
-
                 <div className="dice-control-row">
                   <Stepper
                     label="修正值"
@@ -280,9 +320,79 @@ export function FloatingDicePanel() {
                   </div>
                 </div>
 
+                {mode === 'standard' && (
+                  <>
+                    <div className="dice-current-formula" aria-live="polite">
+                      {currentFormula || '选择骰组'}
+                    </div>
+                    <div className="dice-clear-row">
+                      <button type="button" onClick={clearStandardDiceGroup} disabled={!dice.length && modifier === 0}>
+                        清空骰组
+                      </button>
+                    </div>
+
+                    <div className="dice-preset-panel">
+                      <div className="dice-preset-heading">
+                        <h4>预设骰组</h4>
+                        {editingPresetId && (
+                          <button type="button" onClick={cancelPresetEdit}>
+                            取消编辑
+                          </button>
+                        )}
+                      </div>
+
+                      <form className="dice-preset-form" onSubmit={savePreset}>
+                        <input
+                          value={presetName}
+                          onChange={(event) => {
+                            setPresetName(event.target.value)
+                            if (presetError) setPresetError('')
+                          }}
+                          maxLength={20}
+                          placeholder="名称"
+                          aria-label="预设名称"
+                        />
+                        <input
+                          value={presetFormula}
+                          onChange={(event) => {
+                            setPresetFormula(event.target.value)
+                            if (presetError) setPresetError('')
+                          }}
+                          placeholder="2d6 + 3"
+                          aria-label="预设骰组公式"
+                        />
+                        <button type="submit" aria-label={editingPresetId ? '保存预设' : '添加预设'}>
+                          {editingPresetId ? '存' : <Plus size={18} />}
+                        </button>
+                      </form>
+
+                      {presetError && <div className="dice-group-error">{presetError}</div>}
+
+                      <div className="dice-preset-list" aria-label="预设骰组列表">
+                        {dicePresets.length === 0 ? (
+                          <p>添加常用骰式，之后点击名称即可掷骰</p>
+                        ) : dicePresets.map((preset) => (
+                          <div key={preset.id} className="dice-preset-item">
+                            <button type="button" onClick={() => applyDiceGroup(preset.formula, true)}>
+                              <span>{preset.name}</span>
+                              <small>{preset.formula}</small>
+                            </button>
+                            <button type="button" onClick={() => editPreset(preset)} aria-label={`编辑${preset.name}`}>
+                              编辑
+                            </button>
+                            <button type="button" onClick={() => deletePreset(preset.id)} aria-label={`删除${preset.name}`}>
+                              删除
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+
                 <button type="button" className="dice-roll-button" disabled={!canRoll} onClick={submitRoll}>
                   <Dices size={20} />
-                  掷出骰子
+                  {mode === 'standard' && currentFormula ? `掷 · ${currentFormula}` : '掷出骰子'}
                 </button>
               </section>
 
@@ -695,6 +805,60 @@ function parseDiceGroupFormula(formula: string): {
     modifier,
     normalized: `${diceText}${modifierText}`,
   }
+}
+
+function diceFromCounts(counts: DiceCounts): DicePoolEntry[] {
+  return DICE_SIDES
+    .map((sides) => ({ sides, count: counts[sides] ?? 0 }))
+    .filter((entry) => entry.count > 0)
+}
+
+function formatDiceGroup(counts: DiceCounts, modifier: number) {
+  const diceText = DICE_SIDES
+    .map((sides) => {
+      const count = counts[sides] ?? 0
+      return count > 0 ? `${count}d${sides}` : ''
+    })
+    .filter(Boolean)
+    .join(' + ')
+  const modifierText = modifier > 0 ? `${diceText ? ' + ' : ''}${modifier}` : modifier < 0 ? `${diceText ? ' - ' : '-'}${Math.abs(modifier)}` : ''
+
+  return `${diceText}${modifierText}`
+}
+
+function loadDicePresets(): DicePreset[] {
+  if (typeof window === 'undefined') return []
+
+  try {
+    const raw = window.localStorage.getItem(DICE_PRESETS_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter((item): item is DicePreset => (
+        item
+        && typeof item.id === 'string'
+        && typeof item.name === 'string'
+        && typeof item.formula === 'string'
+      ))
+      .slice(0, 20)
+  } catch {
+    return []
+  }
+}
+
+function persistDicePresets(presets: DicePreset[]) {
+  if (typeof window === 'undefined') return
+
+  try {
+    window.localStorage.setItem(DICE_PRESETS_STORAGE_KEY, JSON.stringify(presets.slice(0, 20)))
+  } catch {
+    // Ignore storage failures; presets still work for the current session.
+  }
+}
+
+function createPresetId() {
+  return `preset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
 function formatTime(value: string) {

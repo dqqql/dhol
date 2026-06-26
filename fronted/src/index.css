@@ -2103,11 +2103,12 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 .dice-panel--ritual .dice-builder,
 .dice-panel--ritual .dice-history {
   min-height: 0;
-  padding: 16px;
+  padding: 14px;
 }
 
 .dice-panel--ritual .dice-builder {
   align-content: start;
+  gap: 10px;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -2117,8 +2118,16 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   letter-spacing: 0.06em;
 }
 
+.dice-panel--ritual .dice-builder--standard .dice-section-heading {
+  display: none;
+}
+
+.dice-panel--ritual .dice-builder--standard .dice-field-label {
+  display: none;
+}
+
 .dice-panel--ritual .dice-mode-switch--tabs {
-  padding: 4px;
+  padding: 3px;
   border: 1px solid #cdbb98;
   border-radius: 10px;
   background: #e7d8b9;
@@ -2130,6 +2139,8 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   background: transparent;
   text-align: center;
   color: #6d5a3f;
+  padding: 9px 10px;
+  min-height: 56px;
 }
 
 .dice-panel--ritual .dice-mode-switch--tabs button:hover {
@@ -2551,9 +2562,9 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 }
 
 .dice-panel--ritual .dice-token {
-  min-height: 54px;
+  min-height: 60px;
   border: 1px solid #cdbb98;
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.5);
   filter: none;
   color: #3f321f;
@@ -2576,19 +2587,22 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 
 .dice-token__label {
   font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 900;
+  font-size: 22px;
+  font-weight: 500;
   line-height: 1;
   color: inherit;
+  text-transform: lowercase;
 }
 
 .dice-panel--ritual .dice-tray {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .dice-panel--ritual .dice-control-row {
   flex-direction: column;
   align-items: stretch;
+  gap: 10px;
 }
 
 .dice-group-box {
@@ -2663,6 +2677,190 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   line-height: 1.45;
 }
 
+.dice-current-formula {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(181, 141, 42, 0.34);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.58);
+  color: #7c5e16;
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.05em;
+  text-align: center;
+  padding: 0 10px;
+}
+
+.dice-clear-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -6px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid rgba(181, 141, 42, 0.18);
+}
+
+.dice-clear-row button,
+.dice-preset-heading button {
+  border: 0;
+  background: transparent;
+  color: #8a7a60;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  transition: color var(--transition-fast);
+}
+
+.dice-clear-row button:hover:not(:disabled),
+.dice-preset-heading button:hover {
+  color: #49361a;
+}
+
+.dice-clear-row button:disabled {
+  cursor: not-allowed;
+  opacity: 0.36;
+}
+
+.dice-preset-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.dice-preset-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dice-preset-heading h4 {
+  margin: 0;
+  color: #79684e;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.dice-preset-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) 42px;
+  gap: 8px;
+}
+
+.dice-preset-form input {
+  min-width: 0;
+  height: 34px;
+  border: 1px solid rgba(181, 141, 42, 0.36);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.62);
+  color: #49361a;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  padding: 0 10px;
+}
+
+.dice-preset-form input::placeholder {
+  color: #a7a0ad;
+}
+
+.dice-preset-form input:focus {
+  border-color: #b98715;
+  box-shadow: 0 0 0 3px rgba(240, 210, 100, 0.18);
+}
+
+.dice-preset-form button {
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #b98715;
+  border-radius: 7px;
+  background: #fff2bd;
+  color: #725410;
+  cursor: pointer;
+  font: inherit;
+  font-family: var(--font-display);
+  font-weight: 800;
+  transition: transform var(--transition-fast), background var(--transition-fast);
+}
+
+.dice-preset-form button:hover {
+  transform: translateY(-1px);
+  background: #f5d978;
+}
+
+.dice-preset-list {
+  min-height: 42px;
+  max-height: 112px;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.dice-preset-list > p {
+  margin: 6px 0 0;
+  color: #92836a;
+  font-size: 12px;
+  text-align: center;
+}
+
+.dice-preset-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #d2c09d;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.42);
+  padding: 4px;
+}
+
+.dice-preset-item button {
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #725410;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  padding: 6px 7px;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.dice-preset-item button:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+
+.dice-preset-item button:hover {
+  background: #fff2bd;
+  color: #332716;
+}
+
+.dice-preset-item span,
+.dice-preset-item small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dice-preset-item span {
+  color: #49361a;
+  font-family: var(--font-display);
+  font-size: 12px;
+}
+
+.dice-preset-item small {
+  color: #79684e;
+  font-size: 11px;
+}
+
 .dice-panel--ritual .dice-token__count {
   top: -4px;
   right: -4px;
@@ -2675,12 +2873,13 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 .dice-panel--ritual .dice-advantage-switch button,
 .dice-panel--ritual .dice-stepper,
 .dice-panel--ritual .dice-stepper button {
-  border-radius: 9px;
+  border-radius: 7px;
 }
 
 .dice-panel--ritual .dice-stepper {
-  display: grid;
+  display: flex;
   gap: 8px;
+  padding: 9px 10px;
 }
 
 .dice-panel--ritual .dice-stepper > div {
@@ -2707,10 +2906,15 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 }
 
 .dice-panel--ritual .dice-roll-button {
-  border-radius: 10px;
+  min-height: 46px;
+  border-radius: 8px;
   background: linear-gradient(90deg, #9f771e, #f0d264, #9f771e);
   background-size: 200% auto;
   animation: rollButtonSheen 4s linear infinite;
+  margin-top: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dice-panel--ritual .dice-history {
@@ -2843,6 +3047,10 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 
   .dice-modal-frame .dice-panel--ritual {
     padding: 14px;
+  }
+
+  .dice-panel--ritual .dice-mode-switch--tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .dice-panel--ritual .dice-stage {
