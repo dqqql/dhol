@@ -113,7 +113,7 @@ describe('RoomDurableObject drawing board', () => {
       shapes: [
         {
           id: 'shape-1',
-          kind: 'triangle',
+          kind: 'circle',
           color: DRAWING_BOARD_COLORS[2],
           x: 100,
           y: 120,
@@ -129,7 +129,7 @@ describe('RoomDurableObject drawing board', () => {
       shapes: [
         {
           id: 'shape-1',
-          kind: 'triangle',
+          kind: 'circle',
           color: DRAWING_BOARD_COLORS[2],
           x: 100,
           y: 120,

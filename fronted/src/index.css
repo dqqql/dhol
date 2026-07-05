@@ -2225,7 +2225,7 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 .drawing-shape-tool svg {
   width: 24px;
   height: 24px;
-  fill: rgba(200, 144, 48, 0.24);
+  fill: none;
   stroke: currentColor;
   stroke-width: 2.4;
 }

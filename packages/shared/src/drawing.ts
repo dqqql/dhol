@@ -1,6 +1,7 @@
 export const DRAWING_BOARD_WIDTH = 1000
 export const DRAWING_BOARD_HEIGHT = 600
 export const MAX_DRAWING_BOARD_SHAPES = 120
+export const MAX_DRAWING_BOARD_POINTS = 300
 
 export const DRAWING_BOARD_COLORS = [
   '#2A1C0A',
@@ -15,10 +16,15 @@ export const DRAWING_BOARD_COLORS = [
   '#111827',
 ] as const
 
-export const DRAWING_BOARD_SHAPES = ['rectangle', 'triangle', 'circle', 'cone', 'line'] as const
+export const DRAWING_BOARD_SHAPES = ['freehand', 'rectangle', 'circle'] as const
 
 export type DrawingBoardColor = typeof DRAWING_BOARD_COLORS[number]
 export type DrawingBoardShapeKind = typeof DRAWING_BOARD_SHAPES[number]
+
+export interface DrawingBoardPoint {
+  x: number
+  y: number
+}
 
 export interface DrawingBoardShape {
   id: string
@@ -28,6 +34,7 @@ export interface DrawingBoardShape {
   y: number
   width: number
   height: number
+  points?: DrawingBoardPoint[]
 }
 
 export interface DrawingBoardState {
@@ -66,6 +73,11 @@ function normalizeDrawingShape(input: unknown, index: number): DrawingBoardShape
   const candidate = input as Partial<DrawingBoardShape>
   if (!candidate.kind || !SHAPE_SET.has(candidate.kind)) return null
 
+  const color = COLOR_SET.has(candidate.color ?? '') ? candidate.color as DrawingBoardColor : DRAWING_BOARD_COLORS[0]
+  if (candidate.kind === 'freehand') {
+    return normalizeFreehandShape(candidate, index, color)
+  }
+
   const x = clampNumber(candidate.x, 0, DRAWING_BOARD_WIDTH)
   const y = clampNumber(candidate.y, 0, DRAWING_BOARD_HEIGHT)
   const maxWidth = DRAWING_BOARD_WIDTH - x
@@ -74,11 +86,51 @@ function normalizeDrawingShape(input: unknown, index: number): DrawingBoardShape
   return {
     id: normalizeShapeId(candidate.id, index),
     kind: candidate.kind as DrawingBoardShapeKind,
-    color: COLOR_SET.has(candidate.color ?? '') ? candidate.color as DrawingBoardColor : DRAWING_BOARD_COLORS[0],
+    color,
     x,
     y,
     width: clampNumber(candidate.width, 1, maxWidth || 1),
     height: clampNumber(candidate.height, 1, maxHeight || 1),
+  }
+}
+
+function normalizeFreehandShape(
+  candidate: Partial<DrawingBoardShape>,
+  index: number,
+  color: DrawingBoardColor,
+): DrawingBoardShape | null {
+  const points = Array.isArray(candidate.points)
+    ? candidate.points
+      .map(normalizePoint)
+      .filter((point): point is DrawingBoardPoint => Boolean(point))
+      .slice(0, MAX_DRAWING_BOARD_POINTS)
+    : []
+
+  if (points.length < 2) return null
+
+  const xs = points.map((point) => point.x)
+  const ys = points.map((point) => point.y)
+  const x = Math.min(...xs)
+  const y = Math.min(...ys)
+
+  return {
+    id: normalizeShapeId(candidate.id, index),
+    kind: 'freehand',
+    color,
+    x,
+    y,
+    width: Math.max(1, Math.max(...xs) - x),
+    height: Math.max(1, Math.max(...ys) - y),
+    points,
+  }
+}
+
+function normalizePoint(input: unknown): DrawingBoardPoint | null {
+  if (!input || typeof input !== 'object') return null
+  const candidate = input as Partial<DrawingBoardPoint>
+  return {
+    x: clampNumber(candidate.x, 0, DRAWING_BOARD_WIDTH),
+    y: clampNumber(candidate.y, 0, DRAWING_BOARD_HEIGHT),
   }
 }
 
