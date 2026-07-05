@@ -316,6 +316,7 @@ export class RoomDurableObject {
 
   private room: RoomState | null = null
   private sockets = new Map<WebSocket, SocketSession>()
+  private persistQueue: Promise<void> = Promise.resolve()
   // WebSocket 速率限制：每个连接每秒最多 30 条消息
   private wsRateLimitMap = new Map<WebSocket, { count: number; resetAt: number }>()
 
@@ -694,12 +695,12 @@ export class RoomDurableObject {
 
       case 'dice.roll':
         this.rollDice(player, message.payload)
-        await this.commit('dice.roll')
+        await this.commit('dice.roll', { waitForPersistence: false })
         return
 
       case 'dice.clearHistory':
         this.clearDiceHistory()
-        await this.commit('dice.clearHistory')
+        await this.commit('dice.clearHistory', { waitForPersistence: false })
         return
 
       case 'xcard.raise':
@@ -1241,12 +1242,32 @@ export class RoomDurableObject {
     }))
   }
 
-  private async commit(reason: string): Promise<void> {
+  private async commit(reason: string, options: { waitForPersistence?: boolean } = {}): Promise<void> {
     const room = this.requireRoom()
     room.updated_at = new Date().toISOString()
     room.snapshot_version += 1
-    await this.save()
-    this.broadcast({ type: 'room.updated', payload: { state: this.publicState(), reason } })
+    const persistPromise = this.enqueueSave()
+    const updateMessage = { type: 'room.updated', payload: { state: this.publicState(), reason } }
+
+    if (options.waitForPersistence === false) {
+      this.broadcast(updateMessage)
+      this.ctx.waitUntil(persistPromise.catch(() => undefined))
+      return
+    }
+
+    await persistPromise
+    this.broadcast(updateMessage)
+  }
+
+  private enqueueSave(): Promise<void> {
+    const persistPromise = this.persistQueue.then(
+      () => this.save(),
+      () => this.save(),
+    )
+    this.persistQueue = persistPromise.catch((error) => {
+      console.error('Room persistence failed', error)
+    })
+    return persistPromise
   }
 
   private async load(): Promise<RoomState | null> {
