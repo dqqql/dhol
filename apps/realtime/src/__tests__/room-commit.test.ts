@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { DRAWING_BOARD_COLORS } from '../../../../packages/shared/src/index'
 import { RoomDurableObject } from '../index'
 import type { RoomState } from '../../../../packages/shared/src/index'
 
@@ -97,5 +98,46 @@ describe('RoomDurableObject commit latency', () => {
     }
 
     await Promise.all(waitUntilPromises)
+  })
+})
+
+describe('RoomDurableObject drawing board', () => {
+  it('stores submitted drawing shapes in room state', () => {
+    const durableObject = new RoomDurableObject({} as DurableObjectState, { ALLOWED_ORIGIN: '*' } as never)
+    const room = createRoom()
+    ;(durableObject as unknown as { room: RoomState | null }).room = room
+
+    ;(durableObject as unknown as {
+      submitDrawingBoard: (player: RoomState['players'][number], payload: unknown) => void
+    }).submitDrawingBoard(room.players[0], {
+      shapes: [
+        {
+          id: 'shape-1',
+          kind: 'triangle',
+          color: DRAWING_BOARD_COLORS[2],
+          x: 100,
+          y: 120,
+          width: 180,
+          height: 140,
+        },
+      ],
+    })
+
+    expect(room.drawing_board).toMatchObject({
+      updated_by_player_id: 'player-1',
+      updated_by_name: 'Host',
+      shapes: [
+        {
+          id: 'shape-1',
+          kind: 'triangle',
+          color: DRAWING_BOARD_COLORS[2],
+          x: 100,
+          y: 120,
+          width: 180,
+          height: 140,
+        },
+      ],
+    })
+    expect(room.drawing_board?.updated_at).toEqual(expect.any(String))
   })
 })

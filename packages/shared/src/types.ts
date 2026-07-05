@@ -1,3 +1,5 @@
+import type { DrawingBoardState } from './drawing'
+
 export type RoomType = 'gm-panel' | 'mobile-panel'
 export type ResourceTrackerResourceKey = 'hope' | 'proficiency' | 'hp' | 'stress' | 'armor_slots' | 'gold'
 export type GmPanelResourceKey = ResourceTrackerResourceKey
@@ -339,6 +341,7 @@ export interface RoomState {
   settings: RoomSettings
   gm_panel?: GmPanelState
   mobile_panel?: MobilePanelState
+  drawing_board?: DrawingBoardState
   dice_rolls: DiceRollRecord[]
   x_card?: XCardAlert | null
   snapshot_version: number
@@ -359,6 +362,7 @@ export interface DhRoomBackup {
   settings: RoomSettings
   gm_panel?: GmPanelState
   mobile_panel?: MobilePanelState
+  drawing_board?: DrawingBoardState
   dice_rolls?: DiceRollRecord[]
   players: Array<Pick<Player, 'id' | 'nickname' | 'color' | 'is_host' | 'is_online'>>
   exported_at: string

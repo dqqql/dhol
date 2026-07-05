@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { nanoid } from 'nanoid'
 import {
   assertDhRoomBackup,
+  normalizeDrawingBoard,
   type ClientMessage,
   type RoomSession,
   type RoomState,
@@ -19,6 +20,7 @@ export const useStore = create<AppStore>((set, get) => {
     set({
       room: {
         ...room,
+        drawing_board: normalizeDrawingBoard(room.drawing_board),
         dice_rolls: Array.isArray(room.dice_rolls) ? room.dice_rolls : [],
       },
     })
@@ -286,6 +288,10 @@ export const useStore = create<AppStore>((set, get) => {
     clearDiceHistory: () => {
       const sent = sendMessage({ type: 'dice.clearHistory', payload: {} })
       if (sent) { get().addToast('已清除掷骰记录', 'success') }
+    },
+    submitDrawingBoard: (request) => {
+      const sent = sendMessage({ type: 'drawing.submit', payload: request })
+      if (sent) { get().addToast('画板已同步给房间成员', 'success') }
     },
 
     raiseXCard: () => {

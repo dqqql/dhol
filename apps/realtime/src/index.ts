@@ -29,6 +29,7 @@ import {
   messageFrom,
   normaliseInvite,
   normalizeBooleanTrack,
+  normalizeDrawingBoard,
   normalizeGmPanelState,
   normalizeGmPanelStateWithHtml,
   normalizeMobilePanelCustom,
@@ -44,6 +45,7 @@ import {
   normalizeTrackerResourceValue,
   type ClientMessage,
   type DhRoomBackup,
+  type DrawingBoardSubmitRequest,
   type DiceRollRecord,
   type DiceRollRequest,
   type GmPanelActivityLogItem,
@@ -401,6 +403,7 @@ export class RoomDurableObject {
       },
       gm_panel: roomType === 'gm-panel' ? createEmptyGmPanelState() : undefined,
       mobile_panel: roomType === 'mobile-panel' ? createEmptyMobilePanelState() : undefined,
+      drawing_board: normalizeDrawingBoard(undefined),
       dice_rolls: [],
       x_card: null,
       snapshot_version: 0,
@@ -703,6 +706,12 @@ export class RoomDurableObject {
         await this.commit('dice.clearHistory', { waitForPersistence: false })
         return
 
+      case 'drawing.submit':
+        this.requireGmPanelRoom()
+        this.submitDrawingBoard(player, message.payload)
+        await this.commit('drawing.submit')
+        return
+
       case 'xcard.raise':
         this.raiseXCard(player)
         await this.commit('xcard.raise')
@@ -778,6 +787,7 @@ export class RoomDurableObject {
         actor_player_id: remapPlayerId(roll.actor_player_id) ?? roll.actor_player_id,
       }))
       : []
+    room.drawing_board = normalizeDrawingBoard(backup.drawing_board)
     room.host_player_id = hostPlayerId
     room.x_card = null
     room.players = activePlayers.map((player) => ({
@@ -823,6 +833,16 @@ export class RoomDurableObject {
   private clearDiceHistory(): void {
     const room = this.requireRoom()
     room.dice_rolls = []
+  }
+
+  private submitDrawingBoard(player: Player, request: DrawingBoardSubmitRequest): void {
+    const room = this.requireRoom()
+    room.drawing_board = normalizeDrawingBoard({
+      shapes: request.shapes,
+      updated_at: new Date().toISOString(),
+      updated_by_player_id: player.id,
+      updated_by_name: player.nickname,
+    })
   }
 
   private raiseXCard(player: Player): void {
@@ -1205,6 +1225,7 @@ export class RoomDurableObject {
       settings: room.settings,
       gm_panel: room.gm_panel,
       mobile_panel: room.mobile_panel,
+      drawing_board: room.drawing_board,
       dice_rolls: room.dice_rolls,
       players: room.players.map(player => ({
         id: player.id,
@@ -1439,6 +1460,7 @@ export class RoomDurableObject {
         resource_change_requires_approval?: boolean
         gm_panel_theme?: 'gold-abyss' | 'jade-hex' | 'amethyst-ember'
       }
+      drawing_board?: RoomState['drawing_board']
       dice_rolls?: DiceRollRecord[]
       x_card?: RoomState['x_card']
     }
@@ -1459,6 +1481,7 @@ export class RoomDurableObject {
       mobile_panel: normalizeRoomType(migrated.room_type) === 'mobile-panel'
         ? normalizeMobilePanelState(migrated.mobile_panel)
         : undefined,
+      drawing_board: normalizeDrawingBoard(migrated.drawing_board),
       dice_rolls: Array.isArray(migrated.dice_rolls) ? migrated.dice_rolls.slice(-50) : [],
     }
   }

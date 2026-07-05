@@ -1,4 +1,5 @@
 import type {
+  DrawingBoardSubmitRequest,
   DiceRollRequest,
   GmPanelTheme,
   GmPanelResourceKey,
@@ -61,6 +62,7 @@ export interface AppStore extends UIState {
   deleteMobileCountdown: (countdownId: string) => void
   rollDice: (request: DiceRollRequest) => void
   clearDiceHistory: () => void
+  submitDrawingBoard: (request: DrawingBoardSubmitRequest) => void
 
   raiseXCard: () => void
   acknowledgeXCard: () => void

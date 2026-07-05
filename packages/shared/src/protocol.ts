@@ -8,6 +8,7 @@ import type {
   RoomState,
   RoomType,
 } from './types'
+import type { DrawingBoardSubmitRequest } from './drawing'
 
 export type ClientMessage =
   | {
@@ -59,6 +60,7 @@ export type ClientMessage =
   | { type: 'mobile.deleteCountdown'; requestId?: string; payload: { countdownId: string } }
   | { type: 'dice.roll'; requestId?: string; payload: DiceRollRequest }
   | { type: 'dice.clearHistory'; requestId?: string; payload?: Record<string, never> }
+  | { type: 'drawing.submit'; requestId?: string; payload: DrawingBoardSubmitRequest }
   | { type: 'xcard.raise'; requestId?: string; payload?: Record<string, never> }
   | { type: 'xcard.acknowledge'; requestId?: string; payload?: Record<string, never> }
   | { type: 'ping'; requestId?: string; payload?: Record<string, never> }
