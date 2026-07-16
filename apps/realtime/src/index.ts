@@ -90,6 +90,16 @@ interface SocketSession {
   nickname: string
 }
 
+type HtmlPersistenceMode =
+  | { mode: 'upsert'; sheetIds: string[] }
+  | { mode: 'delete'; sheetIds: string[] }
+  | { mode: 'sync-all' }
+
+interface CommitOptions {
+  waitForPersistence?: boolean
+  htmlPersistence?: HtmlPersistenceMode
+}
+
 let _corsAllowedOrigin = '*'
 
 const PLAYER_COLORS = ['#f43f5e', '#2563eb', '#f59e0b', '#10b981', '#a855f7', '#06b6d4']
@@ -590,20 +600,28 @@ export class RoomDurableObject {
 
       case 'gm.importHtmlCharacter':
         this.requireGmPanelRoom()
-        this.importGmCharacter(player, message.payload.fileName, message.payload.html)
-        await this.commit('gm.importHtmlCharacter', this.gmSheetPatch('upsert', this.requireGmPanelState().sheet_order.at(-1)!))
+        {
+          const sheetId = this.importGmCharacter(player, message.payload.fileName, message.payload.html)
+          await this.commit('gm.importHtmlCharacter', this.gmSheetPatch('upsert', sheetId), {
+            htmlPersistence: { mode: 'upsert', sheetIds: [sheetId] },
+          })
+        }
         return
 
       case 'gm.replaceHtmlCharacter':
         this.requireGmPanelRoom()
         this.replaceGmCharacter(player, message.payload.sheetId, message.payload.fileName, message.payload.html)
-        await this.commit('gm.replaceHtmlCharacter', this.gmSheetPatch('upsert', message.payload.sheetId))
+        await this.commit('gm.replaceHtmlCharacter', this.gmSheetPatch('upsert', message.payload.sheetId), {
+          htmlPersistence: { mode: 'upsert', sheetIds: [message.payload.sheetId] },
+        })
         return
 
       case 'gm.deleteSheet':
         this.requireGmPanelRoom()
         this.deleteGmSheet(player, message.payload.sheetId)
-        await this.commit('gm.deleteSheet', this.gmSheetPatch('delete', message.payload.sheetId))
+        await this.commit('gm.deleteSheet', this.gmSheetPatch('delete', message.payload.sheetId), {
+          htmlPersistence: { mode: 'delete', sheetIds: [message.payload.sheetId] },
+        })
         return
 
       case 'gm.updateSheet':
@@ -738,7 +756,9 @@ export class RoomDurableObject {
         this.requireImportsEnabled()
         const backup = assertDhRoomBackup(message.payload.backup)
         this.importRoomBackup(backup)
-        await this.commit('room.importRoomBackup', { kind: 'room.replacement', state: this.publicState() })
+        await this.commit('room.importRoomBackup', { kind: 'room.replacement', state: this.publicState() }, {
+          htmlPersistence: { mode: 'sync-all' },
+        })
         return
       }
     }
@@ -894,12 +914,13 @@ export class RoomDurableObject {
     }
   }
 
-  private importGmCharacter(player: Player, fileName: string, html: string): void {
+  private importGmCharacter(player: Player, fileName: string, html: string): string {
     const panel = this.requireGmPanelState()
     const entry = createGmSheetEntry(fileName, html)
     panel.sheets.push(entry)
     panel.sheet_order.push(entry.id)
     this.appendGmLog('sheet-import', `${player.nickname} 导入了角色卡 ${entry.parsed_sheet.character_name || entry.source_file_name}`, player)
+    return entry.id
   }
 
   private replaceGmCharacter(player: Player, sheetId: string, fileName: string, html: string): void {
@@ -1282,14 +1303,14 @@ export class RoomDurableObject {
   private async commit(
     reason: string,
     patchData: RoomPatchData,
-    options: { waitForPersistence?: boolean } = {},
+    options: CommitOptions = {},
   ): Promise<void> {
     const room = this.requireRoom()
     room.updated_at = new Date().toISOString()
     room.snapshot_version += 1
     const version = room.snapshot_version
     const updatedAt = room.updated_at
-    const persistPromise = this.enqueueSave()
+    const persistPromise = this.enqueueSave(options.htmlPersistence)
     if (patchData.kind === 'room.replacement') {
       patchData = { kind: 'room.replacement', state: this.publicState() }
     }
@@ -1455,10 +1476,10 @@ export class RoomDurableObject {
     return { kind: 'xcard', xCard: structuredClone(this.requireRoom().x_card ?? null) }
   }
 
-  private enqueueSave(): Promise<void> {
+  private enqueueSave(htmlPersistence?: HtmlPersistenceMode): Promise<void> {
     const persistPromise = this.persistQueue.then(
-      () => this.save(),
-      () => this.save(),
+      () => this.save(htmlPersistence),
+      () => this.save(htmlPersistence),
     )
     this.persistQueue = persistPromise.catch((error) => {
       console.error('Room persistence failed', error)
@@ -1489,41 +1510,60 @@ export class RoomDurableObject {
     return room
   }
 
-  private async save(): Promise<void> {
+  private async save(htmlPersistence?: HtmlPersistenceMode): Promise<void> {
     if (!this.room) return
-    const snapshot = structuredClone(this.room)
-    const activeHtmlKeys = new Set<string>()
-    const htmlEntries: Array<[string, string]> = []
-    const activeCompiledHtmlKeys = new Set<string>()
-    const compiledHtmlEntries: Array<[string, string]> = []
-
-    if (snapshot.gm_panel) {
-      snapshot.gm_panel.sheets = snapshot.gm_panel.sheets.map((sheet) => {
-        if (sheet.source_html) {
-          const storageKey = getGmSheetHtmlStorageKey(sheet.id)
-          activeHtmlKeys.add(storageKey)
-          htmlEntries.push([storageKey, sheet.source_html])
+    const roomWithoutHtml = this.room.gm_panel
+      ? {
+          ...this.room,
+          gm_panel: {
+            ...this.room.gm_panel,
+            sheets: this.room.gm_panel.sheets.map((sheet) => {
+              const { source_html: _sourceHtml, compiled_html: _compiledHtml, ...rest } = sheet
+              return rest
+            }),
+          },
         }
-        if (sheet.compiled_html) {
-          const storageKey = getGmSheetCompiledHtmlStorageKey(sheet.id)
-          activeCompiledHtmlKeys.add(storageKey)
-          compiledHtmlEntries.push([storageKey, sheet.compiled_html])
-        }
-
-        const { source_html: _sourceHtml, compiled_html: _compiledHtml, ...rest } = sheet
-        return rest
-      })
-    }
+      : this.room
+    const snapshot = structuredClone(roomWithoutHtml)
 
     await this.ctx.storage.put('room', snapshot)
 
-    for (const [storageKey, html] of htmlEntries) {
-      await this.ctx.storage.put(storageKey, html)
-    }
-    for (const [storageKey, html] of compiledHtmlEntries) {
-      await this.ctx.storage.put(storageKey, html)
+    if (!htmlPersistence) {
+      return
     }
 
+    if (htmlPersistence.mode === 'delete') {
+      for (const sheetId of new Set(htmlPersistence.sheetIds)) {
+        await this.ctx.storage.delete(getGmSheetHtmlStorageKey(sheetId))
+        await this.ctx.storage.delete(getGmSheetCompiledHtmlStorageKey(sheetId))
+      }
+      return
+    }
+
+    const sheets = this.room.gm_panel?.sheets ?? []
+    const sheetsToPersist = (htmlPersistence.mode === 'sync-all'
+      ? sheets
+      : sheets.filter((sheet) => htmlPersistence.sheetIds.includes(sheet.id)))
+      .map((sheet) => ({
+        id: sheet.id,
+        sourceHtml: sheet.source_html,
+        compiledHtml: sheet.compiled_html,
+      }))
+
+    for (const sheet of sheetsToPersist) {
+      await this.persistGmSheetHtml(sheet)
+    }
+
+    if (htmlPersistence.mode !== 'sync-all') {
+      return
+    }
+
+    const activeHtmlKeys = new Set(
+      sheetsToPersist.filter((sheet) => sheet.sourceHtml).map((sheet) => getGmSheetHtmlStorageKey(sheet.id)),
+    )
+    const activeCompiledHtmlKeys = new Set(
+      sheetsToPersist.filter((sheet) => sheet.compiledHtml).map((sheet) => getGmSheetCompiledHtmlStorageKey(sheet.id)),
+    )
     const storedHtmlEntries = await this.ctx.storage.list<string>({ prefix: GM_SHEET_HTML_STORAGE_KEY_PREFIX })
     for (const storageKey of storedHtmlEntries.keys()) {
       if (!activeHtmlKeys.has(storageKey)) {
@@ -1535,6 +1575,26 @@ export class RoomDurableObject {
       if (!activeCompiledHtmlKeys.has(storageKey)) {
         await this.ctx.storage.delete(storageKey)
       }
+    }
+  }
+
+  private async persistGmSheetHtml(sheet: {
+    id: string
+    sourceHtml?: string
+    compiledHtml?: string
+  }): Promise<void> {
+    const sourceStorageKey = getGmSheetHtmlStorageKey(sheet.id)
+    if (sheet.sourceHtml) {
+      await this.ctx.storage.put(sourceStorageKey, sheet.sourceHtml)
+    } else {
+      await this.ctx.storage.delete(sourceStorageKey)
+    }
+
+    const compiledStorageKey = getGmSheetCompiledHtmlStorageKey(sheet.id)
+    if (sheet.compiledHtml) {
+      await this.ctx.storage.put(compiledStorageKey, sheet.compiledHtml)
+    } else {
+      await this.ctx.storage.delete(compiledStorageKey)
     }
   }
 
