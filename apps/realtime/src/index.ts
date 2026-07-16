@@ -96,7 +96,6 @@ type HtmlPersistenceMode =
   | { mode: 'sync-all' }
 
 interface CommitOptions {
-  waitForPersistence?: boolean
   htmlPersistence?: HtmlPersistenceMode
 }
 
@@ -567,9 +566,9 @@ export class RoomDurableObject {
     }
 
     try {
-      await this.applyMessage(session, message, socket)
+      const committedVersion = await this.applyMessage(session, message, socket)
       if (message.requestId) {
-        const version = this.requireRoom().snapshot_version
+        const version = committedVersion ?? this.requireRoom().snapshot_version
         this.send(socket, {
           type: 'ack',
           requestId: message.requestId,
@@ -581,7 +580,7 @@ export class RoomDurableObject {
     }
   }
 
-  private async applyMessage(session: SocketSession, message: ClientMessage, socket: WebSocket): Promise<void> {
+  private async applyMessage(session: SocketSession, message: ClientMessage, socket: WebSocket): Promise<number | undefined> {
     await this.mustLoad()
     const player = this.requirePlayer(session.playerId)
 
@@ -592,174 +591,147 @@ export class RoomDurableObject {
 
       case 'room.updateSettings':
         this.updateSettings(message.payload)
-        await this.commit('room.updateSettings', {
+        return this.commit('room.updateSettings', {
           kind: 'room.settings',
           settings: structuredClone(this.requireRoom().settings),
         })
-        return
 
       case 'gm.importHtmlCharacter':
         this.requireGmPanelRoom()
         {
           const sheetId = this.importGmCharacter(player, message.payload.fileName, message.payload.html)
-          await this.commit('gm.importHtmlCharacter', this.gmSheetPatch('upsert', sheetId), {
+          return this.commit('gm.importHtmlCharacter', this.gmSheetPatch('upsert', sheetId), {
             htmlPersistence: { mode: 'upsert', sheetIds: [sheetId] },
           })
         }
-        return
 
       case 'gm.replaceHtmlCharacter':
         this.requireGmPanelRoom()
         this.replaceGmCharacter(player, message.payload.sheetId, message.payload.fileName, message.payload.html)
-        await this.commit('gm.replaceHtmlCharacter', this.gmSheetPatch('upsert', message.payload.sheetId), {
+        return this.commit('gm.replaceHtmlCharacter', this.gmSheetPatch('upsert', message.payload.sheetId), {
           htmlPersistence: { mode: 'upsert', sheetIds: [message.payload.sheetId] },
         })
-        return
 
       case 'gm.deleteSheet':
         this.requireGmPanelRoom()
         this.deleteGmSheet(player, message.payload.sheetId)
-        await this.commit('gm.deleteSheet', this.gmSheetPatch('delete', message.payload.sheetId), {
+        return this.commit('gm.deleteSheet', this.gmSheetPatch('delete', message.payload.sheetId), {
           htmlPersistence: { mode: 'delete', sheetIds: [message.payload.sheetId] },
         })
-        return
 
       case 'gm.updateSheet':
         this.requireGmPanelRoom()
         this.updateGmSheet(player, message.payload.sheetId, message.payload.sheet)
-        await this.commit('gm.updateSheet', this.gmSheetPatch('upsert', message.payload.sheetId))
-        return
+        return this.commit('gm.updateSheet', this.gmSheetPatch('upsert', message.payload.sheetId))
 
       case 'gm.updateResource':
         this.requireGmPanelRoom()
         this.updateGmResource(player, message.payload.sheetId, message.payload.resourceKey, message.payload.nextValue)
-        await this.commit('gm.updateResource', this.gmResourcePatch(message.payload.sheetId, message.payload.resourceKey))
-        return
+        return this.commit('gm.updateResource', this.gmResourcePatch(message.payload.sheetId, message.payload.resourceKey))
 
       case 'gm.updateFear':
         this.requireGmPanelRoom()
         this.updateGmFear(player, message.payload.value)
-        await this.commit('gm.updateFear', this.gmFearPatch())
-        return
+        return this.commit('gm.updateFear', this.gmFearPatch())
 
       case 'gm.createCountdown':
         this.requireGmPanelRoom()
         this.createGmCountdown(player, message.payload.name, message.payload.max)
-        await this.commit('gm.createCountdown', this.gmCountdownPatch('upsert', this.requireGmPanelState().countdowns.at(-1)!.id))
-        return
+        return this.commit('gm.createCountdown', this.gmCountdownPatch('upsert', this.requireGmPanelState().countdowns.at(-1)!.id))
 
       case 'gm.updateCountdown':
         this.requireGmPanelRoom()
         this.updateGmCountdown(player, message.payload.countdownId, message.payload.value)
-        await this.commit('gm.updateCountdown', this.gmCountdownPatch('upsert', message.payload.countdownId))
-        return
+        return this.commit('gm.updateCountdown', this.gmCountdownPatch('upsert', message.payload.countdownId))
 
       case 'gm.deleteCountdown':
         this.requireGmPanelRoom()
         this.deleteGmCountdown(player, message.payload.countdownId)
-        await this.commit('gm.deleteCountdown', this.gmCountdownPatch('delete', message.payload.countdownId))
-        return
+        return this.commit('gm.deleteCountdown', this.gmCountdownPatch('delete', message.payload.countdownId))
 
       case 'gm.moveSheet':
         this.requireGmPanelRoom()
         this.moveGmSheet(player, message.payload.sheetId, message.payload.direction)
-        await this.commit('gm.moveSheet', this.gmOrderPatch())
-        return
+        return this.commit('gm.moveSheet', this.gmOrderPatch())
 
       case 'gm.updateCardsPerPage':
         this.requireGmPanelRoom()
         this.updateGmCardsPerPage(player, message.payload.cardsPerPage)
-        await this.commit('gm.updateCardsPerPage', this.gmCardsPerPagePatch())
-        return
+        return this.commit('gm.updateCardsPerPage', this.gmCardsPerPagePatch())
 
       case 'mobile.importCharacterCode':
         this.requireMobilePanelRoom()
         this.importMobileCharacter(player, message.payload.code, message.payload.displayName, message.payload.experiences)
-        await this.commit('mobile.importCharacterCode', this.mobileCharacterPatch('upsert', this.requireMobilePanelState().character_order.at(-1)!))
-        return
+        return this.commit('mobile.importCharacterCode', this.mobileCharacterPatch('upsert', this.requireMobilePanelState().character_order.at(-1)!))
 
       case 'mobile.replaceCharacterCode':
         this.requireMobilePanelRoom()
         this.replaceMobileCharacter(player, message.payload.characterId, message.payload.code)
-        await this.commit('mobile.replaceCharacterCode', this.mobileCharacterPatch('upsert', message.payload.characterId))
-        return
+        return this.commit('mobile.replaceCharacterCode', this.mobileCharacterPatch('upsert', message.payload.characterId))
 
       case 'mobile.deleteCharacter':
         this.requireMobilePanelRoom()
         this.deleteMobileCharacter(player, message.payload.characterId)
-        await this.commit('mobile.deleteCharacter', this.mobileCharacterPatch('delete', message.payload.characterId))
-        return
+        return this.commit('mobile.deleteCharacter', this.mobileCharacterPatch('delete', message.payload.characterId))
 
       case 'mobile.updateCharacterCustom':
         this.requireMobilePanelRoom()
         this.updateMobileCharacterCustom(player, message.payload.characterId, message.payload.displayName, message.payload.experiences)
-        await this.commit('mobile.updateCharacterCustom', this.mobileCharacterPatch('upsert', message.payload.characterId))
-        return
+        return this.commit('mobile.updateCharacterCustom', this.mobileCharacterPatch('upsert', message.payload.characterId))
 
       case 'mobile.updateResource':
         this.requireMobilePanelRoom()
         this.updateMobileResource(player, message.payload.characterId, message.payload.resourceKey, message.payload.nextValue)
-        await this.commit('mobile.updateResource', this.mobileResourcePatch(message.payload.characterId, message.payload.resourceKey))
-        return
+        return this.commit('mobile.updateResource', this.mobileResourcePatch(message.payload.characterId, message.payload.resourceKey))
 
       case 'mobile.updateFear':
         this.requireMobilePanelRoom()
         this.updateMobileFear(player, message.payload.value)
-        await this.commit('mobile.updateFear', this.mobileFearPatch())
-        return
+        return this.commit('mobile.updateFear', this.mobileFearPatch())
 
       case 'mobile.createCountdown':
         this.requireMobilePanelRoom()
         this.createMobileCountdown(player, message.payload.name, message.payload.max)
-        await this.commit('mobile.createCountdown', this.mobileCountdownPatch('upsert', this.requireMobilePanelState().countdowns.at(-1)!.id))
-        return
+        return this.commit('mobile.createCountdown', this.mobileCountdownPatch('upsert', this.requireMobilePanelState().countdowns.at(-1)!.id))
 
       case 'mobile.updateCountdown':
         this.requireMobilePanelRoom()
         this.updateMobileCountdown(player, message.payload.countdownId, message.payload.value)
-        await this.commit('mobile.updateCountdown', this.mobileCountdownPatch('upsert', message.payload.countdownId))
-        return
+        return this.commit('mobile.updateCountdown', this.mobileCountdownPatch('upsert', message.payload.countdownId))
 
       case 'mobile.deleteCountdown':
         this.requireMobilePanelRoom()
         this.deleteMobileCountdown(player, message.payload.countdownId)
-        await this.commit('mobile.deleteCountdown', this.mobileCountdownPatch('delete', message.payload.countdownId))
-        return
+        return this.commit('mobile.deleteCountdown', this.mobileCountdownPatch('delete', message.payload.countdownId))
 
       case 'dice.roll':
         this.rollDice(player, message.payload)
-        await this.commit('dice.roll', this.diceHistoryPatch(), { waitForPersistence: false })
-        return
+        return this.commit('dice.roll', this.diceHistoryPatch())
 
       case 'dice.clearHistory':
         this.clearDiceHistory()
-        await this.commit('dice.clearHistory', this.diceHistoryPatch(), { waitForPersistence: false })
-        return
+        return this.commit('dice.clearHistory', this.diceHistoryPatch())
 
       case 'drawing.submit':
         this.requireGmPanelRoom()
         this.submitDrawingBoard(player, message.payload)
-        await this.commit('drawing.submit', this.drawingPatch())
-        return
+        return this.commit('drawing.submit', this.drawingPatch())
 
       case 'xcard.raise':
         this.raiseXCard(player)
-        await this.commit('xcard.raise', this.xCardPatch())
-        return
+        return this.commit('xcard.raise', this.xCardPatch())
 
       case 'xcard.acknowledge':
         this.acknowledgeXCard(player)
-        await this.commit('xcard.acknowledge', this.xCardPatch())
-        return
+        return this.commit('xcard.acknowledge', this.xCardPatch())
 
       case 'room.importRoomBackup': {
         this.requireImportsEnabled()
         const backup = assertDhRoomBackup(message.payload.backup)
         this.importRoomBackup(backup)
-        await this.commit('room.importRoomBackup', { kind: 'room.replacement', state: this.publicState() }, {
+        return this.commit('room.importRoomBackup', { kind: 'room.replacement', state: this.publicState() }, {
           htmlPersistence: { mode: 'sync-all' },
         })
-        return
       }
     }
   }
@@ -1304,7 +1276,7 @@ export class RoomDurableObject {
     reason: string,
     patchData: RoomPatchData,
     options: CommitOptions = {},
-  ): Promise<void> {
+  ): Promise<number> {
     const room = this.requireRoom()
     room.updated_at = new Date().toISOString()
     room.snapshot_version += 1
@@ -1315,14 +1287,9 @@ export class RoomDurableObject {
       patchData = { kind: 'room.replacement', state: this.publicState() }
     }
 
-    if (options.waitForPersistence === false) {
-      this.broadcastPatch(reason, patchData, { version, updatedAt })
-      this.ctx.waitUntil(persistPromise.catch(() => undefined))
-      return
-    }
-
     await persistPromise
     this.broadcastPatch(reason, patchData, { version, updatedAt })
+    return version
   }
 
   private broadcastPatch(

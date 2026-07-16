@@ -115,47 +115,116 @@ async function applyRoomMessage(durableObject: RoomDurableObject, message: unkno
   }).applyMessage({ playerId: 'player-1', nickname: 'Host' }, message, {} as WebSocket)
 }
 
-describe('RoomDurableObject commit latency', () => {
-  it('can broadcast a room update before waiting for storage persistence', async () => {
-    const storagePut = new Deferred<void>()
-    const waitUntilPromises: Promise<unknown>[] = []
+describe('RoomDurableObject commit ordering', () => {
+  it('broadcasts and acknowledges queued mutations in persisted snapshot order', async () => {
+    const firstStoragePut = new Deferred<void>()
+    const firstStoragePutStarted = new Deferred<void>()
     const sentMessages: string[] = []
+    let storagePutCount = 0
 
     const ctx = {
       storage: {
-        put: () => storagePut.promise,
+        put: () => {
+          storagePutCount += 1
+          if (storagePutCount === 1) firstStoragePutStarted.resolve()
+          return storagePutCount === 1 ? firstStoragePut.promise : Promise.resolve()
+        },
         list: async () => new Map<string, string>(),
       },
-      waitUntil: (promise: Promise<unknown>) => {
-        waitUntilPromises.push(promise)
-      },
+      waitUntil: () => undefined,
     } as unknown as DurableObjectState
 
     const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
     ;(durableObject as unknown as { room: RoomState | null }).room = createRoom()
+    const socket = { send: (message: string) => sentMessages.push(message) } as unknown as WebSocket
     ;(durableObject as unknown as { sockets: Map<WebSocket, unknown> }).sockets = new Map([
-      [{ send: (message: string) => sentMessages.push(message) } as unknown as WebSocket, {}],
+      [socket, { playerId: 'player-1', nickname: 'Host' }],
     ])
 
-    const commitPromise = (durableObject as unknown as {
-      commit: (reason: string, patch: unknown, options: { waitForPersistence: boolean }) => Promise<void>
-    }).commit('dice.roll', { kind: 'dice.history', diceRolls: [] }, { waitForPersistence: false })
+    const firstMessage = (durableObject as unknown as {
+      handleMessage: (socket: WebSocket, data: string) => Promise<void>
+    }).handleMessage(socket, JSON.stringify({
+      type: 'gm.updateFear',
+      requestId: 'fear-request',
+      payload: { value: 1 },
+    }))
+
+    await firstStoragePutStarted.promise
+    expect(storagePutCount).toBe(1)
+
+    const diceMessage = (durableObject as unknown as {
+      handleMessage: (socket: WebSocket, data: string) => Promise<void>
+    }).handleMessage(socket, JSON.stringify({
+      type: 'dice.roll',
+      requestId: 'dice-request',
+      payload: {
+        mode: 'standard',
+        modifier_mode: 'normal',
+        repeat: 1,
+        modifier: 0,
+        dice: [{ sides: 6, count: 1 }],
+      },
+    }))
 
     await Promise.resolve()
+    expect(sentMessages).toHaveLength(0)
+
+    firstStoragePut.resolve()
+    await Promise.all([firstMessage, diceMessage])
+
+    const messages = sentMessages.map((message) => JSON.parse(message))
+    expect(messages.map((message) => [message.type, message.payload.snapshot_version])).toEqual([
+      ['room.patch', 2],
+      ['ack', 2],
+      ['room.patch', 3],
+      ['ack', 3],
+    ])
+    expect(messages[0]).toMatchObject({ payload: { reason: 'gm.updateFear' } })
+    expect(messages[2]).toMatchObject({ payload: { reason: 'dice.roll' } })
+  })
+
+  it('reports storage failures without broadcasting or acknowledging the mutation', async () => {
+    const sentMessages: string[] = []
+    const storageError = new Error('storage unavailable')
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const ctx = {
+      storage: {
+        put: async () => { throw storageError },
+        list: async () => new Map<string, string>(),
+      },
+      waitUntil: () => undefined,
+    } as unknown as DurableObjectState
+    const socket = { send: (message: string) => sentMessages.push(message) } as unknown as WebSocket
+    const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
+    ;(durableObject as unknown as { room: RoomState | null }).room = createRoom()
+    ;(durableObject as unknown as { sockets: Map<WebSocket, unknown> }).sockets = new Map([
+      [socket, { playerId: 'player-1', nickname: 'Host' }],
+    ])
 
     try {
-      expect(sentMessages).toHaveLength(1)
-      expect(JSON.parse(sentMessages[0])).toMatchObject({
-        type: 'room.patch',
-        payload: { kind: 'dice.history', reason: 'dice.roll', snapshot_version: 2, version: 2 },
-      })
-      expect(waitUntilPromises).toHaveLength(1)
-    } finally {
-      storagePut.resolve()
-      await commitPromise
-    }
+      await (durableObject as unknown as {
+        handleMessage: (socket: WebSocket, data: string) => Promise<void>
+      }).handleMessage(socket, JSON.stringify({
+        type: 'dice.roll',
+        requestId: 'dice-request',
+        payload: {
+          mode: 'standard',
+          modifier_mode: 'normal',
+          repeat: 1,
+          modifier: 0,
+          dice: [{ sides: 6, count: 1 }],
+        },
+      }))
 
-    await Promise.all(waitUntilPromises)
+      expect(sentMessages.map((message) => JSON.parse(message))).toEqual([{
+        type: 'error',
+        requestId: 'dice-request',
+        payload: { code: 'INTERNAL_ERROR', message: 'storage unavailable' },
+      }])
+      expect(consoleError).toHaveBeenCalledWith('Room persistence failed', storageError)
+    } finally {
+      consoleError.mockRestore()
+    }
   })
 
   it('ordinary commits persist only a stripped room snapshot without touching HTML storage', async () => {
