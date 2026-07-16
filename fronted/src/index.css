@@ -2050,18 +2050,18 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 .dice-modal-frame {
   position: relative;
   z-index: 1;
-  width: min(96vw, 72rem);
-  height: 88vh;
+  width: min(calc(100vw - 88px), 99rem);
+  height: min(calc(100vh - 38px), 56.5rem);
   min-height: 0;
   display: flex;
   flex-direction: column;
   margin: auto;
   border: 1px solid rgba(158, 118, 30, 0.54);
-  border-radius: 18px;
+  border-radius: 16px;
   background:
-    radial-gradient(circle at 14% 0%, rgba(240, 210, 100, 0.22), transparent 26%),
-    radial-gradient(circle at 90% 5%, rgba(129, 82, 180, 0.16), transparent 28%),
-    linear-gradient(180deg, #fff8e8 0%, #e8d4aa 100%);
+    radial-gradient(circle at 10% 0%, rgba(240, 210, 100, 0.16), transparent 26%),
+    radial-gradient(circle at 92% 3%, rgba(129, 82, 180, 0.08), transparent 25%),
+    linear-gradient(180deg, #fffaf0 0%, #f8e9c8 100%);
   box-shadow:
     0 30px 80px -26px rgba(39, 25, 8, 0.68),
     inset 0 0 0 1px rgba(255, 255, 255, 0.64),
@@ -2087,20 +2087,24 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px 24px 12px;
+  min-height: 75px;
+  padding: 18px 30px 14px;
 }
 
 .dice-modal-topbar h3 {
   color: #49361a;
   font-family: var(--font-display);
-  font-size: 20px;
+  font-size: 29px;
   font-weight: 900;
   letter-spacing: 0.18em;
 }
 
 .dice-modal-close {
-  width: 32px;
-  height: 32px;
+  position: absolute;
+  top: 20px;
+  right: 30px;
+  width: 48px;
+  height: 48px;
   display: grid;
   place-items: center;
   border: 1px solid #b58d2a;
@@ -2126,8 +2130,8 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   position: relative;
   z-index: 3;
   height: 1px;
-  margin: 0 24px;
-  background: linear-gradient(90deg, transparent, rgba(181, 141, 42, 0.62), transparent);
+  margin: 0 30px;
+  background: linear-gradient(90deg, transparent, rgba(181, 141, 42, 0.28), transparent);
 }
 
 .modal-content:has(.dice-panel--ritual) {
@@ -2151,8 +2155,9 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   z-index: 3;
   flex: 1;
   height: auto;
-  padding: 24px;
-  grid-template-columns: minmax(17rem, 20rem) minmax(22rem, 1fr) minmax(14rem, 16rem);
+  padding: 14px 26px 38px;
+  grid-template-columns: minmax(27rem, 29.5rem) minmax(32rem, 1fr) minmax(21rem, 24.75rem);
+  gap: 22px;
 }
 
 .drawing-modal-frame {
@@ -2352,8 +2357,8 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   border-radius: 12px;
   border: 1px solid rgba(181, 141, 42, 0.34);
   background:
-    linear-gradient(180deg, rgba(255, 252, 242, 0.94), rgba(239, 226, 195, 0.88)),
-    #fff8e8;
+    linear-gradient(180deg, rgba(255, 254, 249, 0.96), rgba(250, 244, 230, 0.92)),
+    #fffaf0;
   box-shadow:
     0 22px 48px -28px rgba(55, 37, 12, 0.58),
     inset 0 1px 0 rgba(255, 255, 255, 0.8);
@@ -2376,12 +2381,12 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 .dice-panel--ritual .dice-builder,
 .dice-panel--ritual .dice-history {
   min-height: 0;
-  padding: 14px;
+  padding: 18px 16px;
 }
 
 .dice-panel--ritual .dice-builder {
   align-content: start;
-  gap: 10px;
+  gap: 12px;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -2395,8 +2400,24 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   display: none;
 }
 
-.dice-panel--ritual .dice-builder--standard .dice-field-label {
-  display: none;
+.dice-builder__intro {
+  display: grid;
+  gap: 5px;
+  padding: 2px 8px 4px;
+}
+
+.dice-builder__intro h3 {
+  margin: 0;
+  color: #49361a;
+  font-family: var(--font-display);
+  font-size: 21px;
+  letter-spacing: 0.08em;
+}
+
+.dice-builder__intro p {
+  margin: 0;
+  color: #79684e;
+  font-size: 13px;
 }
 
 .dice-panel--ritual .dice-mode-switch--tabs {
@@ -2412,8 +2433,9 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   background: transparent;
   text-align: center;
   color: #6d5a3f;
-  padding: 9px 10px;
-  min-height: 56px;
+  padding: 10px 12px;
+  min-height: 66px;
+  font-size: 14px;
 }
 
 .dice-panel--ritual .dice-mode-switch--tabs button:hover {
@@ -2444,7 +2466,7 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 .dice-panel--ritual .dice-stage {
   min-height: 0;
   height: 100%;
-  padding: 22px;
+  padding: 24px 26px;
   border-color: rgba(181, 141, 42, 0.36);
   background:
     radial-gradient(circle at 50% 110%, rgba(219, 171, 45, 0.22), transparent 45%),
@@ -2499,14 +2521,14 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.48);
   color: #49361a;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
 }
 
 .dice-panel--ritual .dice-stage__formula {
   max-width: 36rem;
   color: #79684e;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .dice-panel--ritual .dice-outcome-badge {
@@ -2529,8 +2551,9 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 
 .dice-panel--ritual .dice-stage__result {
   min-height: 0;
-  height: calc(100% - 116px);
-  padding: 18px 0 10px;
+  height: calc(100% - 126px);
+  align-items: flex-start;
+  padding: 58px 0 12px;
 }
 
 .dice-panel--ritual .dice-stage__details {
@@ -2545,6 +2568,10 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   display: grid;
   place-items: center;
   gap: 22px;
+}
+
+.duality-result-shell {
+  gap: 43px;
 }
 
 .duality-result {
@@ -2590,7 +2617,7 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   --die-glow: rgba(201, 162, 39, 0.28);
   display: grid;
   justify-items: center;
-  gap: 6px;
+  gap: 13px;
   color: var(--die-stroke);
 }
 
@@ -2624,8 +2651,8 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 
 .animated-die__face {
   position: relative;
-  width: 84px;
-  height: 84px;
+  width: 138px;
+  height: 138px;
   display: grid;
   place-items: center;
   border: 1.5px solid var(--die-stroke);
@@ -2652,7 +2679,7 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 .animated-die__face strong {
   color: var(--die-ink);
   font-family: var(--font-display);
-  font-size: 36px;
+  font-size: 54px;
   line-height: 1;
   text-shadow: 0 0 12px var(--die-glow);
 }
@@ -2663,7 +2690,7 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 
 .animated-die__label {
   color: var(--die-stroke);
-  font-size: 10px;
+  font-size: 15px;
   font-weight: 800;
   letter-spacing: 0.2em;
 }
@@ -2692,7 +2719,7 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 .roll-result__banner {
   display: grid;
   justify-items: center;
-  gap: 8px;
+  gap: 21px;
   text-align: center;
   animation: diceResultArrival 620ms cubic-bezier(.2,.9,.2,1);
 }
@@ -2700,7 +2727,7 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 .roll-result__banner h3 {
   color: #6f4d08;
   font-family: var(--font-display);
-  font-size: clamp(30px, 5vw, 42px);
+  font-size: clamp(42px, 4vw, 58px);
   font-weight: 900;
   line-height: 1;
   text-shadow: 0 0 24px rgba(111, 77, 8, 0.2);
@@ -2731,14 +2758,14 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 .roll-result__banner strong {
   color: #332716;
   font-family: var(--font-display);
-  font-size: clamp(68px, 9vw, 92px);
+  font-size: clamp(92px, 8vw, 118px);
   line-height: 0.9;
   text-shadow: 0 4px 24px rgba(219, 171, 45, 0.28);
 }
 
 .roll-result__banner small {
   color: rgba(121, 104, 78, 0.78);
-  font-size: 12px;
+  font-size: 16px;
 }
 
 .outcome-backdrop {
@@ -2835,7 +2862,8 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 }
 
 .dice-panel--ritual .dice-token {
-  min-height: 60px;
+  min-height: 108px;
+  aspect-ratio: auto;
   border: 1px solid #cdbb98;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.5);
@@ -2860,7 +2888,7 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 
 .dice-token__label {
   font-family: var(--font-display);
-  font-size: 22px;
+  font-size: 27px;
   font-weight: 500;
   line-height: 1;
   color: inherit;
@@ -2869,12 +2897,47 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 
 .dice-panel--ritual .dice-tray {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 14px;
+}
+
+.dice-panel--ritual .dice-builder--standard .dice-token {
+  min-height: 76px;
+}
+
+.dice-panel--ritual .dice-builder--standard .dice-mode-switch--tabs {
+  margin-bottom: 10px;
+}
+
+.dice-panel--ritual .dice-builder--standard .dice-field-label {
+  margin-bottom: 20px;
+}
+
+.dice-panel--ritual .dice-builder--standard .dice-control-row {
+  margin-top: 10px;
+}
+
+.dice-panel--ritual .dice-builder--standard .dice-formula-row {
+  margin-top: 8px;
 }
 
 .dice-panel--ritual .dice-control-row {
   flex-direction: column;
   align-items: stretch;
+  gap: 12px;
+}
+
+.dice-result-mode {
+  display: grid;
+  gap: 8px;
+  color: #49361a;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.dice-formula-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 10px;
 }
 
@@ -2951,7 +3014,7 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 }
 
 .dice-current-formula {
-  min-height: 42px;
+  min-height: 46px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2960,7 +3023,8 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   background: rgba(255, 255, 255, 0.58);
   color: #7c5e16;
   font-family: var(--font-display);
-  font-size: 15px;
+  gap: 10px;
+  font-size: 16px;
   letter-spacing: 0.05em;
   text-align: center;
   padding: 0 10px;
@@ -3011,8 +3075,8 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   margin: 0;
   color: #79684e;
   font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 700;
   letter-spacing: 0.04em;
 }
 
@@ -3024,7 +3088,7 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 
 .dice-preset-form input {
   min-width: 0;
-  height: 34px;
+  height: 40px;
   border: 1px solid rgba(181, 141, 42, 0.36);
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.62);
@@ -3045,7 +3109,7 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 }
 
 .dice-preset-form button {
-  height: 34px;
+  height: 40px;
   display: grid;
   place-items: center;
   border: 1px solid #b98715;
@@ -3150,26 +3214,41 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 }
 
 .dice-panel--ritual .dice-stepper {
-  display: flex;
+  display: grid;
   gap: 8px;
-  padding: 9px 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #49361a;
+  font-size: 14px;
 }
 
 .dice-panel--ritual .dice-stepper > div {
-  flex-wrap: wrap;
-  justify-content: flex-start;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: 44px minmax(48px, 1fr) 44px repeat(3, 58px);
+  gap: 10px;
+}
+
+.dice-panel--ritual .dice-stepper button {
+  width: 44px;
+  height: 40px;
+  border-radius: 8px;
+}
+
+.dice-panel--ritual .dice-stepper strong {
+  min-width: 48px;
+  font-size: 17px;
 }
 
 .dice-panel--ritual .dice-stepper__quick {
-  width: auto;
-  min-width: 32px;
-  padding: 0 7px;
-  border-radius: 999px;
+  width: 58px;
+  min-width: 58px;
+  padding: 0 8px;
+  border-radius: 8px;
   border-color: #c5a45d;
   background: rgba(255, 255, 255, 0.45);
   color: #725410;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 900;
 }
 
@@ -3179,15 +3258,22 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 }
 
 .dice-panel--ritual .dice-roll-button {
-  min-height: 46px;
+  min-height: 60px;
   border-radius: 8px;
   background: linear-gradient(90deg, #9f771e, #f0d264, #9f771e);
   background-size: 200% auto;
   animation: rollButtonSheen 4s linear infinite;
   margin-top: auto;
+  font-size: 18px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dice-panel--ritual .dice-builder--standard .dice-roll-button {
+  margin-top: 0;
+  position: relative;
+  top: -16px;
 }
 
 .dice-panel--ritual .dice-history {
@@ -3204,6 +3290,8 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 }
 
 .dice-panel--ritual .dice-history-item {
+  min-height: 130px;
+  padding: 13px 16px;
   border: 1px solid #d2c09d;
   border-left-width: 4px;
   border-radius: 8px;
@@ -3240,6 +3328,43 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 14px;
+}
+
+.dice-panel--ritual .dice-history-item__top time {
+  font-size: 12px;
+}
+
+.dice-panel--ritual .dice-history-item__formula {
+  margin-top: 7px;
+  font-size: 12px;
+}
+
+.dice-panel--ritual .dice-history-item__result {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.dice-panel--ritual .dice-history-item__result strong {
+  font-size: 28px;
+}
+
+.dice-panel--ritual .dice-history-item__duality {
+  font-size: 11px;
+}
+
+.dice-panel--ritual .dice-history .dice-section-heading h3 {
+  font-size: 21px;
+}
+
+.dice-preset-heading > div {
+  display: flex;
+  gap: 8px;
+}
+
+.dice-preset-heading button:disabled {
+  cursor: not-allowed;
+  opacity: 0.36;
 }
 
 @keyframes ritualDieRoll {

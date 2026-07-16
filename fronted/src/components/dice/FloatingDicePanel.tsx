@@ -254,19 +254,16 @@ export function FloatingDicePanel() {
                   </button>
                 </div>
 
-                <div className="dice-section-heading">
-                  <div>
-                    <div className="dice-section-heading__eyebrow">ROLL SETUP</div>
-                    <h3>{mode === 'dual' ? '二元骰设定' : '普通骰组'}</h3>
+                {mode === 'dual' && (
+                  <div className="dice-builder__intro">
+                    <h3>二元骰设置</h3>
+                    <p>希望 d12 + 恐惧 d12</p>
                   </div>
-                  <button type="button" className="dice-reset" onClick={resetPool}>
-                    <RotateCcw size={14} /> 重置
-                  </button>
-                </div>
+                )}
 
                 <div>
                   <div className="dice-field-label">
-                    <span>{mode === 'dual' ? '附加骰' : '骰盘'}</span>
+                    <span>{mode === 'dual' ? '附加骰' : '普通骰设置'}</span>
                     <span>左键增加，右键减少</span>
                   </div>
                   <div className="dice-tray">
@@ -307,38 +304,47 @@ export function FloatingDicePanel() {
                     max={100000}
                     format={(value) => value > 0 ? `+${value}` : String(value)}
                   />
-                  <div className="dice-advantage-switch">
-                    <AdvantageButton mode="normal" value={effectiveModifierMode} disabled={false} onChange={setModifierMode}>
-                      常规
-                    </AdvantageButton>
-                    <AdvantageButton mode="advantage" value={effectiveModifierMode} disabled={!canUseAdvantage} onChange={setModifierMode}>
-                      优势
-                    </AdvantageButton>
-                    <AdvantageButton mode="disadvantage" value={effectiveModifierMode} disabled={!canUseAdvantage} onChange={setModifierMode}>
-                      劣势
-                    </AdvantageButton>
+                  <div className="dice-result-mode">
+                    <span>结果模式</span>
+                    <div className="dice-advantage-switch">
+                      <AdvantageButton mode="normal" value={effectiveModifierMode} disabled={false} onChange={setModifierMode}>
+                        常规
+                      </AdvantageButton>
+                      <AdvantageButton mode="advantage" value={effectiveModifierMode} disabled={!canUseAdvantage} onChange={setModifierMode}>
+                        优势
+                      </AdvantageButton>
+                      <AdvantageButton mode="disadvantage" value={effectiveModifierMode} disabled={!canUseAdvantage} onChange={setModifierMode}>
+                        劣势
+                      </AdvantageButton>
+                    </div>
                   </div>
+                </div>
+
+                <div className="dice-formula-row">
+                  <div className="dice-current-formula" aria-live="polite">
+                    <Dices size={18} />
+                    {mode === 'dual' ? '希望 d12 + 恐惧 d12' : (currentFormula || '选择骰组')}
+                  </div>
+                  <button type="button" className="dice-reset" onClick={resetPool}>
+                    <RotateCcw size={15} /> 重置
+                  </button>
                 </div>
 
                 {mode === 'standard' && (
                   <>
-                    <div className="dice-current-formula" aria-live="polite">
-                      {currentFormula || '选择骰组'}
-                    </div>
-                    <div className="dice-clear-row">
-                      <button type="button" onClick={clearStandardDiceGroup} disabled={!dice.length && modifier === 0}>
-                        清空骰组
-                      </button>
-                    </div>
-
                     <div className="dice-preset-panel">
                       <div className="dice-preset-heading">
                         <h4>预设骰组</h4>
-                        {editingPresetId && (
-                          <button type="button" onClick={cancelPresetEdit}>
-                            取消编辑
+                        <div>
+                          <button type="button" onClick={clearStandardDiceGroup} disabled={!dice.length && modifier === 0}>
+                            清空骰组
                           </button>
-                        )}
+                          {editingPresetId && (
+                            <button type="button" onClick={cancelPresetEdit}>
+                              取消编辑
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       <form className="dice-preset-form" onSubmit={savePreset}>
@@ -392,7 +398,7 @@ export function FloatingDicePanel() {
 
                 <button type="button" className="dice-roll-button" disabled={!canRoll} onClick={submitRoll}>
                   <Dices size={20} />
-                  {mode === 'standard' && currentFormula ? `掷 · ${currentFormula}` : '掷出骰子'}
+                  {mode === 'standard' && currentFormula ? `掷 · ${currentFormula.toUpperCase()}` : '掷出骰子'}
                 </button>
               </section>
 
