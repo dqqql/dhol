@@ -74,16 +74,42 @@ function createSheet(
   return sheet
 }
 
-function createStorageSpy(initialEntries: Array<[string, unknown]> = []) {
+interface StorageFailure {
+  operation: 'put' | 'delete'
+  matches: (key: string) => boolean
+  error: Error
+}
+
+function createStorageSpy(
+  initialEntries: Array<[string, unknown]> = [],
+  failure?: StorageFailure,
+) {
   const entries = new Map<string, unknown>(initialEntries)
   const put = vi.fn(async (key: string, value: unknown) => {
+    if (failure?.operation === 'put' && failure.matches(key)) throw failure.error
     entries.set(key, structuredClone(value))
   })
   const list = vi.fn(async ({ prefix }: { prefix?: string } = {}) => new Map(
     Array.from(entries.entries()).filter(([key]) => !prefix || key.startsWith(prefix)),
   ))
   const deleteEntry = vi.fn(async (key: string) => {
+    if (failure?.operation === 'delete' && failure.matches(key)) throw failure.error
     entries.delete(key)
+  })
+  const transaction = vi.fn(async <T>(closure: (txn: DurableObjectTransaction) => Promise<T>) => {
+    const before = structuredClone(entries)
+    try {
+      return await closure({
+        get: async <Value>(key: string) => entries.get(key) as Value | undefined,
+        list,
+        put,
+        delete: deleteEntry,
+      } as unknown as DurableObjectTransaction)
+    } catch (error) {
+      entries.clear()
+      for (const [key, value] of before) entries.set(key, value)
+      throw error
+    }
   })
 
   return {
@@ -93,10 +119,12 @@ function createStorageSpy(initialEntries: Array<[string, unknown]> = []) {
       put,
       list,
       delete: deleteEntry,
+      transaction,
     } as unknown as DurableObjectStorage,
     put,
     list,
     deleteEntry,
+    transaction,
   }
 }
 
@@ -115,21 +143,42 @@ async function applyRoomMessage(durableObject: RoomDurableObject, message: unkno
   }).applyMessage({ playerId: 'player-1', nickname: 'Host' }, message, {} as WebSocket)
 }
 
+function connectRoomObject(storage: DurableObjectStorage, room: RoomState) {
+  const sentMessages: string[] = []
+  const socket = { send: (message: string) => sentMessages.push(message) } as unknown as WebSocket
+  const durableObject = new RoomDurableObject({ storage } as DurableObjectState, { ALLOWED_ORIGIN: '*' } as never)
+  ;(durableObject as unknown as { room: RoomState | null }).room = room
+  ;(durableObject as unknown as { sockets: Map<WebSocket, unknown> }).sockets = new Map([
+    [socket, { playerId: 'player-1', nickname: 'Host' }],
+  ])
+  return { durableObject, sentMessages, socket }
+}
+
+async function handleRoomMessage(durableObject: RoomDurableObject, socket: WebSocket, message: unknown): Promise<void> {
+  await (durableObject as unknown as {
+    handleMessage: (socket: WebSocket, data: string) => Promise<void>
+  }).handleMessage(socket, JSON.stringify(message))
+}
+
 describe('RoomDurableObject commit ordering', () => {
   it('broadcasts and acknowledges queued mutations in persisted snapshot order', async () => {
     const firstStoragePut = new Deferred<void>()
     const firstStoragePutStarted = new Deferred<void>()
     const sentMessages: string[] = []
     let storagePutCount = 0
+    const put = () => {
+      storagePutCount += 1
+      if (storagePutCount === 1) firstStoragePutStarted.resolve()
+      return storagePutCount === 1 ? firstStoragePut.promise : Promise.resolve()
+    }
 
     const ctx = {
       storage: {
-        put: () => {
-          storagePutCount += 1
-          if (storagePutCount === 1) firstStoragePutStarted.resolve()
-          return storagePutCount === 1 ? firstStoragePut.promise : Promise.resolve()
-        },
+        put,
         list: async () => new Map<string, string>(),
+        transaction: (closure: (txn: DurableObjectTransaction) => Promise<unknown>) => closure({
+          put,
+        } as unknown as DurableObjectTransaction),
       },
       waitUntil: () => undefined,
     } as unknown as DurableObjectState
@@ -187,10 +236,14 @@ describe('RoomDurableObject commit ordering', () => {
     const sentMessages: string[] = []
     const storageError = new Error('storage unavailable')
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const put = async () => { throw storageError }
     const ctx = {
       storage: {
-        put: async () => { throw storageError },
+        put,
         list: async () => new Map<string, string>(),
+        transaction: (closure: (txn: DurableObjectTransaction) => Promise<unknown>) => closure({
+          put,
+        } as unknown as DurableObjectTransaction),
       },
       waitUntil: () => undefined,
     } as unknown as DurableObjectState
@@ -222,6 +275,166 @@ describe('RoomDurableObject commit ordering', () => {
         payload: { code: 'INTERNAL_ERROR', message: 'storage unavailable' },
       }])
       expect(consoleError).toHaveBeenCalledWith('Room persistence failed', storageError)
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
+  it('rolls back a room and new HTML import when the compiled HTML write fails', async () => {
+    const storageError = new Error('compiled HTML write failed')
+    const room = createRoom()
+    const storedBefore = new Map<string, unknown>([['room', structuredClone(room)]])
+    const storageSpy = createStorageSpy(Array.from(storedBefore), {
+      operation: 'put',
+      matches: key => key.startsWith('gm_sheet_compiled_html:'),
+      error: storageError,
+    })
+    const { durableObject, sentMessages, socket } = connectRoomObject(storageSpy.storage, room)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      await handleRoomMessage(durableObject, socket, {
+        type: 'gm.importHtmlCharacter',
+        requestId: 'import-request',
+        payload: { fileName: 'new.html', html: createImportedHtml('new') },
+      })
+
+      expect(Array.from(storageSpy.entries.entries())).toEqual(Array.from(storedBefore.entries()))
+      expect(sentMessages.map(message => JSON.parse(message))).toEqual([{
+        type: 'error',
+        requestId: 'import-request',
+        payload: { code: 'INTERNAL_ERROR', message: storageError.message },
+      }])
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
+  it('rolls back a room and replacement source HTML when the compiled HTML write fails', async () => {
+    const storageError = new Error('compiled HTML write failed')
+    const room = createRoom()
+    const existingSheet = createGmSheetEntry('old.html', createImportedHtml('old'), 'sheet-1')
+    room.gm_panel!.sheets = [existingSheet]
+    room.gm_panel!.sheet_order = ['sheet-1']
+    const storedBefore = new Map<string, unknown>([
+      ['room', structuredClone(room)],
+      ['gm_sheet_html:sheet-1', existingSheet.source_html],
+      ['gm_sheet_compiled_html:sheet-1', existingSheet.compiled_html],
+    ])
+    const storageSpy = createStorageSpy(Array.from(storedBefore), {
+      operation: 'put',
+      matches: key => key === 'gm_sheet_compiled_html:sheet-1',
+      error: storageError,
+    })
+    const { durableObject, sentMessages, socket } = connectRoomObject(storageSpy.storage, room)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      await handleRoomMessage(durableObject, socket, {
+        type: 'gm.replaceHtmlCharacter',
+        requestId: 'replace-request',
+        payload: { sheetId: 'sheet-1', fileName: 'replacement.html', html: createImportedHtml('replacement') },
+      })
+
+      expect(Array.from(storageSpy.entries.entries())).toEqual(Array.from(storedBefore.entries()))
+      expect(sentMessages.map(message => JSON.parse(message))).toEqual([{
+        type: 'error',
+        requestId: 'replace-request',
+        payload: { code: 'INTERNAL_ERROR', message: storageError.message },
+      }])
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
+  it('rolls back the room and source deletion when compiled HTML deletion fails', async () => {
+    const storageError = new Error('compiled HTML delete failed')
+    const room = createRoom()
+    const existingSheet = createSheet('sheet-1')
+    room.gm_panel!.sheets = [existingSheet]
+    room.gm_panel!.sheet_order = ['sheet-1']
+    const storedBefore = new Map<string, unknown>([
+      ['room', structuredClone(room)],
+      ['gm_sheet_html:sheet-1', existingSheet.source_html],
+      ['gm_sheet_compiled_html:sheet-1', existingSheet.compiled_html],
+    ])
+    const storageSpy = createStorageSpy(Array.from(storedBefore), {
+      operation: 'delete',
+      matches: key => key === 'gm_sheet_compiled_html:sheet-1',
+      error: storageError,
+    })
+    const { durableObject, sentMessages, socket } = connectRoomObject(storageSpy.storage, room)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      await handleRoomMessage(durableObject, socket, {
+        type: 'gm.deleteSheet',
+        requestId: 'delete-request',
+        payload: { sheetId: 'sheet-1' },
+      })
+
+      expect(Array.from(storageSpy.entries.entries())).toEqual(Array.from(storedBefore.entries()))
+      expect(sentMessages.map(message => JSON.parse(message))).toEqual([{
+        type: 'error',
+        requestId: 'delete-request',
+        payload: { code: 'INTERNAL_ERROR', message: storageError.message },
+      }])
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
+  it('rolls back a full sync when deleting a stale compiled HTML key fails', async () => {
+    const storageError = new Error('stale compiled HTML delete failed')
+    const room = createRoom()
+    const storedBefore = new Map<string, unknown>([
+      ['room', structuredClone(room)],
+      ['gm_sheet_html:stale', '<html>stale source</html>'],
+      ['gm_sheet_compiled_html:stale', '<html>stale compiled</html>'],
+    ])
+    const storageSpy = createStorageSpy(Array.from(storedBefore), {
+      operation: 'delete',
+      matches: key => key === 'gm_sheet_compiled_html:stale',
+      error: storageError,
+    })
+    const { durableObject, sentMessages, socket } = connectRoomObject(storageSpy.storage, room)
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const activeSheet = createGmSheetEntry('active.html', createImportedHtml('active'), 'active')
+
+    try {
+      await handleRoomMessage(durableObject, socket, {
+        type: 'room.importRoomBackup',
+        requestId: 'sync-request',
+        payload: {
+          backup: {
+            format: 'dhroom',
+            version: 1,
+            room: {
+              id: room.room_id,
+              name: 'Imported room',
+              room_type: 'gm-panel',
+              invite_code: room.invite_code,
+              created_at: room.created_at,
+              expires_at: room.expires_at,
+            },
+            settings: room.settings,
+            gm_panel: {
+              ...room.gm_panel,
+              sheets: [activeSheet],
+              sheet_order: ['active'],
+            },
+            players: [],
+            exported_at: '2026-07-05T00:00:00.000Z',
+          },
+        },
+      })
+
+      expect(Array.from(storageSpy.entries.entries())).toEqual(Array.from(storedBefore.entries()))
+      expect(sentMessages.map(message => JSON.parse(message))).toEqual([{
+        type: 'error',
+        requestId: 'sync-request',
+        payload: { code: 'INTERNAL_ERROR', message: storageError.message },
+      }])
     } finally {
       consoleError.mockRestore()
     }
@@ -438,6 +651,10 @@ describe('RoomDurableObject incremental patches', () => {
         put: async () => undefined,
         list: async () => new Map<string, string>(),
         delete: async () => undefined,
+        transaction: (closure: (txn: DurableObjectTransaction) => Promise<unknown>) => closure({
+          put: async () => undefined,
+          delete: async () => false,
+        } as unknown as DurableObjectTransaction),
       },
       waitUntil: () => undefined,
     } as unknown as DurableObjectState

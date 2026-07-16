@@ -1492,76 +1492,70 @@ export class RoomDurableObject {
         }
       : this.room
     const snapshot = structuredClone(roomWithoutHtml)
-
-    await this.ctx.storage.put('room', snapshot)
-
-    if (!htmlPersistence) {
-      return
-    }
-
-    if (htmlPersistence.mode === 'delete') {
-      for (const sheetId of new Set(htmlPersistence.sheetIds)) {
-        await this.ctx.storage.delete(getGmSheetHtmlStorageKey(sheetId))
-        await this.ctx.storage.delete(getGmSheetCompiledHtmlStorageKey(sheetId))
-      }
-      return
-    }
-
     const sheets = this.room.gm_panel?.sheets ?? []
-    const sheetsToPersist = (htmlPersistence.mode === 'sync-all'
+    const sheetsToPersist = (htmlPersistence?.mode === 'sync-all'
       ? sheets
-      : sheets.filter((sheet) => htmlPersistence.sheetIds.includes(sheet.id)))
+      : htmlPersistence?.mode === 'upsert'
+        ? sheets.filter((sheet) => htmlPersistence.sheetIds.includes(sheet.id))
+        : [])
       .map((sheet) => ({
         id: sheet.id,
         sourceHtml: sheet.source_html,
         compiledHtml: sheet.compiled_html,
       }))
+    let staleHtmlKeys: string[] = []
+    let staleCompiledHtmlKeys: string[] = []
 
-    for (const sheet of sheetsToPersist) {
-      await this.persistGmSheetHtml(sheet)
+    if (htmlPersistence?.mode === 'sync-all') {
+      const activeHtmlKeys = new Set(
+        sheetsToPersist.filter((sheet) => sheet.sourceHtml).map((sheet) => getGmSheetHtmlStorageKey(sheet.id)),
+      )
+      const activeCompiledHtmlKeys = new Set(
+        sheetsToPersist.filter((sheet) => sheet.compiledHtml).map((sheet) => getGmSheetCompiledHtmlStorageKey(sheet.id)),
+      )
+      const storedHtmlEntries = await this.ctx.storage.list<string>({ prefix: GM_SHEET_HTML_STORAGE_KEY_PREFIX })
+      staleHtmlKeys = Array.from(storedHtmlEntries.keys()).filter((storageKey) => !activeHtmlKeys.has(storageKey))
+      const storedCompiledHtmlEntries = await this.ctx.storage.list<string>({ prefix: GM_SHEET_COMPILED_HTML_STORAGE_KEY_PREFIX })
+      staleCompiledHtmlKeys = Array.from(storedCompiledHtmlEntries.keys())
+        .filter((storageKey) => !activeCompiledHtmlKeys.has(storageKey))
     }
 
-    if (htmlPersistence.mode !== 'sync-all') {
-      return
-    }
+    await this.ctx.storage.transaction(async (txn) => {
+      await txn.put('room', snapshot)
 
-    const activeHtmlKeys = new Set(
-      sheetsToPersist.filter((sheet) => sheet.sourceHtml).map((sheet) => getGmSheetHtmlStorageKey(sheet.id)),
-    )
-    const activeCompiledHtmlKeys = new Set(
-      sheetsToPersist.filter((sheet) => sheet.compiledHtml).map((sheet) => getGmSheetCompiledHtmlStorageKey(sheet.id)),
-    )
-    const storedHtmlEntries = await this.ctx.storage.list<string>({ prefix: GM_SHEET_HTML_STORAGE_KEY_PREFIX })
-    for (const storageKey of storedHtmlEntries.keys()) {
-      if (!activeHtmlKeys.has(storageKey)) {
-        await this.ctx.storage.delete(storageKey)
+      if (htmlPersistence?.mode === 'delete') {
+        for (const sheetId of new Set(htmlPersistence.sheetIds)) {
+          await txn.delete(getGmSheetHtmlStorageKey(sheetId))
+          await txn.delete(getGmSheetCompiledHtmlStorageKey(sheetId))
+        }
+      } else {
+        for (const sheet of sheetsToPersist) {
+          await this.persistGmSheetHtml(txn, sheet)
+        }
       }
-    }
-    const storedCompiledHtmlEntries = await this.ctx.storage.list<string>({ prefix: GM_SHEET_COMPILED_HTML_STORAGE_KEY_PREFIX })
-    for (const storageKey of storedCompiledHtmlEntries.keys()) {
-      if (!activeCompiledHtmlKeys.has(storageKey)) {
-        await this.ctx.storage.delete(storageKey)
-      }
-    }
+
+      for (const storageKey of staleHtmlKeys) await txn.delete(storageKey)
+      for (const storageKey of staleCompiledHtmlKeys) await txn.delete(storageKey)
+    })
   }
 
-  private async persistGmSheetHtml(sheet: {
+  private async persistGmSheetHtml(txn: DurableObjectTransaction, sheet: {
     id: string
     sourceHtml?: string
     compiledHtml?: string
   }): Promise<void> {
     const sourceStorageKey = getGmSheetHtmlStorageKey(sheet.id)
     if (sheet.sourceHtml) {
-      await this.ctx.storage.put(sourceStorageKey, sheet.sourceHtml)
+      await txn.put(sourceStorageKey, sheet.sourceHtml)
     } else {
-      await this.ctx.storage.delete(sourceStorageKey)
+      await txn.delete(sourceStorageKey)
     }
 
     const compiledStorageKey = getGmSheetCompiledHtmlStorageKey(sheet.id)
     if (sheet.compiledHtml) {
-      await this.ctx.storage.put(compiledStorageKey, sheet.compiledHtml)
+      await txn.put(compiledStorageKey, sheet.compiledHtml)
     } else {
-      await this.ctx.storage.delete(compiledStorageKey)
+      await txn.delete(compiledStorageKey)
     }
   }
 
