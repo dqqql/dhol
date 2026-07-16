@@ -3,9 +3,7 @@ import { nanoid } from 'nanoid'
 import {
   assertDhRoomBackup,
   normalizeDrawingBoard,
-  rollDicePool,
   type ClientMessage,
-  type DiceRollRecord,
   type RoomSession,
   type RoomState,
 } from '@dhgc/shared'
@@ -35,7 +33,7 @@ export const useStore = create<AppStore>((set, get) => {
       dice_rolls: Array.isArray(room.dice_rolls) ? room.dice_rolls : [],
     }
     optimisticRoomState = receiveRoomSnapshot(optimisticRoomState, normalizedRoom)
-    set({ room: optimisticRoomState.room })
+    set({ room: optimisticRoomState.room, pendingDiceRollRequestIds: [] })
   }
 
   const disconnectConnection = () => {
@@ -90,6 +88,7 @@ export const useStore = create<AppStore>((set, get) => {
       session,
       currentPlayerId: session.player_id,
       connectionStatus: 'connecting',
+      pendingDiceRollRequestIds: [],
     })
 
     return new Promise<void>((resolve, reject) => {
@@ -149,16 +148,31 @@ export const useStore = create<AppStore>((set, get) => {
               finishResolve()
               return
 
-            case 'room.patch':
+            case 'room.patch': {
+              const acceptsPatch = message.payload.snapshot_version
+                > (optimisticRoomState.authoritativeRoom?.snapshot_version ?? -1)
               optimisticRoomState = applyAuthoritativeRoomPatch(optimisticRoomState, message.payload)
-              set({ room: optimisticRoomState.room })
+              set((state) => {
+                let pendingDiceRollRequestIds = state.pendingDiceRollRequestIds
+                if (acceptsPatch && message.payload.kind === 'room.replacement') {
+                  pendingDiceRollRequestIds = []
+                } else if (acceptsPatch && message.payload.kind === 'dice.history') {
+                  pendingDiceRollRequestIds = pendingDiceRollRequestIds.slice(1)
+                }
+                return { room: optimisticRoomState.room, pendingDiceRollRequestIds }
+              })
               set({ connectionStatus: 'connected' })
               return
+            }
 
             case 'error':
               if (message.requestId) {
-                optimisticRoomState = rejectMutation(optimisticRoomState, message.requestId)
-                set({ room: optimisticRoomState.room })
+                const requestId = message.requestId
+                optimisticRoomState = rejectMutation(optimisticRoomState, requestId)
+                set((state) => ({
+                  room: optimisticRoomState.room,
+                  pendingDiceRollRequestIds: state.pendingDiceRollRequestIds.filter((pendingId) => pendingId !== requestId),
+                }))
               }
               get().addToast(message.payload.message, 'error')
               return
@@ -186,6 +200,7 @@ export const useStore = create<AppStore>((set, get) => {
 
     // ── Room state ───────────────────────────────────────────────────────────
     room: null,
+    pendingDiceRollRequestIds: [],
 
     // ── Room lifecycle ────────────────────────────────────────────────────────
     createRoom: async ({ nickname, roomName, roomType }) => {
@@ -254,7 +269,7 @@ export const useStore = create<AppStore>((set, get) => {
         get().addToast('当前没有可重连的房间会话。', 'error')
         return
       }
-      set({ connectionStatus: 'connecting' })
+      set({ connectionStatus: 'connecting', pendingDiceRollRequestIds: [] })
       conn.manualReconnect()
     },
 
@@ -268,6 +283,7 @@ export const useStore = create<AppStore>((set, get) => {
         room: null,
         session: null,
         connectionStatus: 'idle',
+        pendingDiceRollRequestIds: [],
       })
     },
 
@@ -347,20 +363,19 @@ export const useStore = create<AppStore>((set, get) => {
     deleteMobileCountdown: (countdownId) => { sendMessage({ type: 'mobile.deleteCountdown', payload: { countdownId } }) },
 
     rollDice: (request) => {
-      const rolled = rollDicePool(request)
-      const player = get().room?.players.find((candidate) => candidate.id === get().currentPlayerId)
-      const roll: DiceRollRecord = {
-        id: `pending-${nanoid()}`,
-        created_at: new Date().toISOString(),
-        actor_player_id: get().currentPlayerId,
-        actor_name: player?.nickname ?? get().session?.nickname ?? '玩家',
-        normalized_formula: rolled.normalizedFormula,
-        request: rolled.request,
-        mode: rolled.request.mode,
-        modifier_mode: rolled.request.modifier_mode,
-        results: rolled.results,
+      const conn = activeConnection
+      if (!conn || !conn.isConnected) {
+        sendMessage({ type: 'dice.roll', payload: request })
+        return
       }
-      sendOptimisticMessage({ type: 'dice.roll', payload: request }, { kind: 'dice.history', roll })
+
+      const requestId = nanoid()
+      set((state) => ({ pendingDiceRollRequestIds: [...state.pendingDiceRollRequestIds, requestId] }))
+      if (!conn.send({ type: 'dice.roll', payload: request, requestId })) {
+        set((state) => ({
+          pendingDiceRollRequestIds: state.pendingDiceRollRequestIds.filter((pendingId) => pendingId !== requestId),
+        }))
+      }
     },
     clearDiceHistory: () => {
       const sent = sendMessage({ type: 'dice.clearHistory', payload: {} })

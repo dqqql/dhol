@@ -7,6 +7,12 @@
     "packages/*"
   ],
   "scripts": {
+    "test:shared": "npm --workspace packages/shared test",
+    "test:fronted": "npm --workspace fronted test",
+    "test:realtime": "npm --workspace apps/realtime test",
+    "check:selectors": "npm --workspace fronted run check:zustand-selectors",
+    "test": "npm run test:shared && npm run test:fronted && npm run test:realtime",
+    "check": "npm run test && npm run check:selectors",
     "fronted:dev": "npm --workspace fronted run dev",
     "fronted:build": "npm --workspace fronted run build",
     "fronted:lint": "npm --workspace fronted run lint",

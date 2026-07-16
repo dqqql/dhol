@@ -78,4 +78,64 @@ describe('useStore optimistic mutations', () => {
     expect(useStore.getState().room?.gm_panel?.sheets[0].parsed_sheet.resources.hope).toBe(1)
     expect(useStore.getState().room?.snapshot_version).toBe(9)
   })
+
+  it('shows a pending dice request without inventing a roll and clears it on the authoritative patch', async () => {
+    await connect()
+    const random = vi.spyOn(Math, 'random').mockImplementation(() => { throw new Error('client must not roll') })
+
+    expect(() => useStore.getState().rollDice({
+      mode: 'standard', modifier_mode: 'normal', repeat: 1, modifier: 0, dice: [{ sides: 6, count: 1 }],
+    })).not.toThrow()
+    random.mockRestore()
+
+    expect(socket.sent).toEqual([{
+      type: 'dice.roll', requestId: 'request-1',
+      payload: { mode: 'standard', modifier_mode: 'normal', repeat: 1, modifier: 0, dice: [{ sides: 6, count: 1 }] },
+    }])
+    expect(useStore.getState().pendingDiceRollRequestIds).toEqual(['request-1'])
+    expect(useStore.getState().room?.dice_rolls).toEqual([])
+
+    socket.handlers!.onMessage({
+      type: 'room.patch',
+      payload: { kind: 'dice.history', diceRolls: [], reason: 'stale', snapshot_version: 1, version: 1, updated_at: now },
+    })
+    expect(useStore.getState().pendingDiceRollRequestIds).toEqual(['request-1'])
+
+    socket.handlers!.onMessage({
+      type: 'room.patch',
+      payload: {
+        kind: 'dice.history',
+        diceRolls: [{
+          id: 'server-roll', created_at: now, actor_player_id: 'host', actor_name: 'GM', normalized_formula: '1d6',
+          request: { mode: 'standard', modifier_mode: 'normal', repeat: 1, modifier: 0, dice: [{ sides: 6, count: 1 }] },
+          mode: 'standard', modifier_mode: 'normal',
+          results: [{ total: 4, critical: false, primary_rolls: [], terms: [{ notation: '1d6', sides: 6, count: 1, rolls: [4], subtotal: 4 }] }],
+        }],
+        reason: 'dice.roll', snapshot_version: 2, version: 2, updated_at: now,
+      },
+    })
+
+    expect(useStore.getState().pendingDiceRollRequestIds).toEqual([])
+    expect(useStore.getState().room?.dice_rolls.at(-1)?.id).toBe('server-roll')
+  })
+
+  it('rolls back pending dice requests on errors and clears them on snapshots', async () => {
+    await connect()
+    const request = { mode: 'dual' as const, modifier_mode: 'normal' as const, repeat: 1, modifier: 0, dice: [] }
+
+    useStore.getState().rollDice(request)
+    expect(useStore.getState().pendingDiceRollRequestIds).toEqual(['request-1'])
+    socket.handlers!.onMessage({ type: 'error', requestId: 'request-1', payload: { code: 'rejected', message: 'No' } })
+    expect(useStore.getState().pendingDiceRollRequestIds).toEqual([])
+
+    useStore.getState().rollDice(request)
+    expect(useStore.getState().pendingDiceRollRequestIds).toEqual(['request-2'])
+    socket.handlers!.onMessage({ type: 'room.snapshot', payload: { state: makeRoom(9), you: { player_id: 'host' } } })
+    expect(useStore.getState().pendingDiceRollRequestIds).toEqual([])
+
+    useStore.getState().rollDice(request)
+    expect(useStore.getState().pendingDiceRollRequestIds).toHaveLength(1)
+    useStore.getState().manualReconnect()
+    expect(useStore.getState().pendingDiceRollRequestIds).toEqual([])
+  })
 })

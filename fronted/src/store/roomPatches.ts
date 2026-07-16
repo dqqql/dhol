@@ -1,5 +1,4 @@
 import type {
-  DiceRollRecord,
   DrawingBoardState,
   GmPanelResourceKey,
   MobilePanelResourceKey,
@@ -20,7 +19,6 @@ export type PendingMutation = PendingMutationCommon & (
   | { kind: 'mobile.resource'; characterId: string; resourceKey: MobilePanelResourceKey; value: number | boolean[] }
   | { kind: 'mobile.fear'; value: number }
   | { kind: 'mobile.countdown'; countdownId: string; value: number }
-  | { kind: 'dice.history'; roll: DiceRollRecord }
   | { kind: 'drawing'; drawingBoard: DrawingBoardState }
 )
 
@@ -204,8 +202,6 @@ function applyOptimisticMutation(room: RoomState, mutation: PendingMutation): Ro
       return room.mobile_panel ? { ...room, mobile_panel: { ...room.mobile_panel, fear: { ...room.mobile_panel.fear, value: mutation.value } } } : room
     case 'mobile.countdown':
       return room.mobile_panel ? { ...room, mobile_panel: { ...room.mobile_panel, countdowns: updateCountdown(room.mobile_panel.countdowns, mutation.countdownId, mutation.value) } } : room
-    case 'dice.history':
-      return { ...room, dice_rolls: [...room.dice_rolls, mutation.roll].slice(-50) }
     case 'drawing':
       return { ...room, drawing_board: mutation.drawingBoard }
   }
@@ -222,7 +218,6 @@ function mutationMatchesPatch(mutation: PendingMutation, patch: RoomPatch): bool
       return patch.kind === mutation.kind && patch.sheetId === mutation.sheetId && patch.resourceKey === mutation.resourceKey
     case 'gm.fear':
     case 'mobile.fear':
-    case 'dice.history':
     case 'drawing':
       return patch.kind === mutation.kind
     case 'gm.countdown':

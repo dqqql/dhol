@@ -145,18 +145,4 @@ describe('optimistic room state', () => {
     expect(recovered.room?.gm_panel?.sheets[0].parsed_sheet.resources.hope).toBe(1)
   })
 
-  it('appends an optimistic dice roll using the server history order and limit', () => {
-    const priorRolls = Array.from({ length: 50 }, (_, index) => ({
-      id: `roll-${index}`, created_at: now, actor_player_id: 'p', actor_name: 'P', normalized_formula: '1d6',
-      request: { mode: 'standard' as const, modifier_mode: 'normal' as const, repeat: 1, modifier: 0, dice: [{ sides: 6, count: 1 }] },
-      mode: 'standard' as const, modifier_mode: 'normal' as const,
-      results: [{ total: 1, critical: false, primary_rolls: [1], terms: [] }],
-    }))
-    const pendingRoll = { ...priorRolls[0], id: 'pending-roll' }
-    const state = enqueueOptimisticMutation(createOptimisticRoomState(room({ dice_rolls: priorRolls })), {
-      requestId: 'dice-request', baseVersion: 1, kind: 'dice.history', roll: pendingRoll,
-    })
-    expect(state.room?.dice_rolls).toHaveLength(50)
-    expect(state.room?.dice_rolls.at(-1)?.id).toBe('pending-roll')
-  })
 })

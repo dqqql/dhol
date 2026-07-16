@@ -28,6 +28,7 @@ export interface UIState {
 
 export interface AppStore extends UIState {
   room: RoomState | null
+  pendingDiceRollRequestIds: string[]
 
   createRoom: (input: { nickname: string; roomName: string; roomType: RoomType }) => Promise<boolean>
   joinRoom: (input: { inviteCode: string; nickname: string }) => Promise<boolean>

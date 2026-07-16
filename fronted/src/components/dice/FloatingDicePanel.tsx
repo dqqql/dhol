@@ -25,9 +25,10 @@ type DicePreset = {
 const EMPTY_COUNTS: DiceCounts = Object.fromEntries(DICE_SIDES.map((sides) => [sides, 0]))
 
 export function FloatingDicePanel() {
-  const { diceRolls, rollDice, clearDiceHistory } = useStore(
+  const { diceRolls, pendingDiceRollCount, rollDice, clearDiceHistory } = useStore(
     useShallow((state) => ({
       diceRolls: state.room?.dice_rolls ?? null,
+      pendingDiceRollCount: state.pendingDiceRollRequestIds.length,
       rollDice: state.rollDice,
       clearDiceHistory: state.clearDiceHistory,
     })),
@@ -403,7 +404,7 @@ export function FloatingDicePanel() {
                 </button>
               </section>
 
-              <LatestRollStage roll={latestRoll} />
+              <LatestRollStage roll={latestRoll} pendingCount={pendingDiceRollCount} />
 
               <RollHistory rolls={history} onClear={clearDiceHistory} />
             </div>
@@ -414,7 +415,20 @@ export function FloatingDicePanel() {
   )
 }
 
-function LatestRollStage({ roll }: { roll?: DiceRollRecord }) {
+export function LatestRollStage({ roll, pendingCount }: { roll?: DiceRollRecord; pendingCount: number }) {
+  if (pendingCount > 0) {
+    return (
+      <section className="dice-stage dice-stage--empty dice-stage--pending dice-result-card" aria-live="polite" aria-busy="true">
+        <div className="dice-stage__sigil"><Dices size={30} /></div>
+        <div>
+          <div className="dice-stage__eyebrow">ROLLING</div>
+          <h3>掷骰中</h3>
+          <p>{pendingCount > 1 ? `${pendingCount} 次掷骰正在等待服务器结果。` : '正在等待服务器返回权威结果。'}</p>
+        </div>
+      </section>
+    )
+  }
+
   if (!roll) {
     return (
       <section className="dice-stage dice-stage--empty dice-result-card">
