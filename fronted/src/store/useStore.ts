@@ -132,7 +132,10 @@ export const useStore = create<AppStore>((set, get) => {
             hasShownRuntimeDisconnectToast = true
             get().addToast(latestConnectionError?.message ?? '与房间的连接恢复失败，请检查网络后手动重连。', 'error')
           }
-          set({ connectionStatus: status })
+          set({
+            connectionStatus: status,
+            ...((status === 'reconnecting' || status === 'error') ? { pendingDiceRollRequestIds: [] } : {}),
+          })
         },
         onMessage: (message) => {
           if (activeConnection !== connection) return
@@ -156,8 +159,6 @@ export const useStore = create<AppStore>((set, get) => {
                 let pendingDiceRollRequestIds = state.pendingDiceRollRequestIds
                 if (acceptsPatch && message.payload.kind === 'room.replacement') {
                   pendingDiceRollRequestIds = []
-                } else if (acceptsPatch && message.payload.kind === 'dice.history') {
-                  pendingDiceRollRequestIds = pendingDiceRollRequestIds.slice(1)
                 }
                 return { room: optimisticRoomState.room, pendingDiceRollRequestIds }
               })
@@ -179,8 +180,12 @@ export const useStore = create<AppStore>((set, get) => {
 
             case 'ack':
               if (message.requestId) {
-                optimisticRoomState = acknowledgeMutation(optimisticRoomState, message.requestId, message.payload.snapshot_version)
-                set({ room: optimisticRoomState.room })
+                const requestId = message.requestId
+                optimisticRoomState = acknowledgeMutation(optimisticRoomState, requestId, message.payload.snapshot_version)
+                set((state) => ({
+                  room: optimisticRoomState.room,
+                  pendingDiceRollRequestIds: state.pendingDiceRollRequestIds.filter((pendingId) => pendingId !== requestId),
+                }))
               }
               return
             case 'pong':
