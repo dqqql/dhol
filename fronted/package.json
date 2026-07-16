@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "check:zustand-selectors": "node scripts/check-zustand-selectors.mjs",
     "lint": "eslint .",
+    "test": "vitest run",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -42,6 +43,7 @@
     "globals": "^17.5.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.2",
+    "vitest": "^3.0.0",
     "vite": "^8.0.10"
   },
   "optionalDependencies": {

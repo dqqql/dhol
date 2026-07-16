@@ -3,27 +3,39 @@ import { nanoid } from 'nanoid'
 import {
   assertDhRoomBackup,
   normalizeDrawingBoard,
+  rollDicePool,
   type ClientMessage,
+  type DiceRollRecord,
   type RoomSession,
   type RoomState,
 } from '@dhgc/shared'
 import { createRoomRequest, joinRoomRequest, RoomSocketConnection } from '@/lib/realtime'
 import type { AppStore } from '@/store/storeTypes'
 import { createUISlice } from '@/store/uiSlice'
+import {
+  acknowledgeMutation,
+  applyAuthoritativeRoomPatch,
+  createOptimisticRoomState,
+  enqueueOptimisticMutation,
+  receiveRoomSnapshot,
+  rejectMutation,
+  type PendingMutationInput,
+} from '@/store/roomPatches'
 
 // ── Module-level room state singletons ──────────────────────────────────────
 let activeConnection: RoomSocketConnection | null = null
+let optimisticRoomState = createOptimisticRoomState()
 
 // ── Unified store ────────────────────────────────────────────────────────────
 export const useStore = create<AppStore>((set, get) => {
   const applyRoomState = (room: RoomState) => {
-    set({
-      room: {
-        ...room,
-        drawing_board: normalizeDrawingBoard(room.drawing_board),
-        dice_rolls: Array.isArray(room.dice_rolls) ? room.dice_rolls : [],
-      },
-    })
+    const normalizedRoom = {
+      ...room,
+      drawing_board: normalizeDrawingBoard(room.drawing_board),
+      dice_rolls: Array.isArray(room.dice_rolls) ? room.dice_rolls : [],
+    }
+    optimisticRoomState = receiveRoomSnapshot(optimisticRoomState, normalizedRoom)
+    set({ room: optimisticRoomState.room })
   }
 
   const disconnectConnection = () => {
@@ -43,11 +55,32 @@ export const useStore = create<AppStore>((set, get) => {
       return false
     }
 
-    conn.send({
+    return conn.send({
       ...message,
       requestId: message.requestId ?? nanoid(),
     })
-    return true
+  }
+
+  const sendOptimisticMessage = (message: ClientMessage, mutation: PendingMutationInput) => {
+    const conn = activeConnection
+    if (!conn || !conn.isConnected || !optimisticRoomState.authoritativeRoom) {
+      return sendMessage(message)
+    }
+
+    const requestId = message.requestId ?? nanoid()
+    optimisticRoomState = enqueueOptimisticMutation(optimisticRoomState, {
+      ...mutation,
+      requestId,
+      baseVersion: optimisticRoomState.authoritativeRoom.snapshot_version,
+    } as Parameters<typeof enqueueOptimisticMutation>[1])
+    set({ room: optimisticRoomState.room })
+
+    const sent = conn.send({ ...message, requestId })
+    if (!sent) {
+      optimisticRoomState = rejectMutation(optimisticRoomState, requestId)
+      set({ room: optimisticRoomState.room })
+    }
+    return sent
   }
 
   const connectSession = async (session: RoomSession) => {
@@ -116,16 +149,26 @@ export const useStore = create<AppStore>((set, get) => {
               finishResolve()
               return
 
-            case 'room.updated':
-              applyRoomState(message.payload.state)
+            case 'room.patch':
+              optimisticRoomState = applyAuthoritativeRoomPatch(optimisticRoomState, message.payload)
+              set({ room: optimisticRoomState.room })
               set({ connectionStatus: 'connected' })
               return
 
             case 'error':
+              if (message.requestId) {
+                optimisticRoomState = rejectMutation(optimisticRoomState, message.requestId)
+                set({ room: optimisticRoomState.room })
+              }
               get().addToast(message.payload.message, 'error')
               return
 
             case 'ack':
+              if (message.requestId) {
+                optimisticRoomState = acknowledgeMutation(optimisticRoomState, message.requestId, message.payload.snapshot_version)
+                set({ room: optimisticRoomState.room })
+              }
+              return
             case 'pong':
               return
           }
@@ -220,6 +263,7 @@ export const useStore = create<AppStore>((set, get) => {
         activeConnection.dispose()
         activeConnection = null
       }
+      optimisticRoomState = createOptimisticRoomState()
       set({
         room: null,
         session: null,
@@ -254,11 +298,21 @@ export const useStore = create<AppStore>((set, get) => {
     },
 
     updateGmResource: (sheetId, resourceKey, nextValue) => {
-      sendMessage({ type: 'gm.updateResource', payload: { sheetId, resourceKey, nextValue } })
+      sendOptimisticMessage(
+        { type: 'gm.updateResource', payload: { sheetId, resourceKey, nextValue } },
+        { kind: 'gm.resource', sheetId, resourceKey, value: nextValue },
+      )
     },
-    updateGmFear: (value) => { sendMessage({ type: 'gm.updateFear', payload: { value } }) },
+    updateGmFear: (value) => {
+      sendOptimisticMessage({ type: 'gm.updateFear', payload: { value } }, { kind: 'gm.fear', value })
+    },
     createGmCountdown: (name, max) => { sendMessage({ type: 'gm.createCountdown', payload: { name, max } }) },
-    updateGmCountdown: (countdownId, value) => { sendMessage({ type: 'gm.updateCountdown', payload: { countdownId, value } }) },
+    updateGmCountdown: (countdownId, value) => {
+      sendOptimisticMessage(
+        { type: 'gm.updateCountdown', payload: { countdownId, value } },
+        { kind: 'gm.countdown', countdownId, value },
+      )
+    },
     deleteGmCountdown: (countdownId) => { sendMessage({ type: 'gm.deleteCountdown', payload: { countdownId } }) },
     moveGmSheet: (sheetId, direction) => { sendMessage({ type: 'gm.moveSheet', payload: { sheetId, direction } }) },
     updateGmCardsPerPage: (cardsPerPage) => { sendMessage({ type: 'gm.updateCardsPerPage', payload: { cardsPerPage } }) },
@@ -275,22 +329,48 @@ export const useStore = create<AppStore>((set, get) => {
       sendMessage({ type: 'mobile.updateCharacterCustom', payload: { characterId, displayName, experiences } })
     },
     updateMobileResource: (characterId, resourceKey, nextValue) => {
-      sendMessage({ type: 'mobile.updateResource', payload: { characterId, resourceKey, nextValue } })
+      sendOptimisticMessage(
+        { type: 'mobile.updateResource', payload: { characterId, resourceKey, nextValue } },
+        { kind: 'mobile.resource', characterId, resourceKey, value: nextValue },
+      )
     },
-    updateMobileFear: (value) => { sendMessage({ type: 'mobile.updateFear', payload: { value } }) },
+    updateMobileFear: (value) => {
+      sendOptimisticMessage({ type: 'mobile.updateFear', payload: { value } }, { kind: 'mobile.fear', value })
+    },
     createMobileCountdown: (name, max) => { sendMessage({ type: 'mobile.createCountdown', payload: { name, max } }) },
-    updateMobileCountdown: (countdownId, value) => { sendMessage({ type: 'mobile.updateCountdown', payload: { countdownId, value } }) },
+    updateMobileCountdown: (countdownId, value) => {
+      sendOptimisticMessage(
+        { type: 'mobile.updateCountdown', payload: { countdownId, value } },
+        { kind: 'mobile.countdown', countdownId, value },
+      )
+    },
     deleteMobileCountdown: (countdownId) => { sendMessage({ type: 'mobile.deleteCountdown', payload: { countdownId } }) },
 
     rollDice: (request) => {
-      sendMessage({ type: 'dice.roll', payload: request })
+      const rolled = rollDicePool(request)
+      const player = get().room?.players.find((candidate) => candidate.id === get().currentPlayerId)
+      const roll: DiceRollRecord = {
+        id: `pending-${nanoid()}`,
+        created_at: new Date().toISOString(),
+        actor_player_id: get().currentPlayerId,
+        actor_name: player?.nickname ?? get().session?.nickname ?? '玩家',
+        normalized_formula: rolled.normalizedFormula,
+        request: rolled.request,
+        mode: rolled.request.mode,
+        modifier_mode: rolled.request.modifier_mode,
+        results: rolled.results,
+      }
+      sendOptimisticMessage({ type: 'dice.roll', payload: request }, { kind: 'dice.history', roll })
     },
     clearDiceHistory: () => {
       const sent = sendMessage({ type: 'dice.clearHistory', payload: {} })
       if (sent) { get().addToast('已清除掷骰记录', 'success') }
     },
     submitDrawingBoard: (request) => {
-      const sent = sendMessage({ type: 'drawing.submit', payload: request })
+      const sent = sendOptimisticMessage(
+        { type: 'drawing.submit', payload: request },
+        { kind: 'drawing', drawingBoard: normalizeDrawingBoard({ shapes: request.shapes }) },
+      )
       if (sent) { get().addToast('画板已同步给房间成员', 'success') }
     },
 
