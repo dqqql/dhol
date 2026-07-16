@@ -61,6 +61,8 @@ import {
   type ResourceTrackerCountdown,
   type ResourceTrackerResourceKey,
   type ResourceTrackerSheet,
+  type RoomPatch,
+  type RoomPatchData,
   type RoomState,
   type RoomType,
 } from '../../../packages/shared/src/index'
@@ -435,7 +437,7 @@ export class RoomDurableObject {
     if (existingPlayer) {
       existingPlayer.is_online = true
       existingPlayer.last_seen_at = now.toISOString()
-      await this.commit('player.rejoined')
+      await this.commit('player.rejoined', this.playerPresencePatch())
       return json({ state: this.publicState(), player: existingPlayer })
     }
 
@@ -443,7 +445,7 @@ export class RoomDurableObject {
     const player = makePlayer(body.playerId, nickname, color, false, now)
 
     room.players.push(player)
-    await this.commit('player.joined')
+    await this.commit('player.joined', this.playerPresencePatch())
 
     return json({ state: this.publicState(), player })
   }
@@ -474,7 +476,7 @@ export class RoomDurableObject {
 
     await this.save()
     await this.scheduleExpiryAlarm(room)
-    this.broadcast({ type: 'room.updated', payload: { state: this.publicState(), reason: 'admin.expiryUpdated' } })
+    this.broadcastPatch('admin.expiryUpdated', { kind: 'room.metadata', expires_at: room.expires_at })
 
     return json(this.getAdminSummary())
   }
@@ -506,7 +508,7 @@ export class RoomDurableObject {
       type: 'room.snapshot',
       payload: { state: this.publicState(), you: { player_id: player.id } },
     }))
-    this.broadcast({ type: 'room.updated', payload: { state: this.publicState(), reason: 'player.online' } })
+    this.broadcastPatch('player.online', this.playerPresencePatch())
 
     server.addEventListener('message', event => {
       void this.handleMessage(server, event.data).catch(error => {
@@ -556,7 +558,14 @@ export class RoomDurableObject {
 
     try {
       await this.applyMessage(session, message, socket)
-      if (message.requestId) this.send(socket, { type: 'ack', requestId: message.requestId, payload: { ok: true } })
+      if (message.requestId) {
+        const version = this.requireRoom().snapshot_version
+        this.send(socket, {
+          type: 'ack',
+          requestId: message.requestId,
+          payload: { ok: true, snapshot_version: version, version },
+        })
+      }
     } catch (error) {
       this.sendError(socket, message.requestId, ERR.INTERNAL_ERROR, messageFrom(error))
     }
@@ -573,160 +582,163 @@ export class RoomDurableObject {
 
       case 'room.updateSettings':
         this.updateSettings(message.payload)
-        await this.commit('room.updateSettings')
+        await this.commit('room.updateSettings', {
+          kind: 'room.settings',
+          settings: structuredClone(this.requireRoom().settings),
+        })
         return
 
       case 'gm.importHtmlCharacter':
         this.requireGmPanelRoom()
         this.importGmCharacter(player, message.payload.fileName, message.payload.html)
-        await this.commit('gm.importHtmlCharacter')
+        await this.commit('gm.importHtmlCharacter', this.gmSheetPatch('upsert', this.requireGmPanelState().sheet_order.at(-1)!))
         return
 
       case 'gm.replaceHtmlCharacter':
         this.requireGmPanelRoom()
         this.replaceGmCharacter(player, message.payload.sheetId, message.payload.fileName, message.payload.html)
-        await this.commit('gm.replaceHtmlCharacter')
+        await this.commit('gm.replaceHtmlCharacter', this.gmSheetPatch('upsert', message.payload.sheetId))
         return
 
       case 'gm.deleteSheet':
         this.requireGmPanelRoom()
         this.deleteGmSheet(player, message.payload.sheetId)
-        await this.commit('gm.deleteSheet')
+        await this.commit('gm.deleteSheet', this.gmSheetPatch('delete', message.payload.sheetId))
         return
 
       case 'gm.updateSheet':
         this.requireGmPanelRoom()
         this.updateGmSheet(player, message.payload.sheetId, message.payload.sheet)
-        await this.commit('gm.updateSheet')
+        await this.commit('gm.updateSheet', this.gmSheetPatch('upsert', message.payload.sheetId))
         return
 
       case 'gm.updateResource':
         this.requireGmPanelRoom()
         this.updateGmResource(player, message.payload.sheetId, message.payload.resourceKey, message.payload.nextValue)
-        await this.commit('gm.updateResource')
+        await this.commit('gm.updateResource', this.gmResourcePatch(message.payload.sheetId, message.payload.resourceKey))
         return
 
       case 'gm.updateFear':
         this.requireGmPanelRoom()
         this.updateGmFear(player, message.payload.value)
-        await this.commit('gm.updateFear')
+        await this.commit('gm.updateFear', this.gmFearPatch())
         return
 
       case 'gm.createCountdown':
         this.requireGmPanelRoom()
         this.createGmCountdown(player, message.payload.name, message.payload.max)
-        await this.commit('gm.createCountdown')
+        await this.commit('gm.createCountdown', this.gmCountdownPatch('upsert', this.requireGmPanelState().countdowns.at(-1)!.id))
         return
 
       case 'gm.updateCountdown':
         this.requireGmPanelRoom()
         this.updateGmCountdown(player, message.payload.countdownId, message.payload.value)
-        await this.commit('gm.updateCountdown')
+        await this.commit('gm.updateCountdown', this.gmCountdownPatch('upsert', message.payload.countdownId))
         return
 
       case 'gm.deleteCountdown':
         this.requireGmPanelRoom()
         this.deleteGmCountdown(player, message.payload.countdownId)
-        await this.commit('gm.deleteCountdown')
+        await this.commit('gm.deleteCountdown', this.gmCountdownPatch('delete', message.payload.countdownId))
         return
 
       case 'gm.moveSheet':
         this.requireGmPanelRoom()
         this.moveGmSheet(player, message.payload.sheetId, message.payload.direction)
-        await this.commit('gm.moveSheet')
+        await this.commit('gm.moveSheet', this.gmOrderPatch())
         return
 
       case 'gm.updateCardsPerPage':
         this.requireGmPanelRoom()
         this.updateGmCardsPerPage(player, message.payload.cardsPerPage)
-        await this.commit('gm.updateCardsPerPage')
+        await this.commit('gm.updateCardsPerPage', this.gmCardsPerPagePatch())
         return
 
       case 'mobile.importCharacterCode':
         this.requireMobilePanelRoom()
         this.importMobileCharacter(player, message.payload.code, message.payload.displayName, message.payload.experiences)
-        await this.commit('mobile.importCharacterCode')
+        await this.commit('mobile.importCharacterCode', this.mobileCharacterPatch('upsert', this.requireMobilePanelState().character_order.at(-1)!))
         return
 
       case 'mobile.replaceCharacterCode':
         this.requireMobilePanelRoom()
         this.replaceMobileCharacter(player, message.payload.characterId, message.payload.code)
-        await this.commit('mobile.replaceCharacterCode')
+        await this.commit('mobile.replaceCharacterCode', this.mobileCharacterPatch('upsert', message.payload.characterId))
         return
 
       case 'mobile.deleteCharacter':
         this.requireMobilePanelRoom()
         this.deleteMobileCharacter(player, message.payload.characterId)
-        await this.commit('mobile.deleteCharacter')
+        await this.commit('mobile.deleteCharacter', this.mobileCharacterPatch('delete', message.payload.characterId))
         return
 
       case 'mobile.updateCharacterCustom':
         this.requireMobilePanelRoom()
         this.updateMobileCharacterCustom(player, message.payload.characterId, message.payload.displayName, message.payload.experiences)
-        await this.commit('mobile.updateCharacterCustom')
+        await this.commit('mobile.updateCharacterCustom', this.mobileCharacterPatch('upsert', message.payload.characterId))
         return
 
       case 'mobile.updateResource':
         this.requireMobilePanelRoom()
         this.updateMobileResource(player, message.payload.characterId, message.payload.resourceKey, message.payload.nextValue)
-        await this.commit('mobile.updateResource')
+        await this.commit('mobile.updateResource', this.mobileResourcePatch(message.payload.characterId, message.payload.resourceKey))
         return
 
       case 'mobile.updateFear':
         this.requireMobilePanelRoom()
         this.updateMobileFear(player, message.payload.value)
-        await this.commit('mobile.updateFear')
+        await this.commit('mobile.updateFear', this.mobileFearPatch())
         return
 
       case 'mobile.createCountdown':
         this.requireMobilePanelRoom()
         this.createMobileCountdown(player, message.payload.name, message.payload.max)
-        await this.commit('mobile.createCountdown')
+        await this.commit('mobile.createCountdown', this.mobileCountdownPatch('upsert', this.requireMobilePanelState().countdowns.at(-1)!.id))
         return
 
       case 'mobile.updateCountdown':
         this.requireMobilePanelRoom()
         this.updateMobileCountdown(player, message.payload.countdownId, message.payload.value)
-        await this.commit('mobile.updateCountdown')
+        await this.commit('mobile.updateCountdown', this.mobileCountdownPatch('upsert', message.payload.countdownId))
         return
 
       case 'mobile.deleteCountdown':
         this.requireMobilePanelRoom()
         this.deleteMobileCountdown(player, message.payload.countdownId)
-        await this.commit('mobile.deleteCountdown')
+        await this.commit('mobile.deleteCountdown', this.mobileCountdownPatch('delete', message.payload.countdownId))
         return
 
       case 'dice.roll':
         this.rollDice(player, message.payload)
-        await this.commit('dice.roll', { waitForPersistence: false })
+        await this.commit('dice.roll', this.diceHistoryPatch(), { waitForPersistence: false })
         return
 
       case 'dice.clearHistory':
         this.clearDiceHistory()
-        await this.commit('dice.clearHistory', { waitForPersistence: false })
+        await this.commit('dice.clearHistory', this.diceHistoryPatch(), { waitForPersistence: false })
         return
 
       case 'drawing.submit':
         this.requireGmPanelRoom()
         this.submitDrawingBoard(player, message.payload)
-        await this.commit('drawing.submit')
+        await this.commit('drawing.submit', this.drawingPatch())
         return
 
       case 'xcard.raise':
         this.raiseXCard(player)
-        await this.commit('xcard.raise')
+        await this.commit('xcard.raise', this.xCardPatch())
         return
 
       case 'xcard.acknowledge':
         this.acknowledgeXCard(player)
-        await this.commit('xcard.acknowledge')
+        await this.commit('xcard.acknowledge', this.xCardPatch())
         return
 
       case 'room.importRoomBackup': {
         this.requireImportsEnabled()
         const backup = assertDhRoomBackup(message.payload.backup)
         this.importRoomBackup(backup)
-        await this.commit('room.importRoomBackup')
+        await this.commit('room.importRoomBackup', { kind: 'room.replacement', state: this.publicState() })
         return
       }
     }
@@ -799,6 +811,7 @@ export class RoomDurableObject {
   private updateSettings(updates: {
     importsEnabled?: boolean
     resourceChangeRequiresApproval?: boolean
+    battlePanelVisibility?: 'host-only' | 'shared'
     gmPanelTheme?: 'gold-abyss' | 'jade-hex' | 'amethyst-ember'
   }): void {
     const room = this.requireRoom()
@@ -807,6 +820,9 @@ export class RoomDurableObject {
       ...(updates.importsEnabled !== undefined ? { imports_enabled: updates.importsEnabled } : {}),
       ...(updates.resourceChangeRequiresApproval !== undefined
         ? { resource_change_requires_approval: updates.resourceChangeRequiresApproval }
+        : {}),
+      ...(updates.battlePanelVisibility !== undefined
+        ? { battle_panel_visibility: updates.battlePanelVisibility }
         : {}),
       ...(updates.gmPanelTheme !== undefined ? { gm_panel_theme: updates.gmPanelTheme } : {}),
     }
@@ -1194,7 +1210,7 @@ export class RoomDurableObject {
     this.transferHostIfNeeded()
     // 离线玩家不应再阻塞 X 卡：若剩余在线玩家均已确认则关闭提示。
     this.clearXCardIfAllAcknowledged()
-    await this.commit('player.offline')
+    await this.commit('player.offline', this.playerPresencePatch())
   }
 
   private transferHostIfNeeded(): void {
@@ -1263,21 +1279,180 @@ export class RoomDurableObject {
     }))
   }
 
-  private async commit(reason: string, options: { waitForPersistence?: boolean } = {}): Promise<void> {
+  private async commit(
+    reason: string,
+    patchData: RoomPatchData,
+    options: { waitForPersistence?: boolean } = {},
+  ): Promise<void> {
     const room = this.requireRoom()
     room.updated_at = new Date().toISOString()
     room.snapshot_version += 1
+    const version = room.snapshot_version
+    const updatedAt = room.updated_at
     const persistPromise = this.enqueueSave()
-    const updateMessage = { type: 'room.updated', payload: { state: this.publicState(), reason } }
+    if (patchData.kind === 'room.replacement') {
+      patchData = { kind: 'room.replacement', state: this.publicState() }
+    }
 
     if (options.waitForPersistence === false) {
-      this.broadcast(updateMessage)
+      this.broadcastPatch(reason, patchData, { version, updatedAt })
       this.ctx.waitUntil(persistPromise.catch(() => undefined))
       return
     }
 
     await persistPromise
-    this.broadcast(updateMessage)
+    this.broadcastPatch(reason, patchData, { version, updatedAt })
+  }
+
+  private broadcastPatch(
+    reason: string,
+    patchData: RoomPatchData,
+    metadata: { version: number; updatedAt: string } = {
+      version: this.requireRoom().snapshot_version,
+      updatedAt: this.requireRoom().updated_at,
+    },
+  ): void {
+    const patch: RoomPatch = {
+      ...patchData,
+      reason,
+      snapshot_version: metadata.version,
+      version: metadata.version,
+      updated_at: metadata.updatedAt,
+    } as RoomPatch
+    this.broadcast({ type: 'room.patch', payload: patch })
+  }
+
+  private playerPresencePatch(): RoomPatchData {
+    const room = this.requireRoom()
+    return {
+      kind: 'players.presence',
+      players: structuredClone(room.players),
+      hostPlayerId: room.host_player_id,
+      xCard: structuredClone(room.x_card ?? null),
+    }
+  }
+
+  private gmSheetPatch(operation: 'upsert' | 'delete', sheetId: string): RoomPatchData {
+    const panel = this.publicState().gm_panel!
+    const common = {
+      kind: 'gm.sheet' as const,
+      sheetId,
+      sheetOrder: panel.sheet_order,
+      activityLog: panel.activity_log,
+    }
+    return operation === 'upsert'
+      ? { ...common, operation, sheet: panel.sheets.find((sheet) => sheet.id === sheetId)! }
+      : { ...common, operation }
+  }
+
+  private gmResourcePatch(sheetId: string, resourceKey: GmPanelResourceKey): RoomPatchData {
+    const panel = this.requireGmPanelState()
+    const sheet = this.requireGmSheet(sheetId)
+    return {
+      kind: 'gm.resource',
+      sheetId,
+      resourceKey,
+      value: cloneTrackerResourceValue(getTrackerResourceValue(sheet.parsed_sheet, resourceKey)),
+      sheetUpdatedAt: sheet.updated_at,
+      activityLog: structuredClone(panel.activity_log),
+    }
+  }
+
+  private gmFearPatch(): RoomPatchData {
+    const panel = this.requireGmPanelState()
+    return { kind: 'gm.fear', fear: structuredClone(panel.fear), activityLog: structuredClone(panel.activity_log) }
+  }
+
+  private gmCountdownPatch(operation: 'upsert' | 'delete', countdownId: string): RoomPatchData {
+    const panel = this.requireGmPanelState()
+    const common = {
+      kind: 'gm.countdown' as const,
+      countdownId,
+      activityLog: structuredClone(panel.activity_log),
+    }
+    return operation === 'upsert'
+      ? {
+          ...common,
+          operation,
+          countdown: structuredClone(panel.countdowns.find((countdown) => countdown.id === countdownId)!),
+        }
+      : { ...common, operation }
+  }
+
+  private gmOrderPatch(): RoomPatchData {
+    const panel = this.requireGmPanelState()
+    return { kind: 'gm.order', sheetOrder: [...panel.sheet_order], activityLog: structuredClone(panel.activity_log) }
+  }
+
+  private gmCardsPerPagePatch(): RoomPatchData {
+    const panel = this.requireGmPanelState()
+    return {
+      kind: 'gm.cardsPerPage',
+      cardsPerPage: panel.cards_per_page,
+      activityLog: structuredClone(panel.activity_log),
+    }
+  }
+
+  private mobileCharacterPatch(operation: 'upsert' | 'delete', characterId: string): RoomPatchData {
+    const panel = this.requireMobilePanelState()
+    const common = {
+      kind: 'mobile.character' as const,
+      characterId,
+      characterOrder: [...panel.character_order],
+      activityLog: structuredClone(panel.activity_log),
+    }
+    return operation === 'upsert'
+      ? {
+          ...common,
+          operation,
+          character: structuredClone(panel.characters.find((character) => character.id === characterId)!),
+        }
+      : { ...common, operation }
+  }
+
+  private mobileResourcePatch(characterId: string, resourceKey: MobilePanelResourceKey): RoomPatchData {
+    const panel = this.requireMobilePanelState()
+    const character = this.requireMobileCharacter(characterId)
+    return {
+      kind: 'mobile.resource',
+      characterId,
+      resourceKey,
+      value: cloneMobilePanelResourceValue(getMobilePanelResourceValue(character, resourceKey)),
+      activityLog: structuredClone(panel.activity_log),
+    }
+  }
+
+  private mobileFearPatch(): RoomPatchData {
+    const panel = this.requireMobilePanelState()
+    return { kind: 'mobile.fear', fear: structuredClone(panel.fear), activityLog: structuredClone(panel.activity_log) }
+  }
+
+  private mobileCountdownPatch(operation: 'upsert' | 'delete', countdownId: string): RoomPatchData {
+    const panel = this.requireMobilePanelState()
+    const common = {
+      kind: 'mobile.countdown' as const,
+      countdownId,
+      activityLog: structuredClone(panel.activity_log),
+    }
+    return operation === 'upsert'
+      ? {
+          ...common,
+          operation,
+          countdown: structuredClone(panel.countdowns.find((countdown) => countdown.id === countdownId)!),
+        }
+      : { ...common, operation }
+  }
+
+  private diceHistoryPatch(): RoomPatchData {
+    return { kind: 'dice.history', diceRolls: structuredClone(this.requireRoom().dice_rolls) }
+  }
+
+  private drawingPatch(): RoomPatchData {
+    return { kind: 'drawing', drawingBoard: normalizeDrawingBoard(this.requireRoom().drawing_board) }
+  }
+
+  private xCardPatch(): RoomPatchData {
+    return { kind: 'xcard', xCard: structuredClone(this.requireRoom().x_card ?? null) }
   }
 
   private enqueueSave(): Promise<void> {

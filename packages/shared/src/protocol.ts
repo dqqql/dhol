@@ -3,12 +3,20 @@ import type {
   DiceRollRequest,
   GmPanelResourceKey,
   MobilePanelExperience,
+  MobilePanelActivityLogItem,
+  MobilePanelCharacterEntry,
   MobilePanelResourceKey,
+  GmPanelActivityLogItem,
+  GmPanelCharacterSheetEntry,
+  Player,
+  ResourceTrackerCountdown,
+  RoomSettings,
   ResourceTrackerSheet,
   RoomState,
   RoomType,
+  XCardAlert,
 } from './types'
-import type { DrawingBoardSubmitRequest } from './drawing'
+import type { DrawingBoardState, DrawingBoardSubmitRequest } from './drawing'
 
 export type ClientMessage =
   | {
@@ -65,10 +73,74 @@ export type ClientMessage =
   | { type: 'xcard.acknowledge'; requestId?: string; payload?: Record<string, never> }
   | { type: 'ping'; requestId?: string; payload?: Record<string, never> }
 
+export interface RoomPatchCommon {
+  reason: string
+  snapshot_version: number
+  /** Alias retained for optimistic clients that track a generic authoritative version. */
+  version: number
+  updated_at: string
+}
+
+export type RoomPatch = RoomPatchCommon & (
+  | { kind: 'room.replacement'; state: RoomState }
+  | { kind: 'room.settings'; settings: RoomSettings }
+  | { kind: 'room.metadata'; expires_at: string }
+  | { kind: 'players.presence'; players: Player[]; hostPlayerId: string; xCard: XCardAlert | null }
+  | ({ kind: 'gm.sheet'; sheetId: string; sheetOrder: string[]; activityLog: GmPanelActivityLogItem[] } & (
+    | { operation: 'upsert'; sheet: GmPanelCharacterSheetEntry }
+    | { operation: 'delete' }
+  ))
+  | {
+    kind: 'gm.resource'
+    sheetId: string
+    resourceKey: GmPanelResourceKey
+    value: number | boolean[]
+    sheetUpdatedAt: string
+    activityLog: GmPanelActivityLogItem[]
+  }
+  | { kind: 'gm.fear'; fear: { value: number; max: number }; activityLog: GmPanelActivityLogItem[] }
+  | ({ kind: 'gm.countdown'; countdownId: string; activityLog: GmPanelActivityLogItem[] } & (
+    | { operation: 'upsert'; countdown: ResourceTrackerCountdown }
+    | { operation: 'delete' }
+  ))
+  | { kind: 'gm.order'; sheetOrder: string[]; activityLog: GmPanelActivityLogItem[] }
+  | { kind: 'gm.cardsPerPage'; cardsPerPage: number; activityLog: GmPanelActivityLogItem[] }
+  | ({
+    kind: 'mobile.character'
+    characterId: string
+    characterOrder: string[]
+    activityLog: MobilePanelActivityLogItem[]
+  } & (
+    | { operation: 'upsert'; character: MobilePanelCharacterEntry }
+    | { operation: 'delete' }
+  ))
+  | {
+    kind: 'mobile.resource'
+    characterId: string
+    resourceKey: MobilePanelResourceKey
+    value: number | boolean[]
+    activityLog: MobilePanelActivityLogItem[]
+  }
+  | { kind: 'mobile.fear'; fear: { value: number; max: number }; activityLog: MobilePanelActivityLogItem[] }
+  | ({ kind: 'mobile.countdown'; countdownId: string; activityLog: MobilePanelActivityLogItem[] } & (
+    | { operation: 'upsert'; countdown: ResourceTrackerCountdown }
+    | { operation: 'delete' }
+  ))
+  | { kind: 'dice.history'; diceRolls: RoomState['dice_rolls'] }
+  | { kind: 'drawing'; drawingBoard: DrawingBoardState }
+  | { kind: 'xcard'; xCard: XCardAlert | null }
+)
+
+export type RoomPatchData = RoomPatch extends infer Patch
+  ? Patch extends RoomPatch
+    ? Omit<Patch, keyof RoomPatchCommon>
+    : never
+  : never
+
 export type ServerMessage =
   | { type: 'room.snapshot'; payload: { state: RoomState; you: { player_id: string } } }
-  | { type: 'room.updated'; payload: { state: RoomState; reason: string } }
-  | { type: 'ack'; requestId?: string; payload: { ok: true } }
+  | { type: 'room.patch'; payload: RoomPatch }
+  | { type: 'ack'; requestId?: string; payload: { ok: true; snapshot_version: number; version: number } }
   | { type: 'error'; requestId?: string; payload: { code: string; message: string } }
   | { type: 'pong'; requestId?: string; payload: { server_time: string } }
 

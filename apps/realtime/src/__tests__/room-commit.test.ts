@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DRAWING_BOARD_COLORS } from '../../../../packages/shared/src/index'
+import { DRAWING_BOARD_COLORS, normalizeResourceTrackerSheet } from '../../../../packages/shared/src/index'
 import { RoomDurableObject } from '../index'
 import type { RoomState } from '../../../../packages/shared/src/index'
 
@@ -23,7 +23,7 @@ function createRoom(): RoomState {
     room_name: 'Latency Test',
     invite_code: 'ABC123',
     created_at: '2026-07-05T00:00:00.000Z',
-    expires_at: '2026-07-06T00:00:00.000Z',
+    expires_at: '2027-07-06T00:00:00.000Z',
     host_player_id: 'player-1',
     players: [
       {
@@ -80,16 +80,16 @@ describe('RoomDurableObject commit latency', () => {
     ])
 
     const commitPromise = (durableObject as unknown as {
-      commit: (reason: string, options: { waitForPersistence: boolean }) => Promise<void>
-    }).commit('dice.roll', { waitForPersistence: false })
+      commit: (reason: string, patch: unknown, options: { waitForPersistence: boolean }) => Promise<void>
+    }).commit('dice.roll', { kind: 'dice.history', diceRolls: [] }, { waitForPersistence: false })
 
     await Promise.resolve()
 
     try {
       expect(sentMessages).toHaveLength(1)
       expect(JSON.parse(sentMessages[0])).toMatchObject({
-        type: 'room.updated',
-        payload: { reason: 'dice.roll' },
+        type: 'room.patch',
+        payload: { kind: 'dice.history', reason: 'dice.roll', snapshot_version: 2, version: 2 },
       })
       expect(waitUntilPromises).toHaveLength(1)
     } finally {
@@ -98,6 +98,72 @@ describe('RoomDurableObject commit latency', () => {
     }
 
     await Promise.all(waitUntilPromises)
+  })
+})
+
+describe('RoomDurableObject incremental patches', () => {
+  it('broadcasts a compact authoritative patch for a GM resource update', async () => {
+    const sentMessages: string[] = []
+    const room = createRoom()
+    const sheet = {
+      id: 'sheet-1',
+      imported_at: '2026-07-05T00:00:00.000Z',
+      updated_at: '2026-07-05T00:00:00.000Z',
+      html_updated_at: '2026-07-05T00:00:00.000Z',
+      source_file_name: 'character.html',
+      source_format: 'mydhcharsheet-html' as const,
+      raw_character_data: {},
+      parsed_sheet: normalizeResourceTrackerSheet({} as never, 'character.html'),
+    }
+    sheet.parsed_sheet.resources.hope = 1
+    room.gm_panel!.sheets.push(sheet)
+    room.gm_panel!.sheet_order.push(sheet.id)
+
+    const ctx = {
+      storage: {
+        put: async () => undefined,
+        list: async () => new Map<string, string>(),
+        delete: async () => undefined,
+      },
+      waitUntil: () => undefined,
+    } as unknown as DurableObjectState
+    const socket = { send: (message: string) => sentMessages.push(message) } as unknown as WebSocket
+    const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
+    ;(durableObject as unknown as { room: RoomState | null }).room = room
+    ;(durableObject as unknown as { sockets: Map<WebSocket, unknown> }).sockets = new Map([
+      [socket, { playerId: 'player-1', nickname: 'Host' }],
+    ])
+
+    await (durableObject as unknown as {
+      handleMessage: (socket: WebSocket, data: string) => Promise<void>
+    }).handleMessage(socket, JSON.stringify({
+      type: 'gm.updateResource',
+      requestId: 'request-1',
+      payload: { sheetId: 'sheet-1', resourceKey: 'hope', nextValue: 2 },
+    }))
+
+    const messages = sentMessages.map((message) => JSON.parse(message))
+    const patch = messages.find((message) => message.type === 'room.patch')
+    expect(patch).toEqual({
+      type: 'room.patch',
+      payload: expect.objectContaining({
+        kind: 'gm.resource',
+        reason: 'gm.updateResource',
+        sheetId: 'sheet-1',
+        resourceKey: 'hope',
+        value: 2,
+        snapshot_version: 2,
+        version: 2,
+      }),
+    })
+    expect(patch.payload).not.toHaveProperty('state')
+    expect(JSON.stringify(patch)).not.toContain('room_name')
+    expect(messages).not.toContainEqual(expect.objectContaining({ type: 'room.updated' }))
+    expect(messages).toContainEqual({
+      type: 'ack',
+      requestId: 'request-1',
+      payload: { ok: true, snapshot_version: 2, version: 2 },
+    })
   })
 })
 
