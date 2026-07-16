@@ -8,6 +8,7 @@ import type {
 } from '@dhgc/shared'
 import { Dices, History, Minus, Plus, RotateCcw, Sparkles, Trash2, UserRound, X } from 'lucide-react'
 import { useStore } from '@/store/useStore'
+import { useShallow } from 'zustand/react/shallow'
 
 const DICE_SIDES = [4, 6, 8, 10, 12, 20] as const
 const DICE_PRESETS_STORAGE_KEY = 'dhgc:dice-presets:v1'
@@ -24,7 +25,13 @@ type DicePreset = {
 const EMPTY_COUNTS: DiceCounts = Object.fromEntries(DICE_SIDES.map((sides) => [sides, 0]))
 
 export function FloatingDicePanel() {
-  const { room, rollDice, clearDiceHistory } = useStore()
+  const { diceRolls, rollDice, clearDiceHistory } = useStore(
+    useShallow((state) => ({
+      diceRolls: state.room?.dice_rolls ?? null,
+      rollDice: state.rollDice,
+      clearDiceHistory: state.clearDiceHistory,
+    })),
+  )
   const [isOpen, setIsOpen] = useState(false)
   const [mode, setMode] = useState<'standard' | 'dual'>('dual')
   const [counts, setCounts] = useState<DiceCounts>({ ...EMPTY_COUNTS })
@@ -54,7 +61,7 @@ export function FloatingDicePanel() {
   }
   const canRoll = mode === 'dual' || dice.length > 0
   const currentFormula = useMemo(() => formatDiceGroup(counts, modifier), [counts, modifier])
-  const roomRolls = Array.isArray(room?.dice_rolls) ? room.dice_rolls : []
+  const roomRolls = Array.isArray(diceRolls) ? diceRolls : []
   const latestRoll = roomRolls.at(-1)
   const history = roomRolls.slice().reverse()
 

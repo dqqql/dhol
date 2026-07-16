@@ -13,12 +13,17 @@ interface RoomPageProps {
 }
 
 export function RoomPage({ onLeaveRoom }: RoomPageProps) {
-  const { room, connectionStatus, manualReconnect } = useStore(
-    useShallow((s) => ({ room: s.room, connectionStatus: s.connectionStatus, manualReconnect: s.manualReconnect }))
+  const { hasRoom, roomType, connectionStatus, manualReconnect } = useStore(
+    useShallow((state) => ({
+      hasRoom: state.room !== null,
+      roomType: state.room?.room_type ?? null,
+      connectionStatus: state.connectionStatus,
+      manualReconnect: state.manualReconnect,
+    })),
   )
   const [topBarHeight, setTopBarHeight] = useState(52)
 
-  if (!room) {
+  if (!hasRoom) {
     return (
       <div
         style={{
@@ -40,7 +45,7 @@ export function RoomPage({ onLeaveRoom }: RoomPageProps) {
 
   const showReconnectBanner = connectionStatus === 'reconnecting' || connectionStatus === 'error'
   const reconnectBannerHeight = showReconnectBanner ? 40 : 0
-  const content = room.room_type === 'mobile-panel' ? <MobilePanelRoom /> : <GmPanelBoard />
+  const content = roomType === 'mobile-panel' ? <MobilePanelRoom /> : <GmPanelBoard />
 
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden' }}>

@@ -3,6 +3,7 @@ import { Check, Clock, Copy } from 'lucide-react'
 import { GM_PANEL_THEMES } from '@/components/gm-panel/gmPanelThemes'
 import { Modal } from './Modal'
 import { useStore } from '@/store/useStore'
+import { useShallow } from 'zustand/react/shallow'
 
 function roomTypeLabel(roomType: string) {
   if (roomType === 'mobile-panel') return '手机角色码房间'
@@ -11,21 +12,39 @@ function roomTypeLabel(roomType: string) {
 
 export function RoomSettingsModal() {
   const {
-    room,
+    roomName,
+    roomType,
+    inviteCode,
+    expiresAtValue,
+    players,
+    gmPanelTheme,
     isRoomSettingsOpen,
     closeRoomSettings,
     addToast,
     updateGmPanelTheme,
-  } = useStore()
+  } = useStore(
+    useShallow((state) => ({
+      roomName: state.room?.room_name ?? null,
+      roomType: state.room?.room_type ?? null,
+      inviteCode: state.room?.invite_code ?? null,
+      expiresAtValue: state.room?.expires_at ?? null,
+      players: state.room?.players ?? null,
+      gmPanelTheme: state.room?.settings.gm_panel_theme ?? null,
+      isRoomSettingsOpen: state.isRoomSettingsOpen,
+      closeRoomSettings: state.closeRoomSettings,
+      addToast: state.addToast,
+      updateGmPanelTheme: state.updateGmPanelTheme,
+    })),
+  )
   const [copied, setCopied] = useState(false)
 
-  if (!room) return null
-  const currentRoom = room
+  if (roomName === null || roomType === null || inviteCode === null || expiresAtValue === null || players === null) return null
 
-  const expiresAt = new Date(currentRoom.expires_at)
+  const currentInviteCode = inviteCode
+  const expiresAt = new Date(expiresAtValue)
   async function copyCode() {
     try {
-      await navigator.clipboard.writeText(currentRoom.invite_code)
+      await navigator.clipboard.writeText(currentInviteCode)
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1800)
       addToast('邀请码已复制。', 'success')
@@ -44,22 +63,22 @@ export function RoomSettingsModal() {
             border: '1px solid var(--border-subtle)',
           }}
         >
-          <div style={{ marginBottom: 4, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>{currentRoom.room_name}</div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 14 }}>{roomTypeLabel(currentRoom.room_type)}</div>
+          <div style={{ marginBottom: 4, fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>{roomName}</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 14 }}>{roomTypeLabel(roomType)}</div>
 
           <div style={{ display: 'grid', gap: 10 }}>
             <div style={rowStyle}>
               <span style={labelStyle}>邀请码</span>
               <button type="button" onClick={copyCode} className="btn btn-secondary btn-sm">
                 {copied ? <Check size={13} /> : <Copy size={13} />}
-                {currentRoom.invite_code}
+                {inviteCode}
               </button>
             </div>
             <div style={rowStyle}>
               <span style={labelStyle}>到期时间</span>
               <span style={valueStyle}>
                 <Clock size={13} />
-                {Number.isNaN(expiresAt.getTime()) ? currentRoom.expires_at : expiresAt.toLocaleString()}
+                {Number.isNaN(expiresAt.getTime()) ? expiresAtValue : expiresAt.toLocaleString()}
               </span>
             </div>
           </div>
@@ -74,7 +93,7 @@ export function RoomSettingsModal() {
         >
           <div style={{ marginBottom: 12, fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>在线成员</div>
           <div style={{ display: 'grid', gap: 10 }}>
-            {currentRoom.players.map((player) => (
+            {players.map((player) => (
               <div
                 key={player.id}
                 style={{
@@ -112,7 +131,7 @@ export function RoomSettingsModal() {
           </div>
         </section>
 
-        {currentRoom.room_type === 'gm-panel' && (
+        {roomType === 'gm-panel' && (
           <section
             style={{
               padding: 16,
@@ -126,7 +145,7 @@ export function RoomSettingsModal() {
             </div>
             <div style={{ display: 'grid', gap: 10 }}>
               {GM_PANEL_THEMES.map((theme) => {
-                const selected = currentRoom.settings.gm_panel_theme === theme.id
+                const selected = gmPanelTheme === theme.id
                 return (
                   <button
                     key={theme.id}

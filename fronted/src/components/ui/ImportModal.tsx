@@ -3,6 +3,7 @@ import { safeJsonParse } from '@dhgc/shared'
 import { AlertCircle, Upload } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { Modal } from './Modal'
+import { useShallow } from 'zustand/react/shallow'
 
 const MAX_IMPORT_FILE_BYTES = 10 * 1024 * 1024
 
@@ -23,19 +24,27 @@ function waitForIdle() {
 
 export function ImportModal() {
   const {
-    room,
+    hasRoom,
+    importsEnabled,
     isImportModalOpen,
     closeImportModal,
     importRoomBackup,
     addToast,
-  } = useStore()
+  } = useStore(
+    useShallow((state) => ({
+      hasRoom: state.room !== null,
+      importsEnabled: state.room?.settings.imports_enabled ?? false,
+      isImportModalOpen: state.isImportModalOpen,
+      closeImportModal: state.closeImportModal,
+      importRoomBackup: state.importRoomBackup,
+      addToast: state.addToast,
+    })),
+  )
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
 
-  if (!room) return null
-
-  const importsEnabled = room.settings.imports_enabled
+  if (!hasRoom) return null
 
   async function handleFile(file: File) {
     if (isImporting) return

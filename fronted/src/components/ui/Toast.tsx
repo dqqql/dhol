@@ -2,6 +2,7 @@ import React from 'react'
 import { useStore } from '@/store/useStore'
 import type { Toast } from '@/types'
 import { X, Info, CheckCircle, AlertTriangle, XCircle } from 'lucide-react'
+import { useShallow } from 'zustand/react/shallow'
 
 const TOAST_ICONS: Record<Toast['type'], React.ReactNode> = {
   info:    <Info size={14} />,
@@ -18,7 +19,9 @@ const TOAST_COLORS: Record<Toast['type'], string> = {
 }
 
 export function ToastContainer() {
-  const { toasts, removeToast } = useStore()
+  const { toasts, removeToast } = useStore(
+    useShallow((state) => ({ toasts: state.toasts, removeToast: state.removeToast })),
+  )
 
   return (
     <div className="toast-container">

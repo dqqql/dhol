@@ -17,6 +17,7 @@ import { Modal } from '@/components/ui/Modal'
 import { fetchGmSheetHtml } from '@/lib/realtime'
 import { useStore } from '@/store/useStore'
 import { buildGmSheetSrcDoc, getGmSheetResourceSnapshot } from '@/utils/gmPanelHtml'
+import { useShallow } from 'zustand/react/shallow'
 
 const SHEETS_PER_PAGE = 2
 
@@ -31,7 +32,10 @@ function isSrdCharacterSheetHtml(html: string) {
 
 export function GmPanelBoard() {
   const {
-    room,
+    panel,
+    gmPanelTheme,
+    inviteCode,
+    roomId,
     importGmCharacter,
     replaceGmCharacter,
     deleteGmCharacter,
@@ -43,7 +47,25 @@ export function GmPanelBoard() {
     moveGmSheet,
     updateGmCardsPerPage,
     addToast,
-  } = useStore()
+  } = useStore(
+    useShallow((state) => ({
+      panel: state.room?.room_type === 'gm-panel' ? state.room.gm_panel : null,
+      gmPanelTheme: state.room?.room_type === 'gm-panel' ? state.room.settings.gm_panel_theme : null,
+      inviteCode: state.room?.room_type === 'gm-panel' ? state.room.invite_code : null,
+      roomId: state.room?.room_type === 'gm-panel' ? state.room.room_id : null,
+      importGmCharacter: state.importGmCharacter,
+      replaceGmCharacter: state.replaceGmCharacter,
+      deleteGmCharacter: state.deleteGmCharacter,
+      updateGmResource: state.updateGmResource,
+      updateGmFear: state.updateGmFear,
+      createGmCountdown: state.createGmCountdown,
+      updateGmCountdown: state.updateGmCountdown,
+      deleteGmCountdown: state.deleteGmCountdown,
+      moveGmSheet: state.moveGmSheet,
+      updateGmCardsPerPage: state.updateGmCardsPerPage,
+      addToast: state.addToast,
+    })),
+  )
   const [currentPage, setCurrentPage] = useState(0)
   const [draftCountdownName, setDraftCountdownName] = useState('')
   const [draftCountdownMax, setDraftCountdownMax] = useState('6')
@@ -58,11 +80,11 @@ export function GmPanelBoard() {
   const sheetDocsRef = useRef<Record<string, SheetDocState>>({})
   const replayFailureReloadsRef = useRef<Record<string, string>>({})
 
-  if (!room || room.room_type !== 'gm-panel' || !room.gm_panel) return null
+  if (panel == null || gmPanelTheme === null || inviteCode === null || roomId === null) return null
 
-  const panel = room.gm_panel
-  const theme = getGmPanelTheme(room.settings.gm_panel_theme)
-  const inviteCode = room.invite_code
+  const currentPanel = panel
+  const currentInviteCode = inviteCode
+  const theme = getGmPanelTheme(gmPanelTheme)
   const orderedSheets = panel.sheet_order
     .map((sheetId) => panel.sheets.find((sheet) => sheet.id === sheetId) ?? null)
     .filter((sheet): sheet is GmPanelCharacterSheetEntry => Boolean(sheet))
@@ -183,7 +205,7 @@ export function GmPanelBoard() {
       if (!message) return
 
       if (message.type === 'dhol-gm-resource-replay-failed') {
-        const entry = panel.sheets.find((sheet) => sheet.id === message.sheetId)
+        const entry = currentPanel.sheets.find((sheet) => sheet.id === message.sheetId)
         if (!entry) return
         if (replayFailureReloadsRef.current[entry.id] === entry.html_updated_at) return
         replayFailureReloadsRef.current[entry.id] = entry.html_updated_at
@@ -197,7 +219,7 @@ export function GmPanelBoard() {
           },
         }))
 
-        fetchGmSheetHtml(inviteCode, entry.id)
+        fetchGmSheetHtml(currentInviteCode, entry.id)
           .then((html) => {
             setSheetDocs((current) => ({
               ...current,
@@ -239,17 +261,17 @@ export function GmPanelBoard() {
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [panel.sheets, inviteCode, updateGmResource])
+  }, [currentPanel.sheets, currentInviteCode, updateGmResource])
 
   async function handleImport(file: File, targetSheetId?: string | null) {
     const previousTarget = targetSheetId
-      ? panel.sheets.find((sheet) => sheet.id === targetSheetId) ?? null
+      ? currentPanel.sheets.find((sheet) => sheet.id === targetSheetId) ?? null
       : null
 
     setPendingImport({
       fileName: file.name,
       mode: targetSheetId ? 'replace' : 'import',
-      previousSheetCount: panel.sheets.length,
+      previousSheetCount: currentPanel.sheets.length,
       previousHtmlUpdatedAt: previousTarget?.html_updated_at,
       targetSheetId: targetSheetId ?? undefined,
     })
@@ -309,7 +331,7 @@ export function GmPanelBoard() {
 
   function submitCountdown() {
     const max = Math.max(2, Math.min(12, Number.parseInt(draftCountdownMax, 10) || 6))
-    createGmCountdown(draftCountdownName.trim() || `进度钟 ${panel.countdowns.length + 1}`, max)
+    createGmCountdown(draftCountdownName.trim() || `进度钟 ${currentPanel.countdowns.length + 1}`, max)
     setDraftCountdownName('')
     setDraftCountdownMax('6')
   }
@@ -438,10 +460,10 @@ export function GmPanelBoard() {
         <GmActivityLogPanel logs={panel.activity_log} theme={theme} />
       </div>
 
-      <FloatingBattlePanel roomId={room.room_id} />
+      <FloatingBattlePanel roomId={roomId} />
       <FloatingDrawingBoard />
       <FloatingDicePanel />
-      <FloatingNotebook roomId={room.room_id} />
+      <FloatingNotebook roomId={roomId} />
       <FloatingXCard />
       {pendingImport && <GmImportPendingToast pendingImport={pendingImport} theme={theme} />}
 

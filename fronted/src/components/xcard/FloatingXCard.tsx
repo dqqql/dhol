@@ -1,16 +1,23 @@
 import { useMemo } from 'react'
 import { Check, Hand, OctagonX, Users } from 'lucide-react'
 import { useStore } from '@/store/useStore'
+import { useShallow } from 'zustand/react/shallow'
 
 export function FloatingXCard() {
-  const { room, currentPlayerId, raiseXCard, acknowledgeXCard } = useStore()
-
-  const xCard = room?.x_card ?? null
+  const { xCard, players, currentPlayerId, raiseXCard, acknowledgeXCard } = useStore(
+    useShallow((state) => ({
+      xCard: state.room?.x_card ?? null,
+      players: state.room?.players ?? null,
+      currentPlayerId: state.currentPlayerId,
+      raiseXCard: state.raiseXCard,
+      acknowledgeXCard: state.acknowledgeXCard,
+    })),
+  )
   const isActive = Boolean(xCard)
 
   const onlinePlayers = useMemo(
-    () => (room?.players ?? []).filter((player) => player.is_online),
-    [room?.players],
+    () => (players ?? []).filter((player) => player.is_online),
+    [players],
   )
 
   const acknowledgedIds = useMemo(

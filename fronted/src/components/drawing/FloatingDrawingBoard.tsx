@@ -11,6 +11,7 @@ import {
 } from '@dhgc/shared'
 import { Brush, Send, Trash2, Undo2, X } from 'lucide-react'
 import { useStore } from '@/store/useStore'
+import { useShallow } from 'zustand/react/shallow'
 
 const SHAPE_LABELS: Record<DrawingBoardShapeKind, string> = {
   freehand: '自由涂鸦',
@@ -21,7 +22,12 @@ const SHAPE_LABELS: Record<DrawingBoardShapeKind, string> = {
 type DraftShape = DrawingBoardShape | null
 
 export function FloatingDrawingBoard() {
-  const { room, submitDrawingBoard } = useStore()
+  const { sharedBoard, submitDrawingBoard } = useStore(
+    useShallow((state) => ({
+      sharedBoard: state.room?.drawing_board,
+      submitDrawingBoard: state.submitDrawingBoard,
+    })),
+  )
   const [isOpen, setIsOpen] = useState(false)
   const [tool, setTool] = useState<DrawingBoardShapeKind>('freehand')
   const [color, setColor] = useState<DrawingBoardColor>(DRAWING_BOARD_COLORS[1])
@@ -31,7 +37,6 @@ export function FloatingDrawingBoard() {
   const boardRef = useRef<SVGSVGElement | null>(null)
   const startPointRef = useRef<{ x: number; y: number } | null>(null)
 
-  const sharedBoard = room?.drawing_board
   const visibleShapes = useMemo(() => (
     draftShape ? [...shapes, draftShape] : shapes
   ), [draftShape, shapes])

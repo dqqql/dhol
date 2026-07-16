@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import type { RoomType } from '@dhgc/shared'
 import { LogIn, Plus, Shield, Swords } from 'lucide-react'
 import { useStore } from '@/store/useStore'
+import { useShallow } from 'zustand/react/shallow'
 
 interface LandingPageProps {
   onEnterRoom: () => void
@@ -10,7 +11,14 @@ interface LandingPageProps {
 const ORNAMENT = '◆'
 
 export function LandingPage({ onEnterRoom }: LandingPageProps) {
-  const { createRoom, joinRoom, isEnteringRoom, addToast } = useStore()
+  const { createRoom, joinRoom, isEnteringRoom, addToast } = useStore(
+    useShallow((state) => ({
+      createRoom: state.createRoom,
+      joinRoom: state.joinRoom,
+      isEnteringRoom: state.isEnteringRoom,
+      addToast: state.addToast,
+    })),
+  )
   const [tab, setTab] = useState<'create' | 'join'>('create')
   const [roomName, setRoomName] = useState('匕首之心 GM 面板')
   const [nickname, setNickname] = useState('')

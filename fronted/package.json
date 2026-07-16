@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "check:zustand-selectors": "node scripts/check-zustand-selectors.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },

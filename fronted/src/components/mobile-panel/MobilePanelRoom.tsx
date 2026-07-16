@@ -15,10 +15,11 @@ import {
   type ExperienceDraft,
 } from '@/components/mobile-panel/MobileCharacterModals'
 import { useStore } from '@/store/useStore'
+import { useShallow } from 'zustand/react/shallow'
 
 export function MobilePanelRoom() {
   const {
-    room,
+    panel,
     importMobileCharacter,
     replaceMobileCharacter,
     deleteMobileCharacter,
@@ -29,7 +30,21 @@ export function MobilePanelRoom() {
     updateMobileCountdown,
     deleteMobileCountdown,
     addToast,
-  } = useStore()
+  } = useStore(
+    useShallow((state) => ({
+      panel: state.room?.room_type === 'mobile-panel' ? state.room.mobile_panel : null,
+      importMobileCharacter: state.importMobileCharacter,
+      replaceMobileCharacter: state.replaceMobileCharacter,
+      deleteMobileCharacter: state.deleteMobileCharacter,
+      updateMobileCharacterCustom: state.updateMobileCharacterCustom,
+      updateMobileResource: state.updateMobileResource,
+      updateMobileFear: state.updateMobileFear,
+      createMobileCountdown: state.createMobileCountdown,
+      updateMobileCountdown: state.updateMobileCountdown,
+      deleteMobileCountdown: state.deleteMobileCountdown,
+      addToast: state.addToast,
+    })),
+  )
 
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [isLogOpen, setIsLogOpen] = useState(false)
@@ -45,7 +60,6 @@ export function MobilePanelRoom() {
   const [countdownMax, setCountdownMax] = useState('6')
   const [activeCharacterMenuId, setActiveCharacterMenuId] = useState<string | null>(null)
 
-  const panel = room?.room_type === 'mobile-panel' ? room.mobile_panel : null
   const orderedCharacters = panel
     ? panel.character_order
       .map((characterId) => panel.characters.find((item) => item.id === characterId) ?? null)

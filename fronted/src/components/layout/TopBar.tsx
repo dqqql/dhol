@@ -3,6 +3,7 @@ import { ChevronDown, Clock, Download, FileJson, FileUp, Layers, LogOut, MoreHor
 import { InviteCodeModal } from '@/components/ui/InviteCodeModal'
 import { fetchDhRoomBackup } from '@/lib/realtime'
 import { useStore } from '@/store/useStore'
+import { useShallow } from 'zustand/react/shallow'
 
 function getModeLabel(roomType: string) {
   if (roomType === 'mobile-panel') return '手机角色码房间'
@@ -21,26 +22,43 @@ export function TopBar({ onLeaveRoom, onHeightChange }: TopBarProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mobileActionsRef = useRef<HTMLDivElement | null>(null)
   const {
-    room,
+    roomName,
+    inviteCode,
+    roomType,
+    expiresAtValue,
     connectionStatus,
     openImportModal,
     openRoomSettings,
     manualReconnect,
     leaveRoom,
     addToast,
-  } = useStore()
+  } = useStore(
+    useShallow((state) => ({
+      roomName: state.room?.room_name ?? null,
+      inviteCode: state.room?.invite_code ?? null,
+      roomType: state.room?.room_type ?? null,
+      expiresAtValue: state.room?.expires_at ?? null,
+      connectionStatus: state.connectionStatus,
+      openImportModal: state.openImportModal,
+      openRoomSettings: state.openRoomSettings,
+      manualReconnect: state.manualReconnect,
+      leaveRoom: state.leaveRoom,
+      addToast: state.addToast,
+    })),
+  )
 
   const toggleExportMenu = () => setIsExportMenuOpen((prev) => !prev)
 
-  if (!room) return null
-  const currentRoom = room
-  const isGmPanel = currentRoom.room_type === 'gm-panel'
-  const isMobilePanel = currentRoom.room_type === 'mobile-panel'
+  if (roomName === null || inviteCode === null || roomType === null || expiresAtValue === null) return null
+  const currentRoomName = roomName
+  const currentInviteCode = inviteCode
+  const isGmPanel = roomType === 'gm-panel'
+  const isMobilePanel = roomType === 'mobile-panel'
 
   const isDisconnected = connectionStatus === 'error' || connectionStatus === 'idle'
   const isReconnecting = connectionStatus === 'reconnecting' || connectionStatus === 'connecting'
-  const modeLabel = getModeLabel(currentRoom.room_type)
-  const expiresAt = new Date(currentRoom.expires_at)
+  const modeLabel = getModeLabel(roomType)
+  const expiresAt = new Date(expiresAtValue)
   const daysLeft = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
 
   useEffect(() => {
@@ -59,7 +77,7 @@ export function TopBar({ onLeaveRoom, onHeightChange }: TopBarProps) {
       observer.disconnect()
       window.removeEventListener('resize', reportHeight)
     }
-  }, [onHeightChange, currentRoom.invite_code, currentRoom.room_name, currentRoom.room_type, isDisconnected, isReconnecting, isExportMenuOpen])
+  }, [onHeightChange, inviteCode, roomName, roomType, isDisconnected, isReconnecting, isExportMenuOpen])
 
   useEffect(() => {
     if (!isMobileActionsOpen) return
@@ -76,11 +94,11 @@ export function TopBar({ onLeaveRoom, onHeightChange }: TopBarProps) {
 
   async function exportDhRoom() {
     try {
-      const blob = await fetchDhRoomBackup(currentRoom.invite_code)
+      const blob = await fetchDhRoomBackup(currentInviteCode)
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `${currentRoom.room_name}.dhroom.json`
+      link.download = `${currentRoomName}.dhroom.json`
       link.click()
       URL.revokeObjectURL(url)
       addToast('房间备份已开始下载。', 'success')
@@ -271,10 +289,10 @@ export function TopBar({ onLeaveRoom, onHeightChange }: TopBarProps) {
               textOverflow: 'ellipsis',
             }}
           >
-            {currentRoom.room_name}
+            {roomName}
           </div>
           <div style={{ fontSize: 10, color: 'rgba(247,242,255,0.64)', letterSpacing: '1px', fontFamily: 'monospace' }}>
-            {currentRoom.invite_code}
+            {inviteCode}
           </div>
         </div>
       </div>
@@ -400,8 +418,8 @@ export function TopBar({ onLeaveRoom, onHeightChange }: TopBarProps) {
 
       <InviteCodeModal
         open={showInviteModal}
-        inviteCode={currentRoom.invite_code}
-        roomName={currentRoom.room_name}
+        inviteCode={inviteCode}
+        roomName={roomName}
         onClose={() => setShowInviteModal(false)}
         onCopied={() => addToast('邀请码已复制到剪贴板。', 'success')}
       />
