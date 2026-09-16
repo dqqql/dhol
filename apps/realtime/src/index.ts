@@ -1216,6 +1216,7 @@ export class RoomDurableObject {
     const room = await this.load()
     const player = room?.players.find(item => item.id === session.playerId)
     if (!room || !player) return
+    if (!player.is_online) return
 
     player.is_online = false
     player.last_seen_at = new Date().toISOString()

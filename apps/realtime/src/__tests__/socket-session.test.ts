@@ -191,6 +191,45 @@ describe('socket session disconnects', () => {
     expect((ctx.storage.put as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled()
   })
 
+  it('does not persist or broadcast again when disconnect is repeated after attachment recovery', async () => {
+    const ctx = createContext()
+    const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
+    const room = createRoom()
+    room.players.push({
+      id: 'player-2',
+      nickname: 'Guest',
+      color: '#2563eb',
+      is_host: false,
+      is_online: true,
+      joined_at: '2026-07-05T00:00:00.000Z',
+      last_seen_at: '2026-07-05T00:00:00.000Z',
+    })
+    const socket = new FakeSocket()
+    socket.deserializedAttachment = { playerId: 'player-1', nickname: 'Host' }
+    const observer = new FakeSocket()
+
+    ;(durableObject as unknown as { room: RoomState | null }).room = room
+    ;(durableObject as unknown as { sockets: Map<WebSocket, { playerId: string; nickname: string }> }).sockets = new Map([
+      [socket as unknown as WebSocket, { playerId: 'player-1', nickname: 'Host' }],
+      [observer as unknown as WebSocket, { playerId: 'player-2', nickname: 'Guest' }],
+    ])
+
+    const disconnect = (durableObject as unknown as {
+      disconnect(socket: WebSocket): Promise<void>
+    }).disconnect
+
+    await disconnect.call(durableObject, socket as unknown as WebSocket)
+    await disconnect.call(durableObject, socket as unknown as WebSocket)
+
+    expect(room.players.find(player => player.id === 'player-1')?.is_online).toBe(false)
+    expect(ctx.storage.put).toHaveBeenCalledOnce()
+    expect(observer.sentMessages).toHaveLength(1)
+    expect(JSON.parse(observer.sentMessages[0])).toEqual(expect.objectContaining({
+      type: 'room.updated',
+      payload: expect.objectContaining({ reason: 'player.offline' }),
+    }))
+  })
+
   it('restores a missing map session from a valid attachment before handling a message', async () => {
     const durableObject = new RoomDurableObject(createContext(), { ALLOWED_ORIGIN: '*' } as never)
     const room = createRoom()
