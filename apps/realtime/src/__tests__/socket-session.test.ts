@@ -191,7 +191,30 @@ describe('socket session disconnects', () => {
     expect((ctx.storage.put as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled()
   })
 
-  it('does not persist or broadcast again when disconnect is repeated after attachment recovery', async () => {
+  it('does not restore or persist a socket after the sockets map has been cleared', async () => {
+    const ctx = createContext()
+    const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
+    const room = createRoom()
+    const socket = new FakeSocket()
+    socket.deserializedAttachment = { playerId: 'player-1', nickname: 'Host' }
+    const sockets = new Map<WebSocket, { playerId: string; nickname: string }>([
+      [socket as unknown as WebSocket, { playerId: 'player-1', nickname: 'Host' }],
+    ])
+
+    ;(durableObject as unknown as { room: RoomState | null }).room = room
+    ;(durableObject as unknown as { sockets: Map<WebSocket, { playerId: string; nickname: string }> }).sockets = sockets
+    sockets.clear()
+
+    await (durableObject as unknown as { disconnect(socket: WebSocket): Promise<void> }).disconnect(
+      socket as unknown as WebSocket,
+    )
+
+    expect(sockets.size).toBe(0)
+    expect(room.players[0].is_online).toBe(true)
+    expect(ctx.storage.put).not.toHaveBeenCalled()
+  })
+
+  it('does not persist or broadcast again when disconnect is repeated', async () => {
     const ctx = createContext()
     const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
     const room = createRoom()

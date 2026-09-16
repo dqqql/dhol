@@ -1200,12 +1200,7 @@ export class RoomDurableObject {
   }
 
   private async disconnect(socket: WebSocket): Promise<void> {
-    let session: SocketSession | null
-    try {
-      session = this.sockets.get(socket) ?? this.restoreSocketSession(socket)
-    } catch {
-      return
-    }
+    const session = this.sockets.get(socket)
     if (!session) return
     this.sockets.delete(socket)
 
