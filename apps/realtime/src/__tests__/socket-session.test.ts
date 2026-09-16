@@ -7,6 +7,7 @@ import {
   getPlayerTag,
   prepareSocketSession,
   readSocketSessionAttachment,
+  serializeSocketSessionAttachment,
   validateSocketSessionAttachment,
 } from '../socket-session'
 import type { RoomState } from '../../../../packages/shared/src/index'
@@ -97,11 +98,22 @@ function createContext() {
       get: vi.fn(async () => undefined),
       put: vi.fn(async () => undefined),
       list: vi.fn(async () => new Map<string, string>()),
+      delete: vi.fn(async () => undefined),
+      deleteAll: vi.fn(async () => undefined),
+      deleteAlarm: vi.fn(async () => undefined),
       setAlarm: vi.fn(async () => undefined),
       getAlarm: vi.fn(async () => null),
     },
     waitUntil: vi.fn(),
   } as unknown as DurableObjectState
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
 }
 
 async function signTestSession(secret: string): Promise<string> {
@@ -169,6 +181,55 @@ describe('socket session connection integration', () => {
       vi.unstubAllGlobals()
     }
   })
+
+  it('registers standard websocket listeners before persistence completes', async () => {
+    vi.stubGlobal('WebSocketPair', FakeWebSocketPair)
+    vi.stubGlobal('Response', class {
+      readonly status: number
+      readonly webSocket: unknown
+
+      constructor(_body: unknown, init: { status?: number; webSocket?: unknown } = {}) {
+        this.status = init.status ?? 200
+        this.webSocket = init.webSocket
+      }
+    })
+
+    const ctx = createContext()
+    const saveGate = createDeferred<void>()
+    ;(ctx.storage.put as ReturnType<typeof vi.fn>).mockImplementation(() => saveGate.promise)
+
+    try {
+      const durableObject = new RoomDurableObject(ctx, {
+        SESSION_SECRET: 'test-secret',
+        ALLOWED_ORIGIN: '*',
+      } as never)
+      ;(durableObject as unknown as { room: RoomState | null }).room = createRoom()
+      const token = await signTestSession('test-secret')
+
+      const responsePromise = durableObject.fetch(new Request(
+        `https://room.local/api/rooms/ABC123/ws?token=${encodeURIComponent(token)}`,
+        { headers: { Upgrade: 'websocket' } },
+      ))
+      try {
+        await vi.waitFor(() => expect(ctx.storage.put).toHaveBeenCalledOnce())
+
+        const pair = FakeWebSocketPair.lastPair
+        expect(pair?.[1].accepted).toBe(true)
+        expect(pair?.[1].listeners.has('message')).toBe(true)
+        expect(pair?.[1].listeners.has('close')).toBe(true)
+        expect(pair?.[1].listeners.has('error')).toBe(true)
+
+        saveGate.resolve(undefined)
+        const response = await responsePromise
+        expect(response.status).toBe(101)
+      } finally {
+        saveGate.resolve(undefined)
+        await responsePromise.catch(() => undefined)
+      }
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
 })
 
 describe('socket session disconnects', () => {
@@ -210,6 +271,65 @@ describe('socket session disconnects', () => {
     )
 
     expect(sockets.size).toBe(0)
+    expect(room.players[0].is_online).toBe(true)
+    expect(ctx.storage.put).not.toHaveBeenCalled()
+
+    await (durableObject as unknown as {
+      handleMessage(socket: WebSocket, data: string): Promise<void>
+    }).handleMessage(socket as unknown as WebSocket, JSON.stringify({
+      type: 'ping',
+      requestId: 'request-after-disconnect',
+    }))
+
+    expect(sockets.size).toBe(0)
+    expect(socket.sentMessages).toHaveLength(0)
+  })
+
+  it('does not restore a socket after purge closes and clears the room', async () => {
+    const ctx = createContext()
+    const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
+    const room = createRoom()
+    const socket = new FakeSocket()
+    socket.deserializedAttachment = { playerId: 'player-1', nickname: 'Host' }
+    const sockets = new Map<WebSocket, { playerId: string; nickname: string }>([
+      [socket as unknown as WebSocket, { playerId: 'player-1', nickname: 'Host' }],
+    ])
+
+    ;(durableObject as unknown as { room: RoomState | null }).room = room
+    ;(durableObject as unknown as { sockets: Map<WebSocket, { playerId: string; nickname: string }> }).sockets = sockets
+
+    await (durableObject as unknown as { purgeRoom(reason: 'expired'): Promise<void> }).purgeRoom('expired')
+    await (durableObject as unknown as {
+      handleMessage(socket: WebSocket, data: string): Promise<void>
+    }).handleMessage(socket as unknown as WebSocket, JSON.stringify({
+      type: 'ping',
+      requestId: 'request-after-purge',
+    }))
+
+    expect(sockets.size).toBe(0)
+    expect(socket.sentMessages).toHaveLength(0)
+  })
+
+  it('keeps a player online when a replacement socket connects while disconnect waits', async () => {
+    const ctx = createContext()
+    const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
+    const room = createRoom()
+    const oldSocket = {} as WebSocket
+    const replacementSocket = {} as WebSocket
+    const sockets = new Map<WebSocket, { playerId: string; nickname: string }>([
+      [oldSocket, { playerId: 'player-1', nickname: 'Host' }],
+    ])
+
+    ;(durableObject as unknown as { room: RoomState | null }).room = room
+    ;(durableObject as unknown as { sockets: Map<WebSocket, { playerId: string; nickname: string }> }).sockets = sockets
+
+    const disconnectPromise = (durableObject as unknown as {
+      disconnect(socket: WebSocket): Promise<void>
+    }).disconnect(oldSocket)
+    sockets.set(replacementSocket, { playerId: 'player-1', nickname: 'Host' })
+
+    await disconnectPromise
+
     expect(room.players[0].is_online).toBe(true)
     expect(ctx.storage.put).not.toHaveBeenCalled()
   })
@@ -363,5 +483,16 @@ describe('socket session attachment helpers', () => {
     expect(registration.tag).toBe('player:player-1')
     expect(registration.tags).toEqual(['player:player-1'])
     expect(getPlayerTag('player-1')).toBe('player:player-1')
+  })
+
+  it('does not silently skip a required attachment serializer', () => {
+    expect(() => serializeSocketSessionAttachment({} as never, {
+      playerId: 'player-1',
+      nickname: 'Host',
+    })).toThrow(TypeError)
+  })
+
+  it('does not silently skip a required attachment deserializer', () => {
+    expect(() => readSocketSessionAttachment({} as never)).toThrow(TypeError)
   })
 })

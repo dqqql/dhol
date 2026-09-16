@@ -4,8 +4,8 @@ export interface SocketSession {
 }
 
 export interface SocketSessionAttachmentSocket {
-  serializeAttachment?(attachment: unknown): void
-  deserializeAttachment?(): unknown | null
+  serializeAttachment(attachment: unknown): void
+  deserializeAttachment(): unknown | null
 }
 
 export interface SocketSessionRegistration {
@@ -54,13 +54,13 @@ export function serializeSocketSessionAttachment(
   session: SocketSession,
 ): void {
   const attachment = validateSocketSessionAttachment(session)
-  socket.serializeAttachment?.(attachment)
+  socket.serializeAttachment(attachment)
 }
 
 export function readSocketSessionAttachment(
   socket: Pick<SocketSessionAttachmentSocket, 'deserializeAttachment'>,
 ): SocketSession {
-  return validateSocketSessionAttachment(socket.deserializeAttachment?.() ?? null)
+  return validateSocketSessionAttachment(socket.deserializeAttachment())
 }
 
 export function getPlayerTag(playerId: string): string {

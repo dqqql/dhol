@@ -321,6 +321,7 @@ export class RoomDurableObject {
 
   private room: RoomState | null = null
   private sockets = new Map<WebSocket, SocketSession>()
+  private closedSockets = new WeakSet<WebSocket>()
   private persistQueue: Promise<void> = Promise.resolve()
   // WebSocket 速率限制：每个连接每秒最多 30 条消息
   private wsRateLimitMap = new Map<WebSocket, { count: number; resetAt: number }>()
@@ -499,20 +500,9 @@ export class RoomDurableObject {
     server.accept()
 
     const socketRegistration = prepareSocketSession(server, player.id, player.nickname)
+    this.closedSockets.delete(server)
     this.sockets.set(server, socketRegistration.session)
     // Stage 3 will pass socketRegistration.tags to the hibernation accept call.
-    player.is_online = true
-    player.last_seen_at = new Date().toISOString()
-    room.updated_at = new Date().toISOString()
-    room.snapshot_version += 1
-    await this.save()
-
-    server.send(JSON.stringify({
-      type: 'room.snapshot',
-      payload: { state: this.publicState(), you: { player_id: player.id } },
-    }))
-    this.broadcast({ type: 'room.updated', payload: { state: this.publicState(), reason: 'player.online' } })
-
     server.addEventListener('message', event => {
       void this.handleMessage(server, event.data).catch(error => {
         this.sendError(server, undefined, 'handler_error', messageFrom(error))
@@ -526,6 +516,18 @@ export class RoomDurableObject {
     server.addEventListener('error', () => {
       void this.disconnect(server)
     })
+
+    player.is_online = true
+    player.last_seen_at = new Date().toISOString()
+    room.updated_at = new Date().toISOString()
+    room.snapshot_version += 1
+    await this.save()
+
+    server.send(JSON.stringify({
+      type: 'room.snapshot',
+      payload: { state: this.publicState(), you: { player_id: player.id } },
+    }))
+    this.broadcast({ type: 'room.updated', payload: { state: this.publicState(), reason: 'player.online' } })
 
     return new Response(null, { status: 101, webSocket: client })
   }
@@ -543,6 +545,8 @@ export class RoomDurableObject {
   }
 
   private async handleMessage(socket: WebSocket, data: string | ArrayBuffer): Promise<void> {
+    if (this.closedSockets.has(socket)) return
+
     let session: SocketSession | undefined
     try {
       session = this.sockets.get(socket) ?? this.restoreSocketSession(socket) ?? undefined
@@ -1200,6 +1204,7 @@ export class RoomDurableObject {
   }
 
   private async disconnect(socket: WebSocket): Promise<void> {
+    this.closedSockets.add(socket)
     const session = this.sockets.get(socket)
     if (!session) return
     this.sockets.delete(socket)
@@ -1209,6 +1214,10 @@ export class RoomDurableObject {
     }
 
     const room = await this.load()
+    if (Array.from(this.sockets.values()).some(item => item.playerId === session.playerId)) {
+      return
+    }
+
     const player = room?.players.find(item => item.id === session.playerId)
     if (!room || !player) return
     if (!player.is_online) return
@@ -1222,6 +1231,7 @@ export class RoomDurableObject {
   }
 
   private restoreSocketSession(socket: WebSocket): SocketSession | null {
+    if (this.closedSockets.has(socket)) return null
     const session = readSocketSessionAttachment(socket)
     this.sockets.set(socket, session)
     return session
@@ -1461,7 +1471,12 @@ export class RoomDurableObject {
   }
 
   private async purgeRoom(reason: 'expired'): Promise<void> {
-    for (const socket of Array.from(this.sockets.keys())) {
+    const sockets = Array.from(this.sockets.keys())
+    for (const socket of sockets) {
+      this.closedSockets.add(socket)
+    }
+
+    for (const socket of sockets) {
       try {
         socket.close(1001, reason === 'expired' ? 'Room expired' : 'Room closed')
       } catch {
