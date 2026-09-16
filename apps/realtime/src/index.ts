@@ -64,6 +64,7 @@ import {
   type RoomState,
   type RoomType,
 } from '../../../packages/shared/src/index'
+import { prepareSocketSession, readSocketSessionAttachment, type SocketSession } from './socket-session'
 
 export interface Env {
   ROOMS: DurableObjectNamespace
@@ -81,11 +82,6 @@ interface SessionPayload {
   player_id: string
   nickname: string
   exp: number
-}
-
-interface SocketSession {
-  playerId: string
-  nickname: string
 }
 
 let _corsAllowedOrigin = '*'
@@ -495,7 +491,9 @@ export class RoomDurableObject {
     const [client, server] = Object.values(pair) as [WebSocket, WebSocket]
     server.accept()
 
-    this.sockets.set(server, { playerId: player.id, nickname: player.nickname })
+    const socketRegistration = prepareSocketSession(server, player.id, player.nickname)
+    this.sockets.set(server, socketRegistration.session)
+    // Stage 3 will pass socketRegistration.tags to the hibernation accept call.
     player.is_online = true
     player.last_seen_at = new Date().toISOString()
     room.updated_at = new Date().toISOString()
@@ -538,7 +536,7 @@ export class RoomDurableObject {
   }
 
   private async handleMessage(socket: WebSocket, data: string | ArrayBuffer): Promise<void> {
-    const session = this.sockets.get(socket)
+    const session = this.sockets.get(socket) ?? this.restoreSocketSession(socket)
     if (!session) return
 
     if (!this.checkWsRateLimit(socket)) {
@@ -1181,9 +1179,13 @@ export class RoomDurableObject {
   }
 
   private async disconnect(socket: WebSocket): Promise<void> {
-    const session = this.sockets.get(socket)
+    const session = this.sockets.get(socket) ?? this.restoreSocketSession(socket)
     if (!session) return
     this.sockets.delete(socket)
+
+    if (Array.from(this.sockets.values()).some(item => item.playerId === session.playerId)) {
+      return
+    }
 
     const room = await this.load()
     const player = room?.players.find(item => item.id === session.playerId)
@@ -1195,6 +1197,16 @@ export class RoomDurableObject {
     // 离线玩家不应再阻塞 X 卡：若剩余在线玩家均已确认则关闭提示。
     this.clearXCardIfAllAcknowledged()
     await this.commit('player.offline')
+  }
+
+  private restoreSocketSession(socket: WebSocket): SocketSession | null {
+    try {
+      const session = readSocketSessionAttachment(socket)
+      this.sockets.set(socket, session)
+      return session
+    } catch {
+      return null
+    }
   }
 
   private transferHostIfNeeded(): void {
