@@ -1,5 +1,6 @@
 import type {
   DhRoomBackup,
+  DiceRollRecord,
   DiceRollRequest,
   GmPanelResourceKey,
   MobilePanelExperience,
@@ -68,6 +69,8 @@ export type ClientMessage =
 export type ServerMessage =
   | { type: 'room.snapshot'; payload: { state: RoomState; you: { player_id: string } } }
   | { type: 'room.updated'; payload: { state: RoomState; reason: string } }
+  | { type: 'dice.rolled'; payload: { roll: DiceRollRecord; snapshot_version: number } }
+  | { type: 'dice.historyCleared'; payload: { snapshot_version: number } }
   | { type: 'ack'; requestId?: string; payload: { ok: true } }
   | { type: 'error'; requestId?: string; payload: { code: string; message: string } }
   | { type: 'pong'; requestId?: string; payload: { server_time: string } }
