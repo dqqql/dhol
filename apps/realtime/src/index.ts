@@ -64,7 +64,14 @@ import {
   type RoomState,
   type RoomType,
 } from '../../../packages/shared/src/index'
-import { prepareSocketSession, readSocketSessionAttachment, type SocketSession } from './socket-session'
+import {
+  SOCKET_SESSION_ATTACHMENT_ERROR_CODE,
+  SOCKET_SESSION_ATTACHMENT_ERROR_MESSAGE,
+  SocketSessionAttachmentError,
+  prepareSocketSession,
+  readSocketSessionAttachment,
+  type SocketSession,
+} from './socket-session'
 
 export interface Env {
   ROOMS: DurableObjectNamespace
@@ -536,7 +543,21 @@ export class RoomDurableObject {
   }
 
   private async handleMessage(socket: WebSocket, data: string | ArrayBuffer): Promise<void> {
-    const session = this.sockets.get(socket) ?? this.restoreSocketSession(socket)
+    let session: SocketSession | undefined
+    try {
+      session = this.sockets.get(socket) ?? this.restoreSocketSession(socket) ?? undefined
+    } catch (error) {
+      if (error instanceof SocketSessionAttachmentError) {
+        this.sendError(
+          socket,
+          undefined,
+          SOCKET_SESSION_ATTACHMENT_ERROR_CODE,
+          SOCKET_SESSION_ATTACHMENT_ERROR_MESSAGE,
+        )
+        try { socket.close(1008, SOCKET_SESSION_ATTACHMENT_ERROR_MESSAGE) } catch { /* ignore */ }
+      }
+      return
+    }
     if (!session) return
 
     if (!this.checkWsRateLimit(socket)) {
@@ -1179,7 +1200,12 @@ export class RoomDurableObject {
   }
 
   private async disconnect(socket: WebSocket): Promise<void> {
-    const session = this.sockets.get(socket) ?? this.restoreSocketSession(socket)
+    let session: SocketSession | null
+    try {
+      session = this.sockets.get(socket) ?? this.restoreSocketSession(socket)
+    } catch {
+      return
+    }
     if (!session) return
     this.sockets.delete(socket)
 
@@ -1200,13 +1226,9 @@ export class RoomDurableObject {
   }
 
   private restoreSocketSession(socket: WebSocket): SocketSession | null {
-    try {
-      const session = readSocketSessionAttachment(socket)
-      this.sockets.set(socket, session)
-      return session
-    } catch {
-      return null
-    }
+    const session = readSocketSessionAttachment(socket)
+    this.sockets.set(socket, session)
+    return session
   }
 
   private transferHostIfNeeded(): void {

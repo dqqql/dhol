@@ -17,6 +17,8 @@ class FakeSocket {
   deserializedAttachment: unknown = null
   sentMessages: string[] = []
   listeners = new Map<string, EventListener>()
+  closeCode: number | undefined
+  closeReason: string | undefined
 
   accept(): void {
     this.accepted = true
@@ -38,7 +40,10 @@ class FakeSocket {
     this.sentMessages.push(message)
   }
 
-  close(): void {}
+  close(code?: number, reason?: string): void {
+    this.closeCode = code
+    this.closeReason = reason
+  }
 }
 
 class FakeWebSocketPair {
@@ -210,6 +215,34 @@ describe('socket session disconnects', () => {
       expect.objectContaining({ type: 'pong', requestId: 'request-1' }),
       expect.objectContaining({ type: 'ack', requestId: 'request-1' }),
     ])
+  })
+
+  it.each([
+    ['an invalid attachment', { playerId: 'player-1', nickname: '' }],
+    ['a missing attachment', null],
+  ])('rejects %s during message handling with a stable error and close', async (_label, attachment) => {
+    const durableObject = new RoomDurableObject(createContext(), { ALLOWED_ORIGIN: '*' } as never)
+    const socket = new FakeSocket()
+    socket.deserializedAttachment = attachment
+
+    await (durableObject as unknown as {
+      handleMessage(socket: WebSocket, data: string): Promise<void>
+    }).handleMessage(socket as unknown as WebSocket, JSON.stringify({ type: 'ping' }))
+
+    expect(socket.sentMessages.map(message => JSON.parse(message))).toEqual([{
+      type: 'error',
+      payload: {
+        code: SOCKET_SESSION_ATTACHMENT_ERROR_CODE,
+        message: SOCKET_SESSION_ATTACHMENT_ERROR_MESSAGE,
+      },
+    }])
+    expect(socket.closeCode).toBe(1008)
+    expect(socket.closeReason).toBe(SOCKET_SESSION_ATTACHMENT_ERROR_MESSAGE)
+
+    await (durableObject as unknown as {
+      disconnect(socket: WebSocket): Promise<void>
+    }).disconnect(socket as unknown as WebSocket)
+    expect(socket.sentMessages).toHaveLength(1)
   })
 })
 
