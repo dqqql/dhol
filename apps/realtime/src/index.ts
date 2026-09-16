@@ -1615,6 +1615,7 @@ export class RoomDurableObject {
       try {
         socket.send(encoded)
       } catch {
+        this.closedSockets.add(socket)
         this.sockets.delete(socket)
       }
     }

@@ -310,6 +310,37 @@ describe('socket session disconnects', () => {
     expect(socket.sentMessages).toHaveLength(0)
   })
 
+  it('does not restore a socket after broadcast removes it because send failed', async () => {
+    const durableObject = new RoomDurableObject(createContext(), { ALLOWED_ORIGIN: '*' } as never)
+    const room = createRoom()
+    const socket = new FakeSocket()
+    socket.deserializedAttachment = { playerId: 'player-1', nickname: 'Host' }
+    let sendAttempts = 0
+    socket.send = (message: string) => {
+      if (sendAttempts++ === 0) throw new Error('socket is closed')
+      socket.sentMessages.push(message)
+    }
+    const sockets = new Map<WebSocket, { playerId: string; nickname: string }>([
+      [socket as unknown as WebSocket, { playerId: 'player-1', nickname: 'Host' }],
+    ])
+
+    ;(durableObject as unknown as { room: RoomState | null }).room = room
+    ;(durableObject as unknown as { sockets: Map<WebSocket, { playerId: string; nickname: string }> }).sockets = sockets
+
+    ;(durableObject as unknown as { broadcast(message: unknown): void }).broadcast({
+      type: 'room.updated',
+    })
+    await (durableObject as unknown as {
+      handleMessage(socket: WebSocket, data: string): Promise<void>
+    }).handleMessage(socket as unknown as WebSocket, JSON.stringify({
+      type: 'ping',
+      requestId: 'request-after-broadcast-failure',
+    }))
+
+    expect(sockets.size).toBe(0)
+    expect(socket.sentMessages).toHaveLength(0)
+  })
+
   it('keeps a player online when a replacement socket connects while disconnect waits', async () => {
     const ctx = createContext()
     const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
