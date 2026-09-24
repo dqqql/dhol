@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DRAWING_BOARD_COLORS } from '../../../../packages/shared/src/index'
 import { RoomDurableObject } from '../index'
-import type { RoomState } from '../../../../packages/shared/src/index'
+import type { DiceRollRecord, RoomState } from '../../../../packages/shared/src/index'
 
 class Deferred<T = void> {
   promise: Promise<T>
@@ -23,7 +23,7 @@ function createRoom(): RoomState {
     room_name: 'Latency Test',
     invite_code: 'ABC123',
     created_at: '2026-07-05T00:00:00.000Z',
-    expires_at: '2026-07-06T00:00:00.000Z',
+    expires_at: '2099-07-06T00:00:00.000Z',
     host_player_id: 'player-1',
     players: [
       {
@@ -58,7 +58,7 @@ function createRoom(): RoomState {
 }
 
 describe('RoomDurableObject commit latency', () => {
-  it('can broadcast a room update before waiting for storage persistence', async () => {
+  it('broadcasts a single dice roll before waiting for storage persistence', async () => {
     const storagePut = new Deferred<void>()
     const waitUntilPromises: Promise<unknown>[] = []
     const sentMessages: string[] = []
@@ -79,24 +79,152 @@ describe('RoomDurableObject commit latency', () => {
     const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
     ;(durableObject as unknown as { room: RoomState | null }).room = createRoom()
 
+    const roll = (durableObject as unknown as {
+      rollDice: (player: RoomState['players'][number], request: {
+        mode: 'standard'
+        modifier_mode: 'normal'
+        repeat: number
+        modifier: number
+        dice: Array<{ sides: number; count: number }>
+      }) => DiceRollRecord
+    }).rollDice(createRoom().players[0], {
+      mode: 'standard',
+      modifier_mode: 'normal',
+      repeat: 1,
+      modifier: 2,
+      dice: [{ sides: 20, count: 1 }],
+    })
     const commitPromise = (durableObject as unknown as {
-      commit: (reason: string, options: { waitForPersistence: boolean }) => Promise<void>
-    }).commit('dice.roll', { waitForPersistence: false })
+      commit: (reason: string, options: {
+        waitForPersistence: boolean
+        message: (snapshotVersion: number) => unknown
+      }) => Promise<void>
+    }).commit('dice.roll', {
+      waitForPersistence: false,
+      message: snapshotVersion => ({
+        type: 'dice.rolled',
+        payload: { roll, snapshot_version: snapshotVersion },
+      }),
+    })
 
     await Promise.resolve()
 
     try {
       expect(sentMessages).toHaveLength(1)
-      expect(JSON.parse(sentMessages[0])).toMatchObject({
-        type: 'room.updated',
-        payload: { reason: 'dice.roll' },
+      const message = JSON.parse(sentMessages[0])
+      expect(message).toMatchObject({
+        type: 'dice.rolled',
+        payload: {
+          roll: {
+            id: roll.id,
+            actor_player_id: 'player-1',
+            actor_name: 'Host',
+            normalized_formula: '1d20 + 2',
+          },
+          snapshot_version: 2,
+        },
       })
+      expect(message.payload).not.toHaveProperty('state')
+      expect(JSON.stringify(message).length).toBeLessThan(2_000)
       expect(waitUntilPromises).toHaveLength(1)
     } finally {
       storagePut.resolve()
       await commitPromise
     }
 
+    await Promise.all(waitUntilPromises)
+  })
+
+  it('broadcasts only dice.historyCleared with the latest snapshot version', async () => {
+    const sentMessages: string[] = []
+    const waitUntilPromises: Promise<unknown>[] = []
+    const room = createRoom()
+    room.dice_rolls = [{
+      id: 'dice_roll_old',
+      created_at: '2026-07-05T00:00:00.000Z',
+      actor_player_id: 'player-1',
+      actor_name: 'Host',
+      normalized_formula: '1d20',
+      request: { mode: 'standard', modifier_mode: 'normal', repeat: 1, modifier: 0, dice: [{ sides: 20, count: 1 }] },
+      mode: 'standard',
+      modifier_mode: 'normal',
+      results: [{ total: 10, critical: false, primary_rolls: [10], terms: [{ notation: '1d20', sides: 20, count: 1, rolls: [10], subtotal: 10 }] }],
+    }]
+    const ctx = {
+      storage: {
+        put: async () => undefined,
+        list: async () => new Map<string, string>(),
+      },
+      waitUntil: (promise: Promise<unknown>) => waitUntilPromises.push(promise),
+      getWebSockets: () => [
+        { send: (message: string) => sentMessages.push(message) } as unknown as WebSocket,
+      ],
+    } as unknown as DurableObjectState
+    const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
+    ;(durableObject as unknown as { room: RoomState | null }).room = room
+
+    await (durableObject as unknown as {
+      applyMessage: (session: { playerId: string }, message: unknown, socket: WebSocket) => Promise<void>
+    }).applyMessage(
+      { playerId: 'player-1' },
+      { type: 'dice.clearHistory', payload: {} },
+      {} as WebSocket,
+    )
+
+    expect(room.dice_rolls).toEqual([])
+    expect(sentMessages.map(message => JSON.parse(message))).toEqual([{
+      type: 'dice.historyCleared',
+      payload: { snapshot_version: 2 },
+    }])
+    await Promise.all(waitUntilPromises)
+  })
+
+  it('handles dice.roll by broadcasting only the generated record and version', async () => {
+    const sentMessages: string[] = []
+    const waitUntilPromises: Promise<unknown>[] = []
+    const ctx = {
+      storage: {
+        put: async () => undefined,
+        list: async () => new Map<string, string>(),
+      },
+      waitUntil: (promise: Promise<unknown>) => waitUntilPromises.push(promise),
+      getWebSockets: () => [
+        { send: (message: string) => sentMessages.push(message) } as unknown as WebSocket,
+      ],
+    } as unknown as DurableObjectState
+    const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
+    ;(durableObject as unknown as { room: RoomState | null }).room = createRoom()
+
+    await (durableObject as unknown as {
+      applyMessage: (session: { playerId: string }, message: unknown, socket: WebSocket) => Promise<void>
+    }).applyMessage(
+      { playerId: 'player-1' },
+      {
+        type: 'dice.roll',
+        payload: {
+          mode: 'dual', modifier_mode: 'advantage', repeat: 1, modifier: 1,
+          dice: [{ sides: 12, count: 2 }],
+        },
+      },
+      {} as WebSocket,
+    )
+
+    expect(sentMessages).toHaveLength(1)
+    const message = JSON.parse(sentMessages[0])
+    expect(message).toMatchObject({
+      type: 'dice.rolled',
+      payload: {
+        roll: {
+          actor_player_id: 'player-1',
+          mode: 'dual',
+          modifier_mode: 'advantage',
+        },
+        snapshot_version: 2,
+      },
+    })
+    expect(message.type).not.toBe('room.updated')
+    expect(message.payload).not.toHaveProperty('state')
+    expect(JSON.stringify(message).length).toBeLessThan(2_000)
     await Promise.all(waitUntilPromises)
   })
 })

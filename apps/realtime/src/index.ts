@@ -63,6 +63,7 @@ import {
   type ResourceTrackerSheet,
   type RoomState,
   type RoomType,
+  type ServerMessage,
 } from '../../../packages/shared/src/index'
 import {
   SOCKET_SESSION_ATTACHMENT_ERROR_CODE,
@@ -717,13 +718,27 @@ export class RoomDurableObject {
         return
 
       case 'dice.roll':
-        this.rollDice(player, message.payload)
-        await this.commit('dice.roll', { waitForPersistence: false })
+        {
+          const roll = this.rollDice(player, message.payload)
+          await this.commit('dice.roll', {
+            waitForPersistence: false,
+            message: snapshotVersion => ({
+              type: 'dice.rolled',
+              payload: { roll, snapshot_version: snapshotVersion },
+            }),
+          })
+        }
         return
 
       case 'dice.clearHistory':
         this.clearDiceHistory()
-        await this.commit('dice.clearHistory', { waitForPersistence: false })
+        await this.commit('dice.clearHistory', {
+          waitForPersistence: false,
+          message: snapshotVersion => ({
+            type: 'dice.historyCleared',
+            payload: { snapshot_version: snapshotVersion },
+          }),
+        })
         return
 
       case 'drawing.submit':
@@ -832,7 +847,7 @@ export class RoomDurableObject {
     }
   }
 
-  private rollDice(player: Player, request: DiceRollRequest): void {
+  private rollDice(player: Player, request: DiceRollRequest): DiceRollRecord {
     const room = this.requireRoom()
     const rolled = rollDicePool(request, secureDiceRandom)
     const record: DiceRollRecord = {
@@ -848,6 +863,7 @@ export class RoomDurableObject {
     }
 
     room.dice_rolls = [...(Array.isArray(room.dice_rolls) ? room.dice_rolls : []), record].slice(-50)
+    return record
   }
 
   private clearDiceHistory(): void {
@@ -1302,12 +1318,16 @@ export class RoomDurableObject {
     }))
   }
 
-  private async commit(reason: string, options: { waitForPersistence?: boolean } = {}): Promise<void> {
+  private async commit(reason: string, options: {
+    waitForPersistence?: boolean
+    message?: (snapshotVersion: number) => ServerMessage
+  } = {}): Promise<void> {
     const room = this.requireRoom()
     room.updated_at = new Date().toISOString()
     room.snapshot_version += 1
     const persistPromise = this.enqueueSave()
-    const updateMessage = { type: 'room.updated', payload: { state: this.publicState(), reason } }
+    const updateMessage: ServerMessage = options.message?.(room.snapshot_version)
+      ?? { type: 'room.updated', payload: { state: this.publicState(), reason } }
 
     if (options.waitForPersistence === false) {
       this.broadcast(updateMessage)

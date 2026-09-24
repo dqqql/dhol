@@ -121,6 +121,32 @@ export const useStore = create<AppStore>((set, get) => {
               set({ connectionStatus: 'connected' })
               return
 
+            case 'dice.rolled':
+              set((state) => {
+                if (!state.room) return state
+                const diceRolls = state.room.dice_rolls.some(roll => roll.id === message.payload.roll.id)
+                  ? state.room.dice_rolls
+                  : [...state.room.dice_rolls, message.payload.roll].slice(-50)
+                return {
+                  room: {
+                    ...state.room,
+                    dice_rolls: diceRolls,
+                    snapshot_version: message.payload.snapshot_version,
+                  },
+                }
+              })
+              return
+
+            case 'dice.historyCleared':
+              set((state) => state.room ? {
+                room: {
+                  ...state.room,
+                  dice_rolls: [],
+                  snapshot_version: message.payload.snapshot_version,
+                },
+              } : state)
+              return
+
             case 'error':
               get().addToast(message.payload.message, 'error')
               return
