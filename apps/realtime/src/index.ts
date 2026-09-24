@@ -93,6 +93,25 @@ interface SessionPayload {
   exp: number
 }
 
+type HtmlPersistence =
+  | { mode: 'upsert'; sheetIds: string[] }
+  | { mode: 'delete'; sheetIds: string[] }
+  | { mode: 'sync-all' }
+
+interface PersistedSheetHtml {
+  id: string
+  sourceHtml?: string
+  compiledHtml?: string
+}
+
+interface RoomPersistenceJob {
+  snapshot: RoomState
+  html?:
+    | { mode: 'upsert'; sheets: PersistedSheetHtml[] }
+    | { mode: 'delete'; sheetIds: string[] }
+    | { mode: 'sync-all'; sheets: PersistedSheetHtml[] }
+}
+
 let _corsAllowedOrigin = '*'
 
 const PLAYER_COLORS = ['#f43f5e', '#2563eb', '#f59e0b', '#10b981', '#a855f7', '#06b6d4']
@@ -432,7 +451,7 @@ export class RoomDurableObject {
       updated_at: now.toISOString(),
     }
 
-    await this.save()
+    await this.enqueueSave()
     await this.scheduleExpiryAlarm(this.requireRoom())
     return json({ state: this.publicState(), player: host })
   }
@@ -494,7 +513,7 @@ export class RoomDurableObject {
     room.updated_at = now.toISOString()
     room.snapshot_version += 1
 
-    await this.save()
+    await this.enqueueSave()
     await this.scheduleExpiryAlarm(room)
     this.broadcast({ type: 'room.updated', payload: { state: this.publicState(), reason: 'admin.expiryUpdated' } })
 
@@ -522,7 +541,7 @@ export class RoomDurableObject {
     player.last_seen_at = new Date().toISOString()
     room.updated_at = new Date().toISOString()
     room.snapshot_version += 1
-    await this.save()
+    await this.enqueueSave()
 
     server.send(JSON.stringify({
       type: 'room.snapshot',
@@ -575,12 +594,17 @@ export class RoomDurableObject {
       return
     }
 
+    let roomBeforeMutation: RoomState | null = null
     try {
+      await this.mustLoad()
+      roomBeforeMutation = structuredClone(this.room)
       await this.applyMessage(session, message, socket)
-      if (message.requestId) this.send(socket, { type: 'ack', requestId: message.requestId, payload: { ok: true } })
     } catch (error) {
+      if (roomBeforeMutation) this.room = roomBeforeMutation
       this.sendError(socket, message.requestId, ERR.INTERNAL_ERROR, messageFrom(error))
+      return
     }
+    if (message.requestId) this.send(socket, { type: 'ack', requestId: message.requestId, payload: { ok: true } })
   }
 
   private async applyMessage(session: SocketSession, message: ClientMessage, socket: WebSocket): Promise<void> {
@@ -599,20 +623,28 @@ export class RoomDurableObject {
 
       case 'gm.importHtmlCharacter':
         this.requireGmPanelRoom()
-        this.importGmCharacter(player, message.payload.fileName, message.payload.html)
-        await this.commit('gm.importHtmlCharacter')
+        await this.commit('gm.importHtmlCharacter', {
+          htmlPersistence: {
+            mode: 'upsert',
+            sheetIds: [this.importGmCharacter(player, message.payload.fileName, message.payload.html)],
+          },
+        })
         return
 
       case 'gm.replaceHtmlCharacter':
         this.requireGmPanelRoom()
         this.replaceGmCharacter(player, message.payload.sheetId, message.payload.fileName, message.payload.html)
-        await this.commit('gm.replaceHtmlCharacter')
+        await this.commit('gm.replaceHtmlCharacter', {
+          htmlPersistence: { mode: 'upsert', sheetIds: [message.payload.sheetId] },
+        })
         return
 
       case 'gm.deleteSheet':
         this.requireGmPanelRoom()
         this.deleteGmSheet(player, message.payload.sheetId)
-        await this.commit('gm.deleteSheet')
+        await this.commit('gm.deleteSheet', {
+          htmlPersistence: { mode: 'delete', sheetIds: [message.payload.sheetId] },
+        })
         return
 
       case 'gm.updateSheet':
@@ -761,7 +793,7 @@ export class RoomDurableObject {
         this.requireImportsEnabled()
         const backup = assertDhRoomBackup(message.payload.backup)
         this.importRoomBackup(backup)
-        await this.commit('room.importRoomBackup')
+        await this.commit('room.importRoomBackup', { htmlPersistence: { mode: 'sync-all' } })
         return
       }
     }
@@ -914,12 +946,13 @@ export class RoomDurableObject {
     }
   }
 
-  private importGmCharacter(player: Player, fileName: string, html: string): void {
+  private importGmCharacter(player: Player, fileName: string, html: string): string {
     const panel = this.requireGmPanelState()
     const entry = createGmSheetEntry(fileName, html)
     panel.sheets.push(entry)
     panel.sheet_order.push(entry.id)
     this.appendGmLog('sheet-import', `${player.nickname} 导入了角色卡 ${entry.parsed_sheet.character_name || entry.source_file_name}`, player)
+    return entry.id
   }
 
   private replaceGmCharacter(player: Player, sheetId: string, fileName: string, html: string): void {
@@ -1321,11 +1354,12 @@ export class RoomDurableObject {
   private async commit(reason: string, options: {
     waitForPersistence?: boolean
     message?: (snapshotVersion: number) => ServerMessage
+    htmlPersistence?: HtmlPersistence
   } = {}): Promise<void> {
     const room = this.requireRoom()
     room.updated_at = new Date().toISOString()
     room.snapshot_version += 1
-    const persistPromise = this.enqueueSave()
+    const persistPromise = this.enqueueSave(options.htmlPersistence)
     const updateMessage: ServerMessage = options.message?.(room.snapshot_version)
       ?? { type: 'room.updated', payload: { state: this.publicState(), reason } }
 
@@ -1339,15 +1373,53 @@ export class RoomDurableObject {
     this.broadcast(updateMessage)
   }
 
-  private enqueueSave(): Promise<void> {
+  private enqueueSave(htmlPersistence?: HtmlPersistence): Promise<void> {
+    const job = this.capturePersistenceJob(htmlPersistence)
     const persistPromise = this.persistQueue.then(
-      () => this.save(),
-      () => this.save(),
+      () => this.saveRoomSnapshot(job),
+      () => this.saveRoomSnapshot(job),
     )
     this.persistQueue = persistPromise.catch((error) => {
       console.error('Room persistence failed', error)
     })
     return persistPromise
+  }
+
+  private capturePersistenceJob(htmlPersistence?: HtmlPersistence): RoomPersistenceJob {
+    const room = this.requireRoom()
+    const snapshot = structuredClone(room)
+    if (snapshot.gm_panel) {
+      snapshot.gm_panel.sheets = snapshot.gm_panel.sheets.map((sheet) => {
+        const { source_html: _sourceHtml, compiled_html: _compiledHtml, ...rest } = sheet
+        return rest
+      })
+    }
+
+    if (!htmlPersistence) return { snapshot }
+    if (htmlPersistence.mode === 'delete') {
+      return {
+        snapshot,
+        html: { mode: 'delete', sheetIds: [...new Set(htmlPersistence.sheetIds)] },
+      }
+    }
+
+    const sheetIds = htmlPersistence.mode === 'upsert'
+      ? new Set(htmlPersistence.sheetIds)
+      : null
+    const sheets = (room.gm_panel?.sheets ?? [])
+      .filter((sheet) => !sheetIds || sheetIds.has(sheet.id))
+      .map((sheet) => ({
+        id: sheet.id,
+        sourceHtml: sheet.source_html,
+        compiledHtml: sheet.compiled_html,
+      }))
+
+    return {
+      snapshot,
+      html: htmlPersistence.mode === 'sync-all'
+        ? { mode: 'sync-all', sheets }
+        : { mode: 'upsert', sheets },
+    }
   }
 
   private async load(): Promise<RoomState | null> {
@@ -1373,53 +1445,54 @@ export class RoomDurableObject {
     return room
   }
 
-  private async save(): Promise<void> {
-    if (!this.room) return
-    const snapshot = structuredClone(this.room)
-    const activeHtmlKeys = new Set<string>()
-    const htmlEntries: Array<[string, string]> = []
-    const activeCompiledHtmlKeys = new Set<string>()
-    const compiledHtmlEntries: Array<[string, string]> = []
+  private async saveRoomSnapshot(job: RoomPersistenceJob): Promise<void> {
+    await this.ctx.storage.transaction(async (txn) => {
+      await txn.put('room', job.snapshot)
+      if (job.html) await this.syncGmSheetHtml(txn, job.html)
+    })
+  }
 
-    if (snapshot.gm_panel) {
-      snapshot.gm_panel.sheets = snapshot.gm_panel.sheets.map((sheet) => {
-        if (sheet.source_html) {
-          const storageKey = getGmSheetHtmlStorageKey(sheet.id)
-          activeHtmlKeys.add(storageKey)
-          htmlEntries.push([storageKey, sheet.source_html])
-        }
-        if (sheet.compiled_html) {
-          const storageKey = getGmSheetCompiledHtmlStorageKey(sheet.id)
-          activeCompiledHtmlKeys.add(storageKey)
-          compiledHtmlEntries.push([storageKey, sheet.compiled_html])
-        }
-
-        const { source_html: _sourceHtml, compiled_html: _compiledHtml, ...rest } = sheet
-        return rest
-      })
-    }
-
-    await this.ctx.storage.put('room', snapshot)
-
-    for (const [storageKey, html] of htmlEntries) {
-      await this.ctx.storage.put(storageKey, html)
-    }
-    for (const [storageKey, html] of compiledHtmlEntries) {
-      await this.ctx.storage.put(storageKey, html)
-    }
-
-    const storedHtmlEntries = await this.ctx.storage.list<string>({ prefix: GM_SHEET_HTML_STORAGE_KEY_PREFIX })
-    for (const storageKey of storedHtmlEntries.keys()) {
-      if (!activeHtmlKeys.has(storageKey)) {
-        await this.ctx.storage.delete(storageKey)
+  private async syncGmSheetHtml(
+    txn: DurableObjectTransaction,
+    html: NonNullable<RoomPersistenceJob['html']>,
+  ): Promise<void> {
+    if (html.mode === 'delete') {
+      for (const sheetId of html.sheetIds) {
+        await txn.delete(getGmSheetHtmlStorageKey(sheetId))
+        await txn.delete(getGmSheetCompiledHtmlStorageKey(sheetId))
       }
+      return
     }
-    const storedCompiledHtmlEntries = await this.ctx.storage.list<string>({ prefix: GM_SHEET_COMPILED_HTML_STORAGE_KEY_PREFIX })
-    for (const storageKey of storedCompiledHtmlEntries.keys()) {
-      if (!activeCompiledHtmlKeys.has(storageKey)) {
-        await this.ctx.storage.delete(storageKey)
-      }
+
+    for (const sheet of html.sheets) {
+      await this.persistGmSheetHtml(txn, sheet)
     }
+    if (html.mode !== 'sync-all') return
+
+    const activeSourceKeys = new Set(
+      html.sheets.filter((sheet) => sheet.sourceHtml).map((sheet) => getGmSheetHtmlStorageKey(sheet.id)),
+    )
+    const activeCompiledKeys = new Set(
+      html.sheets.filter((sheet) => sheet.compiledHtml).map((sheet) => getGmSheetCompiledHtmlStorageKey(sheet.id)),
+    )
+    const storedSource = await txn.list<string>({ prefix: GM_SHEET_HTML_STORAGE_KEY_PREFIX })
+    for (const key of storedSource.keys()) {
+      if (!activeSourceKeys.has(key)) await txn.delete(key)
+    }
+    const storedCompiled = await txn.list<string>({ prefix: GM_SHEET_COMPILED_HTML_STORAGE_KEY_PREFIX })
+    for (const key of storedCompiled.keys()) {
+      if (!activeCompiledKeys.has(key)) await txn.delete(key)
+    }
+  }
+
+  private async persistGmSheetHtml(txn: DurableObjectTransaction, sheet: PersistedSheetHtml): Promise<void> {
+    const sourceKey = getGmSheetHtmlStorageKey(sheet.id)
+    if (sheet.sourceHtml) await txn.put(sourceKey, sheet.sourceHtml)
+    else await txn.delete(sourceKey)
+
+    const compiledKey = getGmSheetCompiledHtmlStorageKey(sheet.id)
+    if (sheet.compiledHtml) await txn.put(compiledKey, sheet.compiledHtml)
+    else await txn.delete(compiledKey)
   }
 
   private async hydrateStoredGmSheetHtml(room: RoomState): Promise<void> {

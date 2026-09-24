@@ -99,12 +99,20 @@ function createContext(initialSockets: Array<{ socket: WebSocket; tags?: string[
   const sockets = new Map<WebSocket, string[]>(
     initialSockets.map(({ socket, tags = [] }) => [socket, tags]),
   )
+  const put = vi.fn(async () => undefined)
+  const list = vi.fn(async () => new Map<string, string>())
+  const deleteEntry = vi.fn(async () => undefined)
   const context = {
     storage: {
       get: vi.fn(async () => undefined),
-      put: vi.fn(async () => undefined),
-      list: vi.fn(async () => new Map<string, string>()),
-      delete: vi.fn(async () => undefined),
+      put,
+      list,
+      delete: deleteEntry,
+      transaction: vi.fn((closure: (txn: DurableObjectTransaction) => Promise<unknown>) => closure({
+        put,
+        list,
+        delete: deleteEntry,
+      } as unknown as DurableObjectTransaction)),
       deleteAll: vi.fn(async () => undefined),
       deleteAlarm: vi.fn(async () => undefined),
       setAlarm: vi.fn(async () => undefined),
