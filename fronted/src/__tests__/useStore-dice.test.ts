@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DiceRollRecord, RoomSession, RoomState, ServerMessage } from '@dhgc/shared'
 
 const realtimeMock = vi.hoisted(() => ({
-  instances: [] as Array<{ emit: (message: ServerMessage) => void }>,
+  instances: [] as Array<{
+    emit: (message: ServerMessage) => void
+    getManualReconnectCount: () => number
+  }>,
   room: null as RoomState | null,
   session: null as RoomSession | null,
 }))
@@ -16,9 +19,13 @@ vi.mock('@/lib/realtime', () => ({
   RoomSocketConnection: class {
     isConnected = true
     private handlers: { onMessage: (message: ServerMessage) => void }
+    private manualReconnectCount = 0
     constructor(_url: string, handlers: { onMessage: (message: ServerMessage) => void }) {
       this.handlers = handlers
-      realtimeMock.instances.push({ emit: message => this.handlers.onMessage(message) })
+      realtimeMock.instances.push({
+        emit: message => this.handlers.onMessage(message),
+        getManualReconnectCount: () => this.manualReconnectCount,
+      })
     }
     connect() {
       this.handlers.onMessage({
@@ -27,7 +34,7 @@ vi.mock('@/lib/realtime', () => ({
       })
     }
     dispose() {}
-    manualReconnect() {}
+    manualReconnect() { this.manualReconnectCount += 1 }
     send() { return true }
   },
 }))
@@ -103,29 +110,90 @@ describe('incremental dice messages', () => {
     })
   })
 
-  it('deduplicates roll ids and retains only the newest 50 rolls', async () => {
+  it('retains only the newest 50 rolls', async () => {
     const connection = await connect()
     for (let index = 0; index < 51; index += 1) {
       connection.emit({ type: 'dice.rolled', payload: { roll: createRoll(`roll-${index}`), snapshot_version: index + 2 } })
     }
-    connection.emit({ type: 'dice.rolled', payload: { roll: createRoll('roll-50'), snapshot_version: 53 } })
 
     expect(useStore.getState().room?.dice_rolls).toHaveLength(50)
     expect(useStore.getState().room?.dice_rolls.map(roll => roll.id)).toEqual(
       Array.from({ length: 50 }, (_, index) => `roll-${index + 1}`),
     )
-    expect(useStore.getState().room?.snapshot_version).toBe(53)
+    expect(useStore.getState().room?.snapshot_version).toBe(52)
+  })
+
+  it('deduplicates a replayed roll id without accepting its repeated version', async () => {
+    const connection = await connect()
+    const message = { type: 'dice.rolled', payload: { roll: createRoll('roll-1'), snapshot_version: 2 } } as const
+    connection.emit(message)
+    connection.emit(message)
+
+    expect(useStore.getState().room?.dice_rolls.map(roll => roll.id)).toEqual(['roll-1'])
+    expect(useStore.getState().room?.snapshot_version).toBe(2)
+  })
+
+  it('deduplicates a roll id while accepting the next sequential version', async () => {
+    const connection = await connect()
+    connection.emit({ type: 'dice.rolled', payload: { roll: createRoll('roll-1'), snapshot_version: 2 } })
+    connection.emit({ type: 'dice.rolled', payload: { roll: createRoll('roll-1'), snapshot_version: 3 } })
+
+    expect(useStore.getState().room?.dice_rolls.map(roll => roll.id)).toEqual(['roll-1'])
+    expect(useStore.getState().room?.snapshot_version).toBe(3)
   })
 
   it('clears dice history without replacing the room and updates the snapshot version', async () => {
     realtimeMock.room!.dice_rolls = [createRoll('roll-1')]
     const connection = await connect()
-    connection.emit({ type: 'dice.historyCleared', payload: { snapshot_version: 4 } })
+    connection.emit({ type: 'dice.historyCleared', payload: { snapshot_version: 2 } })
 
     expect(useStore.getState().room).toMatchObject({
       room_name: 'Incremental dice test',
       dice_rolls: [],
-      snapshot_version: 4,
+      snapshot_version: 2,
     })
+  })
+
+  it('ignores rolls with the current or an older snapshot version', async () => {
+    realtimeMock.room!.snapshot_version = 5
+    realtimeMock.room!.dice_rolls = [createRoll('current-roll')]
+    const connection = await connect()
+
+    connection.emit({ type: 'dice.rolled', payload: { roll: createRoll('same-version'), snapshot_version: 5 } })
+    connection.emit({ type: 'dice.rolled', payload: { roll: createRoll('older-version'), snapshot_version: 4 } })
+
+    expect(useStore.getState().room?.dice_rolls.map(roll => roll.id)).toEqual(['current-roll'])
+    expect(useStore.getState().room?.snapshot_version).toBe(5)
+    expect(connection.getManualReconnectCount()).toBe(0)
+  })
+
+  it('does not resurrect history when an old roll arrives after a newer clear', async () => {
+    realtimeMock.room!.snapshot_version = 11
+    const connection = await connect()
+
+    connection.emit({ type: 'dice.rolled', payload: { roll: createRoll('roll-12'), snapshot_version: 12 } })
+    connection.emit({ type: 'dice.historyCleared', payload: { snapshot_version: 13 } })
+    connection.emit({ type: 'dice.rolled', payload: { roll: createRoll('late-roll-12'), snapshot_version: 12 } })
+
+    expect(useStore.getState().room?.dice_rolls).toEqual([])
+    expect(useStore.getState().room?.snapshot_version).toBe(13)
+  })
+
+  it('does not let an old clear remove newer roll history', async () => {
+    const connection = await connect()
+    connection.emit({ type: 'dice.rolled', payload: { roll: createRoll('roll-2'), snapshot_version: 2 } })
+    connection.emit({ type: 'dice.historyCleared', payload: { snapshot_version: 2 } })
+
+    expect(useStore.getState().room?.dice_rolls.map(roll => roll.id)).toEqual(['roll-2'])
+    expect(useStore.getState().room?.snapshot_version).toBe(2)
+  })
+
+  it('does not apply a version gap and triggers a full-state reconnect', async () => {
+    const connection = await connect()
+    connection.emit({ type: 'dice.rolled', payload: { roll: createRoll('gap-roll'), snapshot_version: 3 } })
+
+    expect(useStore.getState().room?.dice_rolls).toEqual([])
+    expect(useStore.getState().room?.snapshot_version).toBe(1)
+    expect(connection.getManualReconnectCount()).toBe(1)
   })
 })

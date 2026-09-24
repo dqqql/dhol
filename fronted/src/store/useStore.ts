@@ -105,6 +105,19 @@ export const useStore = create<AppStore>((set, get) => {
         onMessage: (message) => {
           if (activeConnection !== connection) return
 
+          const shouldApplyIncrementalVersion = (incomingVersion: number) => {
+            const currentRoom = get().room
+            if (!currentRoom || incomingVersion <= currentRoom.snapshot_version) return false
+            if (incomingVersion > currentRoom.snapshot_version + 1) {
+              if (get().connectionStatus === 'connected') {
+                set({ connectionStatus: 'connecting' })
+                connection.manualReconnect()
+              }
+              return false
+            }
+            return true
+          }
+
           switch (message.type) {
             case 'room.snapshot':
               receivedSnapshot = true
@@ -122,6 +135,7 @@ export const useStore = create<AppStore>((set, get) => {
               return
 
             case 'dice.rolled':
+              if (!shouldApplyIncrementalVersion(message.payload.snapshot_version)) return
               set((state) => {
                 if (!state.room) return state
                 const diceRolls = state.room.dice_rolls.some(roll => roll.id === message.payload.roll.id)
@@ -138,6 +152,7 @@ export const useStore = create<AppStore>((set, get) => {
               return
 
             case 'dice.historyCleared':
+              if (!shouldApplyIncrementalVersion(message.payload.snapshot_version)) return
               set((state) => state.room ? {
                 room: {
                   ...state.room,
