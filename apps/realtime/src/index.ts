@@ -68,6 +68,7 @@ import {
   SOCKET_SESSION_ATTACHMENT_ERROR_CODE,
   SOCKET_SESSION_ATTACHMENT_ERROR_MESSAGE,
   SocketSessionAttachmentError,
+  getPlayerTag,
   prepareSocketSession,
   readSocketSessionAttachment,
   type SocketSession,
@@ -320,8 +321,7 @@ async function roomSessionResponse(request: Request, env: Env, state: RoomState,
 export class RoomDurableObject {
 
   private room: RoomState | null = null
-  private sockets = new Map<WebSocket, SocketSession>()
-  private closedSockets = new WeakSet<WebSocket>()
+  private isClosingRoom = false
   private persistQueue: Promise<void> = Promise.resolve()
   // WebSocket 速率限制：每个连接每秒最多 30 条消息
   private wsRateLimitMap = new Map<WebSocket, { count: number; resetAt: number }>()
@@ -368,6 +368,22 @@ export class RoomDurableObject {
     await this.scheduleExpiryAlarm(room)
   }
 
+  async webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): Promise<void> {
+    try {
+      await this.handleMessage(socket, message)
+    } catch (error) {
+      this.sendError(socket, undefined, 'handler_error', messageFrom(error))
+    }
+  }
+
+  async webSocketClose(socket: WebSocket, _code: number, _reason: string, _wasClean: boolean): Promise<void> {
+    await this.disconnect(socket)
+  }
+
+  async webSocketError(socket: WebSocket, _error: unknown): Promise<void> {
+    await this.disconnect(socket)
+  }
+
   private async create(request: Request): Promise<Response> {
     await this.load()
     if (this.room) {
@@ -377,6 +393,7 @@ export class RoomDurableObject {
         return json({ error: 'room_exists' }, { status: 409 })
       }
     }
+    this.isClosingRoom = false
 
     const body = await request.json() as {
       roomName: string
@@ -497,25 +514,8 @@ export class RoomDurableObject {
 
     const pair = new WebSocketPair()
     const [client, server] = Object.values(pair) as [WebSocket, WebSocket]
-    server.accept()
-
-    const socketRegistration = prepareSocketSession(server, player.id, player.nickname)
-    this.closedSockets.delete(server)
-    this.sockets.set(server, socketRegistration.session)
-    // Stage 3 will pass socketRegistration.tags to the hibernation accept call.
-    server.addEventListener('message', event => {
-      void this.handleMessage(server, event.data).catch(error => {
-        this.sendError(server, undefined, 'handler_error', messageFrom(error))
-      })
-    })
-
-    server.addEventListener('close', () => {
-      void this.disconnect(server)
-    })
-
-    server.addEventListener('error', () => {
-      void this.disconnect(server)
-    })
+    this.ctx.acceptWebSocket(server, [getPlayerTag(player.id)])
+    prepareSocketSession(server, player.id, player.nickname)
 
     player.is_online = true
     player.last_seen_at = new Date().toISOString()
@@ -545,11 +545,9 @@ export class RoomDurableObject {
   }
 
   private async handleMessage(socket: WebSocket, data: string | ArrayBuffer): Promise<void> {
-    if (this.closedSockets.has(socket)) return
-
-    let session: SocketSession | undefined
+    let session: SocketSession
     try {
-      session = this.sockets.get(socket) ?? this.restoreSocketSession(socket) ?? undefined
+      session = readSocketSessionAttachment(socket)
     } catch (error) {
       if (error instanceof SocketSessionAttachmentError) {
         this.sendError(
@@ -562,7 +560,6 @@ export class RoomDurableObject {
       }
       return
     }
-    if (!session) return
 
     if (!this.checkWsRateLimit(socket)) {
       this.sendError(socket, undefined, ERR.RATE_LIMITED, '消息发送过于频繁，连接已断开')
@@ -1204,17 +1201,22 @@ export class RoomDurableObject {
   }
 
   private async disconnect(socket: WebSocket): Promise<void> {
-    this.closedSockets.add(socket)
-    const session = this.sockets.get(socket)
-    if (!session) return
-    this.sockets.delete(socket)
+    if (this.isClosingRoom) return
 
-    if (Array.from(this.sockets.values()).some(item => item.playerId === session.playerId)) {
+    let session: SocketSession
+    try {
+      session = readSocketSessionAttachment(socket)
+    } catch (error) {
+      if (!(error instanceof SocketSessionAttachmentError)) throw error
+      return
+    }
+
+    if (this.hasOtherPlayerSocket(session.playerId, socket)) {
       return
     }
 
     const room = await this.load()
-    if (Array.from(this.sockets.values()).some(item => item.playerId === session.playerId)) {
+    if (this.hasOtherPlayerSocket(session.playerId, socket)) {
       return
     }
 
@@ -1230,11 +1232,8 @@ export class RoomDurableObject {
     await this.commit('player.offline')
   }
 
-  private restoreSocketSession(socket: WebSocket): SocketSession | null {
-    if (this.closedSockets.has(socket)) return null
-    const session = readSocketSessionAttachment(socket)
-    this.sockets.set(socket, session)
-    return session
+  private hasOtherPlayerSocket(playerId: string, excludedSocket: WebSocket): boolean {
+    return this.ctx.getWebSockets(getPlayerTag(playerId)).some(socket => socket !== excludedSocket)
   }
 
   private transferHostIfNeeded(): void {
@@ -1471,10 +1470,8 @@ export class RoomDurableObject {
   }
 
   private async purgeRoom(reason: 'expired'): Promise<void> {
-    const sockets = Array.from(this.sockets.keys())
-    for (const socket of sockets) {
-      this.closedSockets.add(socket)
-    }
+    this.isClosingRoom = true
+    const sockets = this.ctx.getWebSockets()
 
     for (const socket of sockets) {
       try {
@@ -1484,7 +1481,6 @@ export class RoomDurableObject {
       }
     }
 
-    this.sockets.clear()
     this.room = null
     await this.ctx.storage.deleteAlarm()
     await this.ctx.storage.deleteAll()
@@ -1611,12 +1607,15 @@ export class RoomDurableObject {
 
   private broadcast(message: unknown): void {
     const encoded = JSON.stringify(message)
-    for (const socket of this.sockets.keys()) {
+    for (const socket of this.ctx.getWebSockets()) {
       try {
         socket.send(encoded)
       } catch {
-        this.closedSockets.add(socket)
-        this.sockets.delete(socket)
+        try {
+          socket.close(1011, 'Broadcast failed')
+        } catch {
+          // The runtime will remove an already-closed socket from getWebSockets().
+        }
       }
     }
   }

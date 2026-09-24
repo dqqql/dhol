@@ -71,13 +71,13 @@ describe('RoomDurableObject commit latency', () => {
       waitUntil: (promise: Promise<unknown>) => {
         waitUntilPromises.push(promise)
       },
+      getWebSockets: () => [
+        { send: (message: string) => sentMessages.push(message) } as unknown as WebSocket,
+      ],
     } as unknown as DurableObjectState
 
     const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
     ;(durableObject as unknown as { room: RoomState | null }).room = createRoom()
-    ;(durableObject as unknown as { sockets: Map<WebSocket, unknown> }).sockets = new Map([
-      [{ send: (message: string) => sentMessages.push(message) } as unknown as WebSocket, {}],
-    ])
 
     const commitPromise = (durableObject as unknown as {
       commit: (reason: string, options: { waitForPersistence: boolean }) => Promise<void>

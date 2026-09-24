@@ -14,6 +14,7 @@ import type { RoomState } from '../../../../packages/shared/src/index'
 
 class FakeSocket {
   accepted = false
+  readyState = 1
   serializedAttachment: unknown = undefined
   deserializedAttachment: unknown = null
   sentMessages: string[] = []
@@ -27,6 +28,7 @@ class FakeSocket {
 
   serializeAttachment(attachment: unknown): void {
     this.serializedAttachment = attachment
+    this.deserializedAttachment = attachment
   }
 
   deserializeAttachment(): unknown {
@@ -44,6 +46,7 @@ class FakeSocket {
   close(code?: number, reason?: string): void {
     this.closeCode = code
     this.closeReason = reason
+    this.readyState = 3
   }
 }
 
@@ -92,8 +95,11 @@ function createRoom(): RoomState {
   }
 }
 
-function createContext() {
-  return {
+function createContext(initialSockets: Array<{ socket: WebSocket; tags?: string[] }> = []) {
+  const sockets = new Map<WebSocket, string[]>(
+    initialSockets.map(({ socket, tags = [] }) => [socket, tags]),
+  )
+  const context = {
     storage: {
       get: vi.fn(async () => undefined),
       put: vi.fn(async () => undefined),
@@ -105,7 +111,20 @@ function createContext() {
       getAlarm: vi.fn(async () => null),
     },
     waitUntil: vi.fn(),
-  } as unknown as DurableObjectState
+    acceptWebSocket: vi.fn((socket: WebSocket, tags: string[] = []) => {
+      sockets.set(socket, tags)
+      if ('accepted' in socket) {
+        ;(socket as unknown as FakeSocket).accepted = true
+      }
+    }),
+    getWebSockets: vi.fn((tag?: string) => Array.from(sockets.entries())
+      .filter(([socket, tags]) => (
+        (socket as unknown as { readyState?: number }).readyState !== 3
+        && (!tag || tags.includes(tag))
+      ))
+      .map(([socket]) => socket)),
+  }
+  return context as unknown as DurableObjectState & typeof context
 }
 
 function createDeferred<T>() {
@@ -156,8 +175,9 @@ describe('socket session connection integration', () => {
       }
     })
 
+    const ctx = createContext()
     try {
-      const durableObject = new RoomDurableObject(createContext(), {
+      const durableObject = new RoomDurableObject(ctx, {
         SESSION_SECRET: 'test-secret',
         ALLOWED_ORIGIN: '*',
       } as never)
@@ -177,12 +197,13 @@ describe('socket session connection integration', () => {
         nickname: 'Host',
       })
       expect(Object.keys(pair?.[1].serializedAttachment as object)).toEqual(['playerId', 'nickname'])
+      expect(ctx.acceptWebSocket).toHaveBeenCalledWith(pair?.[1], ['player:player-1'])
     } finally {
       vi.unstubAllGlobals()
     }
   })
 
-  it('registers standard websocket listeners before persistence completes', async () => {
+  it('registers the hibernatable websocket before persistence completes', async () => {
     vi.stubGlobal('WebSocketPair', FakeWebSocketPair)
     vi.stubGlobal('Response', class {
       readonly status: number
@@ -215,9 +236,8 @@ describe('socket session connection integration', () => {
 
         const pair = FakeWebSocketPair.lastPair
         expect(pair?.[1].accepted).toBe(true)
-        expect(pair?.[1].listeners.has('message')).toBe(true)
-        expect(pair?.[1].listeners.has('close')).toBe(true)
-        expect(pair?.[1].listeners.has('error')).toBe(true)
+        expect(ctx.acceptWebSocket).toHaveBeenCalledWith(pair?.[1], ['player:player-1'])
+        expect(pair?.[1].listeners.size).toBe(0)
 
         saveGate.resolve(undefined)
         const response = await responsePromise
@@ -234,140 +254,26 @@ describe('socket session connection integration', () => {
 
 describe('socket session disconnects', () => {
   it('keeps a player online while another socket for that player remains', async () => {
-    const ctx = createContext()
-    const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
     const room = createRoom()
-    const firstSocket = {} as WebSocket
-    const secondSocket = {} as WebSocket
+    const firstSocket = new FakeSocket()
+    const secondSocket = new FakeSocket()
+    firstSocket.deserializedAttachment = { playerId: 'player-1', nickname: 'Host' }
+    secondSocket.deserializedAttachment = { playerId: 'player-1', nickname: 'Host' }
+    const ctx = createContext([
+      { socket: firstSocket as unknown as WebSocket, tags: ['player:player-1'] },
+      { socket: secondSocket as unknown as WebSocket, tags: ['player:player-1'] },
+    ])
+    const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
 
     ;(durableObject as unknown as { room: RoomState | null }).room = room
-    ;(durableObject as unknown as { sockets: Map<WebSocket, { playerId: string; nickname: string }> }).sockets = new Map([
-      [firstSocket, { playerId: 'player-1', nickname: 'Host' }],
-      [secondSocket, { playerId: 'player-1', nickname: 'Host' }],
-    ])
-
-    await (durableObject as unknown as { disconnect(socket: WebSocket): Promise<void> }).disconnect(firstSocket)
+    firstSocket.readyState = 3
+    await durableObject.webSocketClose(firstSocket as unknown as WebSocket, 1000, '', true)
 
     expect(room.players[0].is_online).toBe(true)
     expect((ctx.storage.put as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled()
   })
 
-  it('does not restore or persist a socket after the sockets map has been cleared', async () => {
-    const ctx = createContext()
-    const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
-    const room = createRoom()
-    const socket = new FakeSocket()
-    socket.deserializedAttachment = { playerId: 'player-1', nickname: 'Host' }
-    const sockets = new Map<WebSocket, { playerId: string; nickname: string }>([
-      [socket as unknown as WebSocket, { playerId: 'player-1', nickname: 'Host' }],
-    ])
-
-    ;(durableObject as unknown as { room: RoomState | null }).room = room
-    ;(durableObject as unknown as { sockets: Map<WebSocket, { playerId: string; nickname: string }> }).sockets = sockets
-    sockets.clear()
-
-    await (durableObject as unknown as { disconnect(socket: WebSocket): Promise<void> }).disconnect(
-      socket as unknown as WebSocket,
-    )
-
-    expect(sockets.size).toBe(0)
-    expect(room.players[0].is_online).toBe(true)
-    expect(ctx.storage.put).not.toHaveBeenCalled()
-
-    await (durableObject as unknown as {
-      handleMessage(socket: WebSocket, data: string): Promise<void>
-    }).handleMessage(socket as unknown as WebSocket, JSON.stringify({
-      type: 'ping',
-      requestId: 'request-after-disconnect',
-    }))
-
-    expect(sockets.size).toBe(0)
-    expect(socket.sentMessages).toHaveLength(0)
-  })
-
-  it('does not restore a socket after purge closes and clears the room', async () => {
-    const ctx = createContext()
-    const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
-    const room = createRoom()
-    const socket = new FakeSocket()
-    socket.deserializedAttachment = { playerId: 'player-1', nickname: 'Host' }
-    const sockets = new Map<WebSocket, { playerId: string; nickname: string }>([
-      [socket as unknown as WebSocket, { playerId: 'player-1', nickname: 'Host' }],
-    ])
-
-    ;(durableObject as unknown as { room: RoomState | null }).room = room
-    ;(durableObject as unknown as { sockets: Map<WebSocket, { playerId: string; nickname: string }> }).sockets = sockets
-
-    await (durableObject as unknown as { purgeRoom(reason: 'expired'): Promise<void> }).purgeRoom('expired')
-    await (durableObject as unknown as {
-      handleMessage(socket: WebSocket, data: string): Promise<void>
-    }).handleMessage(socket as unknown as WebSocket, JSON.stringify({
-      type: 'ping',
-      requestId: 'request-after-purge',
-    }))
-
-    expect(sockets.size).toBe(0)
-    expect(socket.sentMessages).toHaveLength(0)
-  })
-
-  it('does not restore a socket after broadcast removes it because send failed', async () => {
-    const durableObject = new RoomDurableObject(createContext(), { ALLOWED_ORIGIN: '*' } as never)
-    const room = createRoom()
-    const socket = new FakeSocket()
-    socket.deserializedAttachment = { playerId: 'player-1', nickname: 'Host' }
-    let sendAttempts = 0
-    socket.send = (message: string) => {
-      if (sendAttempts++ === 0) throw new Error('socket is closed')
-      socket.sentMessages.push(message)
-    }
-    const sockets = new Map<WebSocket, { playerId: string; nickname: string }>([
-      [socket as unknown as WebSocket, { playerId: 'player-1', nickname: 'Host' }],
-    ])
-
-    ;(durableObject as unknown as { room: RoomState | null }).room = room
-    ;(durableObject as unknown as { sockets: Map<WebSocket, { playerId: string; nickname: string }> }).sockets = sockets
-
-    ;(durableObject as unknown as { broadcast(message: unknown): void }).broadcast({
-      type: 'room.updated',
-    })
-    await (durableObject as unknown as {
-      handleMessage(socket: WebSocket, data: string): Promise<void>
-    }).handleMessage(socket as unknown as WebSocket, JSON.stringify({
-      type: 'ping',
-      requestId: 'request-after-broadcast-failure',
-    }))
-
-    expect(sockets.size).toBe(0)
-    expect(socket.sentMessages).toHaveLength(0)
-  })
-
-  it('keeps a player online when a replacement socket connects while disconnect waits', async () => {
-    const ctx = createContext()
-    const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
-    const room = createRoom()
-    const oldSocket = {} as WebSocket
-    const replacementSocket = {} as WebSocket
-    const sockets = new Map<WebSocket, { playerId: string; nickname: string }>([
-      [oldSocket, { playerId: 'player-1', nickname: 'Host' }],
-    ])
-
-    ;(durableObject as unknown as { room: RoomState | null }).room = room
-    ;(durableObject as unknown as { sockets: Map<WebSocket, { playerId: string; nickname: string }> }).sockets = sockets
-
-    const disconnectPromise = (durableObject as unknown as {
-      disconnect(socket: WebSocket): Promise<void>
-    }).disconnect(oldSocket)
-    sockets.set(replacementSocket, { playerId: 'player-1', nickname: 'Host' })
-
-    await disconnectPromise
-
-    expect(room.players[0].is_online).toBe(true)
-    expect(ctx.storage.put).not.toHaveBeenCalled()
-  })
-
-  it('does not persist or broadcast again when disconnect is repeated', async () => {
-    const ctx = createContext()
-    const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
+  it('marks the player offline when their last tagged socket closes', async () => {
     const room = createRoom()
     room.players.push({
       id: 'player-2',
@@ -380,20 +286,146 @@ describe('socket session disconnects', () => {
     })
     const socket = new FakeSocket()
     socket.deserializedAttachment = { playerId: 'player-1', nickname: 'Host' }
+    socket.readyState = 3
     const observer = new FakeSocket()
+    observer.deserializedAttachment = { playerId: 'player-2', nickname: 'Guest' }
+    const ctx = createContext([
+      { socket: socket as unknown as WebSocket, tags: ['player:player-1'] },
+      { socket: observer as unknown as WebSocket, tags: ['player:player-2'] },
+    ])
+    const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
 
     ;(durableObject as unknown as { room: RoomState | null }).room = room
-    ;(durableObject as unknown as { sockets: Map<WebSocket, { playerId: string; nickname: string }> }).sockets = new Map([
-      [socket as unknown as WebSocket, { playerId: 'player-1', nickname: 'Host' }],
-      [observer as unknown as WebSocket, { playerId: 'player-2', nickname: 'Guest' }],
+    await durableObject.webSocketClose(socket as unknown as WebSocket, 1000, '', true)
+
+    expect(room.players.find(player => player.id === 'player-1')?.is_online).toBe(false)
+    expect(ctx.storage.put).toHaveBeenCalledOnce()
+    expect(observer.sentMessages).toHaveLength(1)
+    expect(JSON.parse(observer.sentMessages[0])).toMatchObject({
+      type: 'room.updated',
+      payload: { reason: 'player.offline' },
+    })
+  })
+
+  it('does not persist an invalid attachment during close handling', async () => {
+    const ctx = createContext()
+    const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
+    const room = createRoom()
+    const socket = new FakeSocket()
+    socket.deserializedAttachment = null
+
+    ;(durableObject as unknown as { room: RoomState | null }).room = room
+    await durableObject.webSocketClose(socket as unknown as WebSocket, 1006, '', false)
+
+    expect(room.players[0].is_online).toBe(true)
+    expect(ctx.storage.put).not.toHaveBeenCalled()
+  })
+
+  it('handles websocket errors through the hibernation event handler', async () => {
+    const room = createRoom()
+    const socket = new FakeSocket()
+    socket.deserializedAttachment = { playerId: 'player-1', nickname: 'Host' }
+    socket.readyState = 3
+    const ctx = createContext([
+      { socket: socket as unknown as WebSocket, tags: ['player:player-1'] },
     ])
+    const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
+    ;(durableObject as unknown as { room: RoomState | null }).room = room
 
-    const disconnect = (durableObject as unknown as {
-      disconnect(socket: WebSocket): Promise<void>
-    }).disconnect
+    await durableObject.webSocketError(socket as unknown as WebSocket, new Error('connection failed'))
 
-    await disconnect.call(durableObject, socket as unknown as WebSocket)
-    await disconnect.call(durableObject, socket as unknown as WebSocket)
+    expect(room.players[0].is_online).toBe(false)
+    expect(ctx.storage.put).toHaveBeenCalledOnce()
+  })
+
+  it('closes every hibernatable socket when the room expires', async () => {
+    const socket = new FakeSocket()
+    socket.deserializedAttachment = { playerId: 'player-1', nickname: 'Host' }
+    const observer = new FakeSocket()
+    const ctx = createContext([
+      { socket: socket as unknown as WebSocket },
+      { socket: observer as unknown as WebSocket },
+    ])
+    const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
+    const room = createRoom()
+
+    ;(durableObject as unknown as { room: RoomState | null }).room = room
+    await (durableObject as unknown as { purgeRoom(reason: 'expired'): Promise<void> }).purgeRoom('expired')
+
+    expect(socket.closeCode).toBe(1001)
+    expect(observer.closeCode).toBe(1001)
+    expect(ctx.storage.deleteAlarm).toHaveBeenCalledOnce()
+    expect(ctx.storage.deleteAll).toHaveBeenCalledOnce()
+
+    await durableObject.webSocketClose(socket as unknown as WebSocket, 1001, 'Room expired', true)
+    expect(ctx.storage.put).not.toHaveBeenCalled()
+  })
+
+  it('closes a socket whose broadcast send fails and continues broadcasting', () => {
+    const socket = new FakeSocket()
+    socket.send = () => { throw new Error('socket is closed') }
+    const observer = new FakeSocket()
+    const ctx = createContext([
+      { socket: socket as unknown as WebSocket },
+      { socket: observer as unknown as WebSocket },
+    ])
+    const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
+
+    ;(durableObject as unknown as { broadcast(message: unknown): void }).broadcast({
+      type: 'room.updated',
+    })
+
+    expect(socket.closeCode).toBe(1011)
+    expect(observer.sentMessages).toHaveLength(1)
+  })
+
+  it('keeps a player online when a replacement socket connects while disconnect waits', async () => {
+    const room = createRoom()
+    const oldSocket = new FakeSocket()
+    oldSocket.deserializedAttachment = { playerId: 'player-1', nickname: 'Host' }
+    const replacementSocket = new FakeSocket()
+    replacementSocket.deserializedAttachment = { playerId: 'player-1', nickname: 'Host' }
+    const ctx = createContext([
+      { socket: oldSocket as unknown as WebSocket, tags: ['player:player-1'] },
+    ])
+    const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
+
+    ;(durableObject as unknown as { room: RoomState | null }).room = room
+    oldSocket.readyState = 3
+    const disconnectPromise = durableObject.webSocketClose(oldSocket as unknown as WebSocket, 1000, '', true)
+    ctx.acceptWebSocket(replacementSocket as unknown as WebSocket, ['player:player-1'])
+
+    await disconnectPromise
+
+    expect(room.players[0].is_online).toBe(true)
+    expect(ctx.storage.put).not.toHaveBeenCalled()
+  })
+
+  it('does not persist or broadcast again when disconnect is repeated', async () => {
+    const room = createRoom()
+    room.players.push({
+      id: 'player-2',
+      nickname: 'Guest',
+      color: '#2563eb',
+      is_host: false,
+      is_online: true,
+      joined_at: '2026-07-05T00:00:00.000Z',
+      last_seen_at: '2026-07-05T00:00:00.000Z',
+    })
+    const socket = new FakeSocket()
+    socket.deserializedAttachment = { playerId: 'player-1', nickname: 'Host' }
+    socket.readyState = 3
+    const observer = new FakeSocket()
+    observer.deserializedAttachment = { playerId: 'player-2', nickname: 'Guest' }
+    const ctx = createContext([
+      { socket: socket as unknown as WebSocket, tags: ['player:player-1'] },
+      { socket: observer as unknown as WebSocket, tags: ['player:player-2'] },
+    ])
+    const durableObject = new RoomDurableObject(ctx, { ALLOWED_ORIGIN: '*' } as never)
+
+    ;(durableObject as unknown as { room: RoomState | null }).room = room
+    await durableObject.webSocketClose(socket as unknown as WebSocket, 1000, '', true)
+    await durableObject.webSocketClose(socket as unknown as WebSocket, 1000, '', true)
 
     expect(room.players.find(player => player.id === 'player-1')?.is_online).toBe(false)
     expect(ctx.storage.put).toHaveBeenCalledOnce()
@@ -404,26 +436,18 @@ describe('socket session disconnects', () => {
     }))
   })
 
-  it('restores a missing map session from a valid attachment before handling a message', async () => {
+  it('handles a message from its serialized attachment after hibernation', async () => {
     const durableObject = new RoomDurableObject(createContext(), { ALLOWED_ORIGIN: '*' } as never)
     const room = createRoom()
     const socket = new FakeSocket()
     socket.deserializedAttachment = { playerId: 'player-1', nickname: 'Host' }
 
     ;(durableObject as unknown as { room: RoomState | null }).room = room
-    await (durableObject as unknown as {
-      handleMessage(socket: WebSocket, data: string): Promise<void>
-    }).handleMessage(socket as unknown as WebSocket, JSON.stringify({
+    await durableObject.webSocketMessage(socket as unknown as WebSocket, JSON.stringify({
       type: 'ping',
       requestId: 'request-1',
     }))
 
-    expect((durableObject as unknown as {
-      sockets: Map<WebSocket, { playerId: string; nickname: string }>
-    }).sockets.get(socket as unknown as WebSocket)).toEqual({
-      playerId: 'player-1',
-      nickname: 'Host',
-    })
     expect(socket.sentMessages.map(message => JSON.parse(message))).toEqual([
       expect.objectContaining({ type: 'pong', requestId: 'request-1' }),
       expect.objectContaining({ type: 'ack', requestId: 'request-1' }),
@@ -438,9 +462,7 @@ describe('socket session disconnects', () => {
     const socket = new FakeSocket()
     socket.deserializedAttachment = attachment
 
-    await (durableObject as unknown as {
-      handleMessage(socket: WebSocket, data: string): Promise<void>
-    }).handleMessage(socket as unknown as WebSocket, JSON.stringify({ type: 'ping' }))
+    await durableObject.webSocketMessage(socket as unknown as WebSocket, JSON.stringify({ type: 'ping' }))
 
     expect(socket.sentMessages.map(message => JSON.parse(message))).toEqual([{
       type: 'error',
@@ -452,9 +474,7 @@ describe('socket session disconnects', () => {
     expect(socket.closeCode).toBe(1008)
     expect(socket.closeReason).toBe(SOCKET_SESSION_ATTACHMENT_ERROR_MESSAGE)
 
-    await (durableObject as unknown as {
-      disconnect(socket: WebSocket): Promise<void>
-    }).disconnect(socket as unknown as WebSocket)
+    await durableObject.webSocketClose(socket as unknown as WebSocket, 1008, '', false)
     expect(socket.sentMessages).toHaveLength(1)
   })
 })
