@@ -96,23 +96,25 @@ export class RoomSocketConnection {
 
     this.handlers.onStatusChange?.('connecting')
 
+    let socket: WebSocket
     try {
-      this.socket = new WebSocket(this.websocketUrl)
+      socket = new WebSocket(this.websocketUrl)
+      this.socket = socket
     } catch {
       this.handlers.onError?.(new Error('无法建立实时连接，请检查网络后重试。'))
       this.scheduleReconnect()
       return
     }
 
-    this.socket.addEventListener('open', () => {
-      if (this.disposed) return
+    socket.addEventListener('open', () => {
+      if (this.disposed || this.socket !== socket) return
       this.reconnectAttempts = 0
       this.clearReconnectTimer()
       this.handlers.onOpen?.()
     })
 
-    this.socket.addEventListener('close', (event) => {
-      if (this.disposed) return
+    socket.addEventListener('close', (event) => {
+      if (this.disposed || this.socket !== socket) return
 
       const wasIntentional = this.intentionalClose
       this.socket = null
@@ -136,13 +138,13 @@ export class RoomSocketConnection {
       this.handlers.onClose?.()
     })
 
-    this.socket.addEventListener('error', () => {
-      if (this.disposed) return
+    socket.addEventListener('error', () => {
+      if (this.disposed || this.socket !== socket) return
       // close event will fire after error
     })
 
-    this.socket.addEventListener('message', (event) => {
-      if (this.disposed) return
+    socket.addEventListener('message', (event) => {
+      if (this.disposed || this.socket !== socket) return
       try {
         const data = typeof event.data === 'string' ? event.data : String(event.data)
         const message = safeJsonParse(data) as ServerMessage
