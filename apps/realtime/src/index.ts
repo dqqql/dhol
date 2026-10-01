@@ -597,7 +597,7 @@ export class RoomDurableObject {
     let roomBeforeMutation: RoomState | null = null
     try {
       await this.mustLoad()
-      roomBeforeMutation = structuredClone(this.room)
+      if (message.type !== 'ping') roomBeforeMutation = structuredClone(this.room)
       await this.applyMessage(session, message, socket)
     } catch (error) {
       if (roomBeforeMutation) this.room = roomBeforeMutation

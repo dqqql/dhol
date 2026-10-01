@@ -154,6 +154,23 @@ async function handleRoomMessage(durableObject: RoomDurableObject, socket: WebSo
   }).handleMessage(socket, JSON.stringify(message))
 }
 
+describe('RoomDurableObject message handling', () => {
+  it('handles ping without cloning the room state', async () => {
+    const storageSpy = createStorageSpy()
+    const { durableObject, sentMessages, socket } = createObject(storageSpy.storage)
+    const structuredCloneSpy = vi.spyOn(globalThis, 'structuredClone')
+
+    try {
+      await handleRoomMessage(durableObject, socket, { type: 'ping', requestId: 'ping-request' })
+
+      expect(structuredCloneSpy).not.toHaveBeenCalled()
+      expect(sentMessages.map(message => JSON.parse(message).type)).toEqual(['pong', 'ack'])
+    } finally {
+      structuredCloneSpy.mockRestore()
+    }
+  })
+})
+
 describe('RoomDurableObject HTML persistence', () => {
   it('ordinary commits persist only a stripped room snapshot without touching HTML storage', async () => {
     const storageSpy = createStorageSpy()
