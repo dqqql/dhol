@@ -105,6 +105,7 @@ interface PersistedSheetHtml {
 }
 
 interface RoomPersistenceJob {
+  generation: number
   snapshot: RoomState
   html?:
     | { mode: 'upsert'; sheets: PersistedSheetHtml[] }
@@ -342,6 +343,7 @@ export class RoomDurableObject {
 
   private room: RoomState | null = null
   private isClosingRoom = false
+  private roomGeneration = 0
   private persistQueue: Promise<void> = Promise.resolve()
   // WebSocket 速率限制：每个连接每秒最多 30 条消息
   private wsRateLimitMap = new Map<WebSocket, { count: number; resetAt: number }>()
@@ -427,6 +429,7 @@ export class RoomDurableObject {
     const host = makePlayer(body.playerId, body.nickname, PLAYER_COLORS[0], true, now)
     const roomType = normalizeRoomType(body.roomType)
 
+    this.roomGeneration += 1
     this.room = {
       room_type: roomType,
       room_id: body.inviteCode,
@@ -1388,6 +1391,7 @@ export class RoomDurableObject {
   private capturePersistenceJob(htmlPersistence?: HtmlPersistence): RoomPersistenceJob {
     const room = this.requireRoom()
     const snapshot = structuredClone(room)
+    const generation = this.roomGeneration
     if (snapshot.gm_panel) {
       snapshot.gm_panel.sheets = snapshot.gm_panel.sheets.map((sheet) => {
         const { source_html: _sourceHtml, compiled_html: _compiledHtml, ...rest } = sheet
@@ -1395,9 +1399,10 @@ export class RoomDurableObject {
       })
     }
 
-    if (!htmlPersistence) return { snapshot }
+    if (!htmlPersistence) return { generation, snapshot }
     if (htmlPersistence.mode === 'delete') {
       return {
+        generation,
         snapshot,
         html: { mode: 'delete', sheetIds: [...new Set(htmlPersistence.sheetIds)] },
       }
@@ -1415,6 +1420,7 @@ export class RoomDurableObject {
       }))
 
     return {
+      generation,
       snapshot,
       html: htmlPersistence.mode === 'sync-all'
         ? { mode: 'sync-all', sheets }
@@ -1446,6 +1452,7 @@ export class RoomDurableObject {
   }
 
   private async saveRoomSnapshot(job: RoomPersistenceJob): Promise<void> {
+    if (job.generation !== this.roomGeneration) return
     await this.ctx.storage.transaction(async (txn) => {
       await txn.put('room', job.snapshot)
       if (job.html) await this.syncGmSheetHtml(txn, job.html)
@@ -1563,6 +1570,7 @@ export class RoomDurableObject {
   }
 
   private async purgeRoom(reason: 'expired'): Promise<void> {
+    this.roomGeneration += 1
     this.isClosingRoom = true
     const sockets = this.ctx.getWebSockets()
 

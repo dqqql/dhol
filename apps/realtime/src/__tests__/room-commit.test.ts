@@ -97,6 +97,10 @@ function createStorageSpy(
     if (failure?.operation === 'delete' && failure.matches(key)) throw failure.error
     entries.delete(key)
   })
+  const deleteAll = vi.fn(async () => {
+    entries.clear()
+  })
+  const deleteAlarm = vi.fn(async () => undefined)
   const transaction = vi.fn(async <T>(closure: (txn: DurableObjectTransaction) => Promise<T>) => {
     const before = structuredClone(entries)
     try {
@@ -115,6 +119,8 @@ function createStorageSpy(
       put,
       list,
       delete: deleteEntry,
+      deleteAll,
+      deleteAlarm,
       transaction,
       getAlarm: async () => null,
       setAlarm: async () => undefined,
@@ -122,6 +128,8 @@ function createStorageSpy(
     put,
     list,
     deleteEntry,
+    deleteAll,
+    deleteAlarm,
     transaction,
   }
 }
@@ -168,6 +176,67 @@ describe('RoomDurableObject message handling', () => {
     } finally {
       structuredCloneSpy.mockRestore()
     }
+  })
+})
+
+describe('RoomDurableObject persistence lifecycle', () => {
+  it('does not persist an old queued snapshot after the room is purged', async () => {
+    const room = createRoom()
+    const storageSpy = createStorageSpy([['room', structuredClone(room)]])
+    const { durableObject } = createObject(storageSpy.storage, room)
+    const queueGate = new Deferred<void>()
+    ;(durableObject as unknown as { persistQueue: Promise<void> }).persistQueue = queueGate.promise
+
+    await (durableObject as unknown as {
+      commit: (reason: string, options: { waitForPersistence: boolean }) => Promise<void>
+    }).commit('dice.roll', { waitForPersistence: false })
+    const oldQueuedSave = (durableObject as unknown as { persistQueue: Promise<void> }).persistQueue
+
+    await (durableObject as unknown as { purgeRoom: (reason: 'expired') => Promise<void> }).purgeRoom('expired')
+    queueGate.resolve()
+    await oldQueuedSave
+
+    expect(storageSpy.deleteAll).toHaveBeenCalledOnce()
+    expect(storageSpy.transaction).not.toHaveBeenCalled()
+    expect(storageSpy.entries.has('room')).toBe(false)
+  })
+
+  it('does not write an old snapshot before persisting a replacement room with the same invite code', async () => {
+    const oldRoom = createRoom()
+    const storageSpy = createStorageSpy([['room', structuredClone(oldRoom)]])
+    const { durableObject } = createObject(storageSpy.storage, oldRoom)
+    const queueGate = new Deferred<void>()
+    ;(durableObject as unknown as { persistQueue: Promise<void> }).persistQueue = queueGate.promise
+
+    await (durableObject as unknown as {
+      commit: (reason: string, options: { waitForPersistence: boolean }) => Promise<void>
+    }).commit('dice.roll', { waitForPersistence: false })
+    await (durableObject as unknown as { purgeRoom: (reason: 'expired') => Promise<void> }).purgeRoom('expired')
+
+    const createPromise = (durableObject as unknown as { create: (request: Request) => Promise<Response> }).create(
+      new Request('https://example.test/internal/create', {
+        method: 'POST',
+        body: JSON.stringify({
+          roomName: 'Replacement Room',
+          inviteCode: oldRoom.invite_code,
+          playerId: 'replacement-host',
+          nickname: 'Replacement Host',
+          roomType: 'gm-panel',
+        }),
+      }),
+    )
+    await vi.waitFor(() => {
+      expect((durableObject as unknown as { room: RoomState | null }).room?.room_name).toBe('Replacement Room')
+    })
+
+    queueGate.resolve()
+    const response = await createPromise
+
+    expect(response.status).toBe(200)
+    expect(storageSpy.put.mock.calls
+      .filter(([key]) => key === 'room')
+      .map(([, snapshot]) => (snapshot as RoomState).room_name)).toEqual(['Replacement Room'])
+    expect((storageSpy.entries.get('room') as RoomState).room_name).toBe('Replacement Room')
   })
 })
 
