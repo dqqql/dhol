@@ -1,9 +1,12 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import type { CharacterSummary, TrackResource } from '@dhgc/shared/desktop'
 import CharacterSummaryCard from './CharacterSummaryCard'
 import { charactersOnPage, pageCount } from './pagination'
 
-export default function CharacterPanelBoard({ characters, page, ready, onPage, onHope, onMark, onDetail, onDelete, onQuickRollStat }: {
+const CharacterNotesDialog = lazy(() => import('./CharacterNotesDialog'))
+
+export default function CharacterPanelBoard({ roomId, characters, page, ready, onPage, onHope, onMark, onDetail, onDelete, onAddIndicator, onAdjustIndicator, onQuickRollStat }: {
+  roomId: string
   characters: CharacterSummary[]
   page: number
   ready: boolean
@@ -12,9 +15,12 @@ export default function CharacterPanelBoard({ characters, page, ready, onPage, o
   onMark: (character: CharacterSummary, resource: TrackResource, index: number, marked: boolean) => void
   onDetail: (character: CharacterSummary) => void
   onDelete: (character: CharacterSummary) => void
+  onAddIndicator: (character: CharacterSummary, name: string, value: number) => void
+  onAdjustIndicator: (character: CharacterSummary, id: string, delta: 1 | -1) => void
   onQuickRollStat: (character: CharacterSummary, statName: string, statVal: string) => void
 }) {
   const [deleteTarget, setDeleteTarget] = useState<CharacterSummary | null>(null)
+  const [notesTarget, setNotesTarget] = useState<CharacterSummary | null>(null)
   const pages = pageCount(characters.length)
   const safePage = Math.min(page, pages - 1)
 
@@ -33,11 +39,15 @@ export default function CharacterPanelBoard({ characters, page, ready, onPage, o
           onHope={delta => onHope(character, delta)}
           onMark={(resource, index, marked) => onMark(character, resource, index, marked)}
           onDetail={() => onDetail(character)}
+          onNotes={() => setNotesTarget(character)}
           onDelete={() => setDeleteTarget(character)}
+          onAddIndicator={(name, value) => onAddIndicator(character, name, value)}
+          onAdjustIndicator={(id, delta) => onAdjustIndicator(character, id, delta)}
           onQuickRollStat={onQuickRollStat}
         />
       ))}
     </div>
+    {notesTarget && <Suspense fallback={null}><CharacterNotesDialog key={`${roomId}:${notesTarget.name}`} storageKey={`dhol-notes-${roomId}-${encodeURIComponent(notesTarget.name)}`} name={notesTarget.name} onClose={() => setNotesTarget(null)} /></Suspense>}
     {pages > 1 && (
       <nav className="pagination" aria-label="角色分页">
         <button type="button" disabled={safePage === 0} onClick={() => onPage(safePage - 1)}>上一页</button>

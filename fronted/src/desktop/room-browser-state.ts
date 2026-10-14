@@ -12,9 +12,10 @@ export function loadCountdowns(storage: Pick<Storage, 'getItem'>, key: string): 
 export function clearRoomBrowserState(storage: Storage, roomId: string): void {
   const keys = [`dhol-countdowns-${roomId}`, `dhol-roomlog-${roomId}`]
   const outboxPrefix = `dhol:desktop:v2:outbox:${roomId}:`
+  const notesPrefix = `dhol-notes-${roomId}-`
   for (let index = 0; index < storage.length; index++) {
     const key = storage.key(index)
-    if (key?.startsWith(outboxPrefix)) keys.push(key)
+    if (key?.startsWith(outboxPrefix) || key?.startsWith(notesPrefix)) keys.push(key)
   }
   for (const key of keys) storage.removeItem(key)
 }

@@ -20,7 +20,7 @@
   --border: #111111;
   --border-subtle: #D0D0C8;
 
-  --font: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Inter", "Arial", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font: "Noto Sans SC", "Microsoft YaHei UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   --font-mono: "SF Mono", "JetBrains Mono", "Roboto Mono", Menlo, Consolas, monospace;
 }
 
@@ -738,8 +738,9 @@ input, select, textarea {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-family: var(--font-mono);
+  font-family: var(--font);
   font-size: 13px;
+  line-height: 1.55;
 }
 
 .hist-top { display: flex; justify-content: space-between; align-items: baseline; }

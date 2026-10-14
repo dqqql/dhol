@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import type { CharacterSummary, TrackResource } from '@dhgc/shared/desktop'
 import ResourceTrack from './ResourceTrack'
 
@@ -7,26 +7,44 @@ const attributes: Array<[keyof CharacterSummary['attributes'], string]> = [
   ['instinct', '本能'], ['presence', '风度'], ['knowledge', '知识'],
 ]
 
-function CharacterSummaryCard({ character, ready, onHope, onMark, onDetail, onDelete, onQuickRollStat }: {
+function CharacterSummaryCard({ character, ready, onHope, onMark, onDetail, onNotes, onDelete, onAddIndicator, onAdjustIndicator, onQuickRollStat }: {
   character: CharacterSummary
   ready: boolean
   onHope: (delta: 1 | -1) => void
   onMark: (resource: TrackResource, index: number, marked: boolean) => void
   onDetail: () => void
+  onNotes: () => void
   onDelete: () => void
+  onAddIndicator: (name: string, value: number) => void
+  onAdjustIndicator: (id: string, delta: 1 | -1) => void
   onQuickRollStat: (character: CharacterSummary, statName: string, statVal: string) => void
 }) {
+  const [addingIndicator, setAddingIndicator] = useState(false)
+  const [indicatorName, setIndicatorName] = useState('')
+  const [indicatorValue, setIndicatorValue] = useState('1')
   const value = (item: string | null) => item ?? '—'
   const hopeSlots = Array.from({ length: character.resources.hopeMax || 6 }, (_, i) => i < character.resources.hope)
+  const indicators = character.resources.indicators ?? []
 
   return <article className="character-card" aria-labelledby={`character-${character.generation}`}>
+    {indicators.length > 0 && <div className="character-indicators" aria-label={`${character.name}的指示物`}>
+      {indicators.map((indicator, index) => <button key={indicator.id} type="button" className={`character-indicator character-indicator--${index % 6}`} title={`${indicator.name}：${indicator.value}（左键增加，右键减少）`} aria-label={`${indicator.name} ${indicator.value}，左键增加，右键减少`} disabled={!ready} onClick={() => onAdjustIndicator(indicator.id, 1)} onContextMenu={event => { event.preventDefault(); if (ready) onAdjustIndicator(indicator.id, -1) }}>{indicator.value}</button>)}
+    </div>}
     <header className="character-card__identity">
       <div className="player-title-row">
         <h2 id={`character-${character.generation}`} className="player-name">{character.name}</h2>
         <span className="player-sub">{[character.profession, character.level && `${character.level}级`].filter(Boolean).join(' · ')}</span>
       </div>
-      <button type="button" className="btn-remove-player" disabled={!ready} onClick={onDelete}>移除</button>
+      <div className="character-card__actions">
+        <button type="button" className="btn-indicator-add" disabled={!ready || indicators.length >= 6} onClick={() => setAddingIndicator(open => !open)}>指示物</button>
+        <button type="button" className="btn-remove-player" disabled={!ready} onClick={onDelete}>移除</button>
+      </div>
     </header>
+    {addingIndicator && <form className="indicator-popover" onSubmit={event => { event.preventDefault(); const number = Number(indicatorValue); if (!indicatorName.trim() || !Number.isSafeInteger(number) || number < 1 || number > 999) return; onAddIndicator(indicatorName.trim(), number); setIndicatorName(''); setIndicatorValue('1'); setAddingIndicator(false) }}>
+      <label>名字<input autoFocus maxLength={32} value={indicatorName} onChange={event => setIndicatorName(event.target.value)} required /></label>
+      <label>初始数值<input type="number" min="1" max="999" step="1" value={indicatorValue} onChange={event => setIndicatorValue(event.target.value)} required /></label>
+      <div><button type="button" onClick={() => setAddingIndicator(false)}>取消</button><button type="submit" className="button--primary">添加</button></div>
+    </form>}
     <section className="character-card__resources" aria-label="四项资源">
       <div className="hope-control">
         <div className="hope-control__label">
@@ -74,6 +92,7 @@ function CharacterSummaryCard({ character, ready, onHope, onMark, onDetail, onDe
     </div>
     <footer>
       <button type="button" className="button button--primary btn-detail" onClick={onDetail}>完整信息</button>
+      <button type="button" className="btn-notes" onClick={onNotes}>笔记</button>
     </footer>
   </article>
 }

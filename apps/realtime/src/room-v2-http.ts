@@ -95,6 +95,7 @@ function restoreState(value: unknown): { name: string; fear: number; xCard: Room
     if (!summary || !summary.resources || !Array.isArray(summary.resources.hp) || !Array.isArray(summary.resources.stress) || !Array.isArray(summary.resources.armor)) throw new Error('INVALID_BACKUP')
     const resources = summary.resources
     if (resources.hp.some(mark => typeof mark !== 'boolean') || resources.stress.some(mark => typeof mark !== 'boolean') || resources.armor.some(mark => typeof mark !== 'boolean') || !Number.isInteger(resources.hope) || !Number.isInteger(resources.hopeMax) || resources.hope < 0 || resources.hope > resources.hopeMax) throw new Error('INVALID_BACKUP')
+    if (resources.indicators !== undefined && (!Array.isArray(resources.indicators) || resources.indicators.length > 6 || new Set(resources.indicators.map(item => item?.id)).size !== resources.indicators.length || resources.indicators.some(item => !item || typeof item.id !== 'string' || !/^[\w-]{1,128}$/.test(item.id) || typeof item.name !== 'string' || !item.name.trim() || item.name.length > 32 || !Number.isSafeInteger(item.value) || item.value < 1 || item.value > 999))) throw new Error('INVALID_BACKUP')
     if (resources.hp.length !== (delivery.sheet.hp as boolean[]).length || resources.stress.length !== (delivery.sheet.stress as boolean[]).length || resources.armor.length !== (delivery.sheet.armorBoxes as boolean[]).length) throw new Error('INVALID_BACKUP')
     return { sheet: delivery.sheet, resources, position: Number.isSafeInteger(summary.position) ? summary.position : index }
   })

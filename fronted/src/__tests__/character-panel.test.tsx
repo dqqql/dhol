@@ -21,7 +21,7 @@ describe('character panel pagination', () => {
     item.primaryWeaponName = '短弓'
     item.primaryWeaponTrait = '敏捷'
     item.primaryWeaponRange = '远距离'
-    const html = renderToStaticMarkup(<CharacterSummaryCard character={item} ready onHope={() => undefined} onMark={() => undefined} onDetail={() => undefined} onDelete={() => undefined} onQuickRollStat={() => undefined} />)
+    const html = renderToStaticMarkup(<CharacterSummaryCard character={item} ready onHope={() => undefined} onMark={() => undefined} onDetail={() => undefined} onNotes={() => undefined} onDelete={() => undefined} onAddIndicator={() => undefined} onAdjustIndicator={() => undefined} onQuickRollStat={() => undefined} />)
     expect(html).toContain('阿岚 敏捷+2，掷二元骰')
     expect(html.match(/掷二元骰/g)).toHaveLength(6)
     expect(html).toContain('短弓')
@@ -35,7 +35,7 @@ describe('character panel pagination', () => {
       { name: '身经百战', bonus: '+2', kind: 'standard' },
       { name: '走遍大陆', bonus: '+3', kind: 'standard' },
     ]
-    const html = renderToStaticMarkup(<CharacterSummaryCard character={item} ready onHope={() => undefined} onMark={() => undefined} onDetail={() => undefined} onDelete={() => undefined} onQuickRollStat={() => undefined} />)
+    const html = renderToStaticMarkup(<CharacterSummaryCard character={item} ready onHope={() => undefined} onMark={() => undefined} onDetail={() => undefined} onNotes={() => undefined} onDelete={() => undefined} onAddIndicator={() => undefined} onAdjustIndicator={() => undefined} onQuickRollStat={() => undefined} />)
     expect(html.match(/class="experience-info"/g)).toHaveLength(2)
     expect(html.indexOf('短弓')).toBeLessThan(html.indexOf('身经百战'))
     expect(html).toContain('身经百战</strong><span>+2</span>')

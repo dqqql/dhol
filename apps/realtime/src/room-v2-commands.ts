@@ -126,7 +126,7 @@ export class RoomV2Commands {
   private applyCommand(actor: string, nickname: string, command: MutationCommand): (seq: number) => { event: RoomEvent | null; write: () => void } {
     return seq => {
       const requestId = command.requestId
-      if (command.type === 'character.adjustHope' || command.type === 'character.setMark' || command.type === 'character.delete') {
+      if (command.type === 'character.adjustHope' || command.type === 'character.setMark' || command.type === 'character.addIndicator' || command.type === 'character.adjustIndicator' || command.type === 'character.delete') {
         const row = this.db.characterHeader(command.name)
         if (!row || row.generation !== command.generation) throw new CommandFailure('CHARACTER_REPLACED', '角色已重新投递，旧修改未应用')
         if (command.type === 'character.delete') return { event: { type: 'character.deleted', requestId, seq, name: command.name, generation: command.generation }, write: () => this.db.deleteCharacter(command.name) }
@@ -135,6 +135,17 @@ export class RoomV2Commands {
         if (command.type === 'character.adjustHope') {
           resources.hope = Math.max(0, Math.min(previous.hopeMax, previous.hope + command.delta))
           if (resources.hope === previous.hope) return { event: null, write: () => undefined }
+        } else if (command.type === 'character.addIndicator') {
+          const indicators = previous.indicators ?? []
+          if (indicators.length >= 6) throw new CommandFailure('INVALID_COMMAND', '每名角色最多六个指示物')
+          if (indicators.some(item => item.id === command.id)) throw new CommandFailure('INVALID_COMMAND', '指示物 ID 已存在')
+          resources.indicators = [...indicators, { id: command.id, name: command.indicatorName, value: command.value }]
+        } else if (command.type === 'character.adjustIndicator') {
+          const indicators = previous.indicators ?? []
+          const indicator = indicators.find(item => item.id === command.id)
+          if (!indicator) throw new CommandFailure('INVALID_COMMAND', '指示物已不存在')
+          resources.indicators = indicators.flatMap(item => item.id !== command.id ? [item] : item.value === 1 && command.delta === -1 ? [] : [{ ...item, value: Math.min(999, item.value + command.delta) }])
+          if (indicator.value === 999 && command.delta === 1) return { event: null, write: () => undefined }
         } else {
           const track = command.resource === 'gold' ? previous.gold ?? Array(21).fill(false) as boolean[] : previous[command.resource]
           if (command.index >= track.length) throw new CommandFailure('INVALID_COMMAND', '资源格索引无效')

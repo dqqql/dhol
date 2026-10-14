@@ -2,6 +2,7 @@ import type { DiceRollRecord } from './dice-types'
 
 export type RuleSetId = 'daggerheart' | 'rhodes-island'
 export type TrackResource = 'hp' | 'stress' | 'armor' | 'gold'
+export interface CharacterIndicator { id: string; name: string; value: number }
 export interface CharacterResources {
   hope: number
   hopeMax: number
@@ -10,6 +11,8 @@ export interface CharacterResources {
   armor: boolean[]
   /** Twenty handful/bag slots followed by the chest slot. Optional for older room snapshots. */
   gold?: boolean[]
+  /** Synchronized counters attached to this character. */
+  indicators?: CharacterIndicator[]
 }
 export interface CharacterSummary {
   name: string

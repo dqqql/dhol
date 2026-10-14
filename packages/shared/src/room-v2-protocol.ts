@@ -10,6 +10,8 @@ export interface CharacterIdentity { name: string; generation: number }
 export type ResourceCommand = MutationEnvelope & CharacterIdentity & (
   | { type: 'character.adjustHope'; delta: 1 | -1 }
   | { type: 'character.setMark'; resource: TrackResource; index: number; marked: boolean }
+  | { type: 'character.addIndicator'; id: string; indicatorName: string; value: number }
+  | { type: 'character.adjustIndicator'; id: string; delta: 1 | -1 }
 )
 export type RoomCommand = MutationEnvelope & (
   | { type: 'room.adjustFear'; delta: 1 | -1 }
@@ -53,7 +55,7 @@ export function parseMutationCommand(value: unknown): MutationCommand {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('INVALID_COMMAND')
   const command = { ...value as Record<string, unknown> }
   if (command.protocolVersion !== 2 || typeof command.requestId !== 'string' || !/^[\w-]{1,128}$/.test(command.requestId)) throw new Error('INVALID_COMMAND')
-  if (command.type === 'character.adjustHope' || command.type === 'character.setMark' || command.type === 'character.delete') {
+  if (command.type === 'character.adjustHope' || command.type === 'character.setMark' || command.type === 'character.addIndicator' || command.type === 'character.adjustIndicator' || command.type === 'character.delete') {
     if (typeof command.name !== 'string' || !Number.isSafeInteger(command.generation) || (command.generation as number) < 1) throw new Error('INVALID_COMMAND')
     try { command.name = characterNameKey(command.name) } catch { throw new Error('INVALID_COMMAND') }
   }
@@ -65,6 +67,15 @@ export function parseMutationCommand(value: unknown): MutationCommand {
     case 'character.setMark':
       if (!['hp', 'stress', 'armor', 'gold'].includes(String(command.resource)) || !Number.isSafeInteger(command.index) || (command.index as number) < 0 || typeof command.marked !== 'boolean') break
       return command as unknown as MutationCommand
+    case 'character.addIndicator':
+      if (typeof command.id === 'string' && /^[\w-]{1,128}$/.test(command.id) && typeof command.indicatorName === 'string' && command.indicatorName.trim().length > 0 && command.indicatorName.trim().length <= 32 && Number.isSafeInteger(command.value) && (command.value as number) >= 1 && (command.value as number) <= 999) {
+        command.indicatorName = command.indicatorName.trim()
+        return command as unknown as MutationCommand
+      }
+      break
+    case 'character.adjustIndicator':
+      if (typeof command.id === 'string' && /^[\w-]{1,128}$/.test(command.id) && (command.delta === 1 || command.delta === -1)) return command as unknown as MutationCommand
+      break
     case 'character.delete':
     case 'dice.clearHistory':
       return command as unknown as MutationCommand

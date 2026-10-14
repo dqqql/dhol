@@ -24,6 +24,23 @@ function fixture() {
 }
 
 describe('Room V2 command commits', () => {
+  it('syncs six character indicators and compacts the row when a counter reaches zero', async () => {
+    const room = fixture()
+    let resources = { hope: 1, hopeMax: 6, hp: [false], stress: [false], armor: [false], indicators: [] as Array<{ id: string; name: string; value: number }> }
+    room.db.characterHeader = () => ({ name: '阿岚', generation: 1, position: 0 })
+    room.db.resources = () => resources
+    room.db.saveResources = (_name, next) => { resources = { ...next, indicators: next.indicators ?? [] } }
+    for (let index = 0; index < 6; index++) {
+      await room.commands.mutate('player-a', '甲', { type: 'character.addIndicator', protocolVersion: 2, requestId: `add-${index}`, name: '阿岚', generation: 1, id: `indicator-${index}`, indicatorName: `标记${index}`, value: 1 })
+    }
+    expect(resources.indicators).toHaveLength(6)
+    await expect(room.commands.mutate('player-a', '甲', { type: 'character.addIndicator', protocolVersion: 2, requestId: 'seventh', name: '阿岚', generation: 1, id: 'seventh', indicatorName: '超额', value: 1 })).rejects.toMatchObject({ code: 'INVALID_COMMAND' })
+    await room.commands.mutate('player-b', '乙', { type: 'character.adjustIndicator', protocolVersion: 2, requestId: 'remove-first', name: '阿岚', generation: 1, id: 'indicator-0', delta: -1 })
+    expect(resources.indicators.map(item => item.id)).toEqual(['indicator-1', 'indicator-2', 'indicator-3', 'indicator-4', 'indicator-5'])
+    await room.commands.mutate('player-a', '甲', { type: 'character.adjustIndicator', protocolVersion: 2, requestId: 'increase-next', name: '阿岚', generation: 1, id: 'indicator-1', delta: 1 })
+    expect(resources.indicators[0].value).toBe(2)
+    expect(room.events.filter(event => event.type === 'character.resourcesChanged')).toHaveLength(8)
+  })
   it('deduplicates the same operation and rejects reuse with another payload', async () => {
     const room = fixture()
     const command = { type: 'room.adjustFear' as const, protocolVersion: 2 as const, requestId: 'same', delta: 1 as const }

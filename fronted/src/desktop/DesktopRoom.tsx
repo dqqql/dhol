@@ -267,6 +267,7 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
 
           {/* 模块二：玩家 (一行四卡) */}
           <CharacterPanelBoard
+            roomId={session.roomId}
             characters={room.characters}
             page={ui.page}
             ready={ready}
@@ -275,6 +276,8 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
             onMark={mark}
             onDetail={character => void openDetail(character)}
             onDelete={remove}
+            onAddIndicator={(character, name, value) => submit({ type: 'character.addIndicator', name: character.name, generation: character.generation, id: crypto.randomUUID(), indicatorName: name, value })}
+            onAdjustIndicator={(character, id, delta) => submit({ type: 'character.adjustIndicator', name: character.name, generation: character.generation, id, delta })}
             onQuickRollStat={quickRollStat}
           />
 
