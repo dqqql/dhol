@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from 'react'
 import type { CharacterSummary, TrackResource } from '@dhgc/shared/desktop'
 import CharacterSummaryCard from './CharacterSummaryCard'
+import NotesLoadingDialog from './NotesLoadingDialog'
 import { charactersOnPage, pageCount } from './pagination'
 
 const CharacterNotesDialog = lazy(() => import('./CharacterNotesDialog'))
@@ -47,7 +48,7 @@ export default function CharacterPanelBoard({ roomId, characters, page, ready, o
         />
       ))}
     </div>
-    {notesTarget && <Suspense fallback={null}><CharacterNotesDialog key={`${roomId}:${notesTarget.name}`} storageKey={`dhol-notes-${roomId}-${encodeURIComponent(notesTarget.name)}`} name={notesTarget.name} onClose={() => setNotesTarget(null)} /></Suspense>}
+    {notesTarget && <Suspense fallback={<NotesLoadingDialog name={notesTarget.name} onClose={() => setNotesTarget(null)} />}><CharacterNotesDialog key={`${roomId}:${notesTarget.name}`} storageKey={`dhol-notes-${roomId}-${encodeURIComponent(notesTarget.name)}`} name={notesTarget.name} onClose={() => setNotesTarget(null)} /></Suspense>}
     {pages > 1 && (
       <nav className="pagination" aria-label="角色分页">
         <button type="button" disabled={safePage === 0} onClick={() => onPage(safePage - 1)}>上一页</button>

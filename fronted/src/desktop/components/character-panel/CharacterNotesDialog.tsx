@@ -41,6 +41,6 @@ export default function CharacterNotesDialog({ storageKey, name, onClose }: { st
     <div className="notes-dialog__bar"><div><small>本机笔记 · {dirty ? '未保存' : '已保存'}</small><h2 id="notes-title">{name}的笔记</h2></div><div className="notes-dialog__actions"><button type="button" className="button--primary" disabled={!editor || !dirty} onClick={save}>保存</button><button type="button" onClick={onClose}>关闭</button></div></div>
     <div className="notes-dialog__hint" aria-label="支持的 Markdown 格式"><span># 一级标题</span><span>## 二级标题</span><span>### 三级标题</span><span>- 列表</span><span>**文字** 加粗</span><span>**** 分隔线</span></div>
     {saveError && <p className="notes-dialog__error" role="alert">保存失败，请检查浏览器存储空间。</p>}
-    <EditorContent editor={editor} className="notes-editor" aria-label={`${name}的笔记编辑器`} />
+    {editor ? <EditorContent editor={editor} className="notes-editor" aria-label={`${name}的笔记编辑器`} /> : <div className="notes-loading" role="status"><span className="notes-loading__spinner" aria-hidden="true" />正在加载笔记编辑器…</div>}
   </dialog>
 }

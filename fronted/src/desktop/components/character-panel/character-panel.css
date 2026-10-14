@@ -377,6 +377,11 @@
 .notes-dialog__hint { display: flex; flex-wrap: wrap; gap: 5px 12px; padding: 10px 20px; color: var(--ink-secondary); font-size: 12px; background: var(--surface-subtle); }
 .notes-dialog__hint span { white-space: nowrap; }
 .notes-dialog__error { padding: 6px 20px; color: var(--red); font-size: 12px; }
+.notes-dialog--loading { height: min(240px, calc(100vh - 40px)); }
+.notes-loading { min-height: 120px; display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--ink-secondary); font-size: 14px; }
+.notes-loading__spinner { width: 22px; height: 22px; border: 3px solid var(--border-subtle); border-top-color: var(--blue); border-radius: 50%; animation: notes-spin .7s linear infinite; }
+@keyframes notes-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .notes-loading__spinner { animation: none; border-top-color: var(--blue); } }
 .notes-editor { height: calc(100% - 110px); overflow: auto; }
 .notes-editor .tiptap { min-height: 100%; padding: 20px 24px; outline: none; font-family: var(--font); font-size: 15px; line-height: 1.75; }
 .notes-editor .tiptap > * + * { margin-top: .7em; }
