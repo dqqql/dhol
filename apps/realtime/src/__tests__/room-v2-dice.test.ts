@@ -39,6 +39,19 @@ const standardRoll = (requestId: string) => ({
 })
 
 describe('Room V2 dice hot path', () => {
+  it('returns the supplied request ID when a command cannot be parsed', async () => {
+    const sent: Array<{ requestId: string; code: string }> = []
+    const room = Object.create(RoomV2DurableObject.prototype) as unknown as {
+      db: Record<string, unknown>
+      commands: Record<string, unknown>
+      webSocketMessage(socket: WebSocket, data: string | ArrayBuffer): Promise<void>
+    }
+    room.db = { sessionAccess: () => ({ roomId: 'room', inviteCode: 'ABC123', expiresAt: '2030-01-01T00:00:00.000Z', member: true }) }
+    room.commands = { mutate: () => { throw new Error('invalid command reached commit') } }
+    const socket = { deserializeAttachment: () => ({ aud: 'dhol-room-v2', roomId: 'room', inviteCode: 'ABC123', playerId: 'player-a', nickname: '甲', exp: Math.floor(Date.now() / 1000) + 60 }), send: (value: string) => sent.push(JSON.parse(value)), close: () => undefined }
+    await room.webSocketMessage(socket as unknown as WebSocket, JSON.stringify({ type: 'character.futureCommand', protocolVersion: 2, requestId: 'unsupported-1' }))
+    expect(sent).toEqual([{ type: 'operation.error', requestId: 'unsupported-1', code: 'INVALID_COMMAND', message: 'INVALID_COMMAND' }])
+  })
   it('authorizes a WebSocket roll without reading or parsing the complete room metadata', async () => {
     const sent: unknown[] = []
     const session = { aud: 'dhol-room-v2', roomId: 'room', inviteCode: 'ABC123', playerId: 'player-a', nickname: '甲', exp: Math.floor(Date.now() / 1000) + 60 }

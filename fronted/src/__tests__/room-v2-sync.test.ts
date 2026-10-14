@@ -17,6 +17,17 @@ function harness(roomId = 'room-fixture') {
 }
 
 describe('Room V2 sync', () => {
+  it('drops an unsupported indicator command rejected by an older Worker without a request ID', () => {
+    const { sync, room } = harness()
+    const character = room.characters[0]
+    sync.submit({ type: 'character.addIndicator', name: character.name, generation: character.generation, id: 'marker-1', indicatorName: '标记', value: 2 })
+    expect(sync.pending()).toHaveLength(1)
+    sync.receive({ type: 'operation.error', requestId: '', code: 'INVALID_COMMAND', message: 'INVALID_COMMAND' })
+    expect(sync.pending()).toHaveLength(0)
+    expect(sync.getState().connection).toBe('ready')
+    expect(sync.ui.getState().notice).toContain('版本尚未更新')
+    sync.destroy()
+  })
   it('updates presence without advancing room sequence or changing dice', () => {
     const { sync, room } = harness()
     const dice = sync.getState().room?.dice

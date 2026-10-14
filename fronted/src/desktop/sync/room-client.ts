@@ -68,7 +68,8 @@ export class RoomClient {
   }
   sync(): void {
     if (!this.socket || this.socket.readyState !== 1 || this.destroyed) return
-    this.update('synchronizing')
+    // A background reconciliation uses the existing healthy socket; it is not a reconnect.
+    if (this.status !== 'ready') this.update('synchronizing')
     const request: SyncRequest = { type: 'room.sync', protocolVersion: 2, afterSeq: this.options.afterSeq(), pendingRequestIds: this.options.pendingIds() }
     this.socket.send(JSON.stringify(request))
   }

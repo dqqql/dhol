@@ -180,10 +180,9 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
       catch { this.send(socket, { type: 'operation.error', requestId: '', code: 'INVALID_COMMAND', message: '同步请求无效' }) }
       return
     }
-    let requestId = ''
+    const requestId = typeof input === 'object' && input !== null && 'requestId' in input && typeof input.requestId === 'string' && /^[\w-]{1,128}$/.test(input.requestId) ? input.requestId : ''
     try {
       const command = parseMutationCommand(input)
-      requestId = command.requestId
       const result = await this.commands.mutate(session.playerId, session.nickname, command, { receivedAtMs })
       this.send(socket, result.ack)
     } catch (error) {

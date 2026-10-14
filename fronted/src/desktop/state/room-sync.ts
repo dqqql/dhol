@@ -189,6 +189,19 @@ export class RoomSync {
       return
     }
     if (message.type === 'operation.error') {
+      // Older Workers lose the request ID while rejecting commands they do not know.
+      // Drop the unsupported indicator operation instead of resending it every 8 seconds.
+      if (message.code === 'INVALID_COMMAND' && !message.requestId) {
+        const unsupported = this.outbox.list().find(entry => entry.command.type === 'character.addIndicator' || entry.command.type === 'character.adjustIndicator')
+        if (unsupported) {
+          this.finish(unsupported.command.requestId, false)
+          this.ui.setNotice('指示物暂不可用：房间服务版本尚未更新')
+          this.save = 'failed'
+          this.reason = '房间服务尚未支持指示物，请稍后重试'
+          this.emit()
+          return
+        }
+      }
       if (message.code === 'CHARACTER_REPLACED' || message.code === 'INVALID_COMMAND' || message.code === 'REQUEST_ID_REUSED' || message.code === 'ROOM_EXPIRED') {
         this.outbox.remove(message.requestId)
         this.save = this.outbox.list().length ? 'saving' : 'failed'

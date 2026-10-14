@@ -47,4 +47,20 @@ describe('Room V2 client', () => {
     expect(retries).toBe(0)
     client.destroy()
   })
+
+  it('keeps a healthy socket connected during background reconciliation', () => {
+    const { socket, sent } = fakeSocket()
+    const statuses: string[] = []
+    const client = new RoomClient({ roomId: 'room-a', websocketUrl: 'ws://room-a', socketFactory: () => socket,
+      pendingIds: () => [], afterSeq: () => 4, onMessage: () => undefined, onStatus: status => { statuses.push(status) } })
+    client.connect()
+    socket.onopen?.call(socket as WebSocket, new Event('open'))
+    client.ready()
+    const statusCount = statuses.length
+    client.sync()
+    expect(client.connectionStatus).toBe('ready')
+    expect(statuses).toHaveLength(statusCount)
+    expect(sent.at(-1)).toMatchObject({ type: 'room.sync', afterSeq: 4 })
+    client.destroy()
+  })
 })
