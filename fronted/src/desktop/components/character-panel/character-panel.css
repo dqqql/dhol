@@ -427,13 +427,17 @@
   background: var(--surface);
   color: var(--ink);
   box-shadow: 18px 18px 0px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
 }
+
+.detail-dialog[open] { display: flex; flex-direction: column; }
 
 .detail-dialog::backdrop {
   background: rgba(10, 10, 10, 0.75);
 }
 
 .detail-dialog__bar {
+  flex: none;
   position: sticky;
   top: 0;
   z-index: 2;
@@ -453,9 +457,12 @@
 
 .detail-dialog__body {
   padding: 24px;
-  max-height: calc(100vh - 120px);
+  min-height: 0;
   overflow-y: auto;
+  scrollbar-width: none;
 }
+
+.detail-dialog__body::-webkit-scrollbar { display: none; }
 
 /* ReadOnlyCharacterSheet - 瑞士国际主义排版风格 */
 .sheet-swiss-root {
@@ -1036,44 +1043,4 @@
 .sheet-muted-text {
   color: var(--ink-muted);
   font-size: 12px;
-}
-
-/* 底部明细折叠 */
-.sheet-source-details {
-  border: 1px solid var(--border-subtle);
-  padding: 12px 16px;
-  background: var(--surface-subtle);
-}
-
-.sheet-source-details summary {
-  cursor: pointer;
-  font-weight: 800;
-  font-size: 13px;
-  color: var(--ink-secondary);
-}
-
-.sheet-source-details dl {
-  max-height: 40vh;
-  overflow: auto;
-  margin: 12px 0 0;
-}
-
-.sheet-source-details dl div {
-  display: grid;
-  grid-template-columns: minmax(140px, 1fr) 2fr;
-  gap: 12px;
-  padding: 6px 0;
-  border-top: 1px solid var(--border-subtle);
-  font-size: 12px;
-}
-
-.sheet-source-details dt {
-  color: var(--ink-muted);
-  overflow-wrap: anywhere;
-}
-
-.sheet-source-details dd {
-  margin: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }

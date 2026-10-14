@@ -261,38 +261,6 @@ function GoldInteractive({ gold: savedGold, initialGold, onChange, disabled }: {
   )
 }
 
-const labels: Record<string, string> = {
-  level: '等级', profession: '职业', community: '社群', subclass: '分支',
-  ancestry1: '种族', ancestry2: '第二种族', proficiency: '熟练度',
-  evasion: '闪避值', armorValue: '护甲值', armorName: '护甲', armorBaseScore: '护甲基础值', armorThreshold: '护甲阈值', armorFeature: '护甲特性', armorBonus: '护甲加值',
-  minorThreshold: '轻伤阈值', majorThreshold: '重伤阈值',
-  agility: '敏捷', strength: '力量', finesse: '灵巧', instinct: '本能', presence: '风度', knowledge: '知识',
-  primaryWeaponName: '主武器', primaryWeaponTrait: '主武器属性', primaryWeaponRange: '主武器攻击距离', primaryWeaponDistance: '主武器攻击距离', primaryWeaponDamage: '主武器伤害', primaryWeaponFeature: '主武器特性',
-  secondaryWeaponName: '副武器', secondaryWeaponTrait: '副武器属性', secondaryWeaponRange: '副武器攻击距离', secondaryWeaponDistance: '副武器攻击距离', secondaryWeaponDamage: '副武器伤害', secondaryWeaponFeature: '副武器特性',
-  inventoryWeapon1Name: '备用武器一', inventoryWeapon1Trait: '备用武器一属性', inventoryWeapon1Damage: '备用武器一伤害', inventoryWeapon1Feature: '备用武器一特性',
-  inventoryWeapon2Name: '备用武器二', inventoryWeapon2Trait: '备用武器二属性', inventoryWeapon2Damage: '备用武器二伤害', inventoryWeapon2Feature: '备用武器二特性',
-  characterBackground: '背景', characterAppearance: '外貌', characterMotivation: '动机',
-  companionName: '伙伴名称', companionDescription: '伙伴描述', companionWeapon: '攻击方式', companionRange: '伤害骰', companionEvasion: '闪避值',
-  characterProfile: '角色简介', playerInfo: '玩家信息', backstory: '背景故事', milestones: '大事记', adventureLog: '冒险履历',
-  race: '种族', age: '年龄', gender: '性别', height: '身高', weight: '体重', skinColor: '肤色', eyeColor: '瞳色', hairColor: '发色', birthplace: '出生地', faith: '信仰／理念', otherInfo: '其他信息',
-  nickname: '昵称', preference: '偏好', activeTime: '活动时间', playStyle: '游戏风格',
-  date: '时间', levelRange: '等级跨度', trauma: '创伤', backgroundQuestions: '背景问题', relationships: '关系',
-  name: '名称', title: '名称', type: '类型', description: '描述', text: '正文', effect: '效果', feature: '特性', cost: '花费', domain: '领域', rarity: '稀有度',
-}
-
-function label(key: string): string {
-  return labels[key] ?? key
-}
-
-// ===== SOURCE DETAILS FALLBACK =====
-function sourceFields(value: unknown, path: string[] = []): Array<[string, string]> {
-  if (Array.isArray(value)) return value.flatMap((item, index) => sourceFields(item, [...path, String(index + 1)]))
-  const nested = record(value)
-  if (nested) return Object.entries(nested).flatMap(([key, item]) => sourceFields(item, [...path, label(key)]))
-  const shown = scalar(value)
-  return shown === null ? [] : [[path.join(' › '), shown]]
-}
-
 // ===== MAIN COMPONENT =====
 export default function ReadOnlyCharacterSheet({ sheet: originalSheet, resources, onGoldChange, disabled = false }: { sheet: CharacterSheetJson; resources: CharacterResources; onGoldChange?: (index: number, marked: boolean) => void; disabled?: boolean }) {
   const view = originalSheet.desktopView
@@ -584,18 +552,6 @@ export default function ReadOnlyCharacterSheet({ sheet: originalSheet, resources
         </div>
       </section>
 
-      {/* 完整角色字段（未排版拓展明细，满足数据完整性及测试断言） */}
-      <details className="sheet-source-details">
-        <summary>完整角色字段（含未单独排版的字段）</summary>
-        <dl>
-          {sourceFields(sheet).map(([name, value], index) => (
-            <div key={`${name}-${index}`}>
-              <dt>{name}</dt>
-              <dd>{value}</dd>
-            </div>
-          ))}
-        </dl>
-      </details>
     </article>
   )
 }

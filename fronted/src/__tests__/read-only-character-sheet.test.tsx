@@ -10,8 +10,7 @@ describe('read-only character sheet', () => {
     expect(html).toContain('熟练度与经历')
     expect(html).toContain('金币存量')
     expect(html).toContain('武器与护甲配置')
-    expect(html).toContain('出生地')
-    expect(html).toContain('守护故乡。')
+    expect(html).not.toContain('完整角色字段')
     expect(html).not.toContain('characterImage')
     expect(html).not.toContain('base64')
     expect(html).not.toContain('<pre')
@@ -30,18 +29,15 @@ describe('read-only character sheet', () => {
     expect(html).toContain('金币（箱）')
     expect(html).toContain('1 / 1')
   })
-  it('shows the sent threshold and all edited source text in the read-only detail', () => {
+  it('shows formatted background without a raw source field list', () => {
     const html = renderToStaticMarkup(<ReadOnlyCharacterSheet sheet={{
       ruleSetId: 'daggerheart', name: '阿岚', hope: 3, cards: [], minorThreshold: '9', characterBackground: '刚修改的背景',
-      customNotes: { title: '手写标题', lines: ['第一句'] },
       desktopView: { version: 1, evasion: '11', armorValue: '2', minorThreshold: '17', majorThreshold: '28',
         attributes: { agility: '+2', strength: '+1', finesse: '0', instinct: '0', presence: '0', knowledge: '0' },
         hpMax: 7, stressMax: 7, armorMax: 2, primaryWeaponAttribute: '', primaryWeaponRange: '', secondaryWeaponAttribute: '', secondaryWeaponRange: '' },
     }} resources={{ hope: 3, hopeMax: 6, hp: Array(7).fill(false), stress: Array(7).fill(false), armor: [false, false] }} />)
-    expect(html).toContain('<dd>17</dd>')
     expect(html).toContain('刚修改的背景')
-    expect(html).toContain('手写标题')
-    expect(html).toContain('第一句')
-    expect(html).toContain('完整角色字段')
+    expect(html).not.toContain('完整角色字段')
+    expect(html).not.toContain('sheet-source-details')
   })
 })
