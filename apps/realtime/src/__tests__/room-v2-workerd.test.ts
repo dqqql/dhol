@@ -64,6 +64,25 @@ function nextPresence(socket: WebSocket): Promise<{ members: Array<{ id: string;
 }
 
 describe('Room V2 workerd integration', () => {
+  it('broadcasts a countdown to another member and includes it in later snapshots', async () => {
+    const { stub, room } = await createRoom('WRK007')
+    const first = await socketFor(stub, room, room.players[0])
+    const second = await socketFor(stub, room, room.players[1])
+    const changed = new Promise<RoomEvent>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('timed out waiting for clock.changed')), 5_000)
+      second.addEventListener('message', message => {
+        const event = JSON.parse(String(message.data)) as RoomEvent
+        if (event.type === 'clock.changed') { clearTimeout(timeout); resolve(event) }
+      })
+    })
+    first.send(JSON.stringify({ type: 'clock.create', protocolVersion: 2, requestId: 'create-clock', id: 'clock-1', name: '援军抵达', max: 6 }))
+    await expect(changed).resolves.toMatchObject({ type: 'clock.changed', clock: { id: 'clock-1', name: '援军抵达', value: 0, max: 6 } })
+    await runInDurableObject(stub, async (_instance, state) => {
+      const storage = new RoomV2Storage(state.storage)
+      expect(storage.snapshot('player-b', [])?.room.clocks).toEqual([{ id: 'clock-1', name: '援军抵达', value: 0, max: 6 }])
+    })
+    first.close(); second.close()
+  })
   it('updates online members when tabs connect and close, counting two tabs for one player once', async () => {
     const { stub, room } = await createRoom('WRK006')
     const first = await socketFor(stub, room, room.players[0])

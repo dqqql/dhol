@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clearRoomBrowserState, loadCountdowns } from '../desktop/room-browser-state'
+import { clearRoomBrowserState, loadLegacyCountdowns } from '../desktop/room-browser-state'
 
 class MemoryStorage implements Storage {
   private data = new Map<string, string>()
@@ -12,10 +12,14 @@ class MemoryStorage implements Storage {
 }
 
 describe('room-local browser state', () => {
-  it('starts a room with no preset countdowns', () => {
-    expect(loadCountdowns(new MemoryStorage(), 'missing')).toEqual([])
+  it('loads valid legacy countdowns and ignores malformed entries', () => {
+    const storage = new MemoryStorage()
+    storage.setItem('dhol-countdowns-room-a', JSON.stringify([
+      { id: 'c123', name: '援军抵达', value: 3, max: 6 },
+      { id: '../bad', name: '无效', value: 0, max: 6 },
+    ]))
+    expect(loadLegacyCountdowns(storage, 'room-a')).toEqual([{ id: 'c123', name: '援军抵达', value: 3, max: 6 }])
   })
-
   it('removes every local artifact for only the deleted room', () => {
     const storage = new MemoryStorage()
     storage.setItem('dhol-countdowns-room-a', '[]')

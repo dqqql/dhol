@@ -19,9 +19,10 @@ function project(room: RoomV2Model, pending: PendingOperation[]): RoomV2Model {
   let view = room
   for (const entry of pending) {
     const command = entry.command
-    if ('name' in command) {
+    if ('generation' in command) {
+      if (command.type === 'character.delete') continue
       const character = view.characters.find(item => item.name === command.name && item.generation === command.generation)
-      if (!character || command.type === 'character.delete') continue
+      if (!character) continue
       const resources = { ...character.resources }
       if (command.type === 'character.adjustHope') resources.hope = Math.max(0, Math.min(resources.hopeMax, resources.hope + command.delta))
       else if (command.type === 'character.addIndicator') {
@@ -36,6 +37,9 @@ function project(room: RoomV2Model, pending: PendingOperation[]): RoomV2Model {
       }
       view = { ...view, characters: view.characters.map(item => item === character ? { ...character, resources } : item) }
     } else if (command.type === 'room.adjustFear') view = { ...view, fear: { ...view.fear, value: Math.max(0, Math.min(view.fear.max, view.fear.value + command.delta)) } }
+    else if (command.type === 'clock.create') view = { ...view, clocks: [...view.clocks, { id: command.id, name: command.name, value: command.value ?? 0, max: command.max }] }
+    else if (command.type === 'clock.delete') view = { ...view, clocks: view.clocks.filter(clock => clock.id !== command.id) }
+    else if (command.type === 'clock.adjust' || command.type === 'clock.reset') view = { ...view, clocks: view.clocks.map(clock => clock.id === command.id ? { ...clock, value: command.type === 'clock.reset' ? 0 : Math.max(0, Math.min(clock.max, clock.value + command.delta)) } : clock) }
     else if (command.type === 'xcard.set') view = { ...view, xCard: { ...view.xCard, active: command.active } }
   }
   return view
@@ -158,7 +162,7 @@ export class RoomSync {
     }
     for (const entry of this.outbox.list()) {
       const command = entry.command
-      if ('name' in command) {
+      if ('generation' in command) {
         const character = this.confirmed.getState().room?.characters.find(item => item.name === command.name)
         if (!character || character.generation !== command.generation) {
           this.finish(entry.command.requestId)

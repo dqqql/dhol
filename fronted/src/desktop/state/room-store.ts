@@ -19,6 +19,8 @@ export function applyRoomEvent(room: RoomV2Model, event: RoomEvent): RoomV2Model
     case 'dice.rolled': return { ...base, dice: [...room.dice, event.roll].slice(-50) }
     case 'dice.historyCleared': return { ...base, dice: [] }
     case 'xcard.changed': return { ...base, xCard: event.xCard }
+    case 'clock.changed': return { ...base, clocks: room.clocks.some(clock => clock.id === event.clock.id) ? room.clocks.map(clock => clock.id === event.clock.id ? event.clock : clock) : [...room.clocks, event.clock] }
+    case 'clock.deleted': return { ...base, clocks: room.clocks.filter(clock => clock.id !== event.id) }
   }
 }
 

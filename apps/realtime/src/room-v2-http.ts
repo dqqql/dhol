@@ -80,7 +80,7 @@ async function join(request: Request, env: RoomV2Env): Promise<Response> {
   return sessionResponse(request, env, payload.room, payload.player)
 }
 
-function restoreState(value: unknown): { name: string; fear: number; xCard: RoomV2Model['xCard']; dice: DiceRollRecord[]; characters: Array<{ sheet: CharacterSheetJson; resources: CharacterResources; position: number }> } {
+function restoreState(value: unknown): { name: string; fear: number; xCard: RoomV2Model['xCard']; dice: DiceRollRecord[]; clocks: RoomV2Model['clocks']; characters: Array<{ sheet: CharacterSheetJson; resources: CharacterResources; position: number }> } {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('INVALID_BACKUP')
   const backup = value as { schemaVersion?: unknown; room?: unknown; characters?: unknown }
   if (backup.schemaVersion !== 2 || !backup.room || typeof backup.room !== 'object' || !Array.isArray(backup.characters)) throw new Error('INVALID_BACKUP')
@@ -100,7 +100,9 @@ function restoreState(value: unknown): { name: string; fear: number; xCard: Room
     return { sheet: delivery.sheet, resources, position: Number.isSafeInteger(summary.position) ? summary.position : index }
   })
   if (room.dice.some(roll => !roll || typeof roll !== 'object' || typeof roll.id !== 'string' || typeof roll.actor_name !== 'string' || typeof roll.normalized_formula !== 'string' || !Array.isArray(roll.results))) throw new Error('INVALID_BACKUP')
-  return { name: text(room.name, 60) || 'Restored Room', fear: Math.max(0, Math.min(12, Math.floor(room.fear.value))), xCard: { active: room.xCard.active, updatedAt: typeof room.xCard.updatedAt === 'string' ? room.xCard.updatedAt : null }, dice: room.dice.slice(-50), characters }
+  const clocks = room.clocks ?? []
+  if (!Array.isArray(clocks) || clocks.length > 20 || new Set(clocks.map(clock => clock?.id)).size !== clocks.length || clocks.some(clock => !clock || typeof clock.id !== 'string' || !/^[\w-]{1,128}$/.test(clock.id) || typeof clock.name !== 'string' || !clock.name.trim() || clock.name.length > 60 || !Number.isSafeInteger(clock.max) || clock.max < 2 || clock.max > 12 || !Number.isSafeInteger(clock.value) || clock.value < 0 || clock.value > clock.max)) throw new Error('INVALID_BACKUP')
+  return { name: text(room.name, 60) || 'Restored Room', fear: Math.max(0, Math.min(12, Math.floor(room.fear.value))), xCard: { active: room.xCard.active, updatedAt: typeof room.xCard.updatedAt === 'string' ? room.xCard.updatedAt : null }, dice: room.dice.slice(-50), clocks, characters }
 }
 
 async function restore(request: Request, env: RoomV2Env): Promise<Response> {

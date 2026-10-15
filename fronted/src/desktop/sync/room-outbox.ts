@@ -39,7 +39,7 @@ export class RoomOutbox {
   }
   remove(requestId: string): void { this.persist(this.entries.filter(entry => entry.command.requestId !== requestId)) }
   removeGeneration(name: string, generation: number): string[] {
-    const removed = this.entries.filter(entry => 'name' in entry.command && entry.command.name === name && entry.command.generation === generation).map(entry => entry.command.requestId)
+    const removed = this.entries.filter(entry => 'generation' in entry.command && entry.command.name === name && entry.command.generation === generation).map(entry => entry.command.requestId)
     if (removed.length) this.persist(this.entries.filter(entry => !removed.includes(entry.command.requestId)))
     return removed
   }

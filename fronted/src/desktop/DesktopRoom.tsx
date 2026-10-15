@@ -7,12 +7,12 @@ import CharacterPanelBoard from './components/character-panel/CharacterPanelBoar
 import { pageCount } from './components/character-panel/pagination'
 import CharacterDetailDialog, { type DetailState } from './components/character-panel/CharacterDetailDialog'
 import FearTracker from './components/FearTracker'
-import CountdownTracker, { type CountdownClock } from './components/CountdownTracker'
+import CountdownTracker from './components/CountdownTracker'
 import XCard from './components/XCard'
 import DicePanel, { type DicePanelTab, type RoomLogItem } from './components/DicePanel'
 import RoomToolbar from './components/RoomToolbar'
 import BackupDialog from './components/BackupDialog'
-import { clearRoomBrowserState, loadCountdowns } from './room-browser-state'
+import { clearRoomBrowserState, loadLegacyCountdowns } from './room-browser-state'
 import './components/character-panel/character-panel.css'
 
 export default function DesktopRoom({ session, onLeave }: { session: DesktopSession; onLeave: () => void }) {
@@ -27,15 +27,12 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
   const lifecycle = useRef(0)
   const dicePanelRef = useRef<HTMLElement>(null)
   const quickRollSequence = useRef(0)
+  const legacyClocksQueued = useRef(false)
   const [diceTab, setDiceTab] = useState<DicePanelTab>('dual')
   const [detail, setDetail] = useState<{ character: CharacterSummary; state: DetailState } | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
-
-  // 倒计时持久化
-  const countdownsStorageKey = `dhol-countdowns-${session.roomId}`
-  const [clocks, setClocks] = useState<CountdownClock[]>(() => loadCountdowns(localStorage, countdownsStorageKey))
 
   // 房间流水记录持久化
   const roomLogStorageKey = `dhol-roomlog-${session.roomId}`
@@ -56,11 +53,6 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
       return next
     })
   }, [roomLogStorageKey])
-
-  const handleClocksChange = (nextClocks: CountdownClock[]) => {
-    setClocks(nextClocks)
-    try { localStorage.setItem(countdownsStorageKey, JSON.stringify(nextClocks)) } catch { /* ignore */ }
-  }
 
   const handleClearRoomLog = () => {
     setRoomLog([])
@@ -83,6 +75,26 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
   const room = state.room
   const ready = state.connection === 'ready'
   const submit = (command: Parameters<RoomSync['submit']>[0]) => { try { sync.submit(command) } catch { /* status explains the failure */ } }
+
+  useEffect(() => {
+    if (!ready || !room || legacyClocksQueued.current) return
+    const legacy = loadLegacyCountdowns(localStorage, session.roomId)
+    if (!legacy.length) return
+    try {
+      let count = room.clocks.length
+      const knownIds = new Set(room.clocks.map(clock => clock.id))
+      for (const clock of legacy) {
+        if (knownIds.has(clock.id) || count >= 20) continue
+        sync.submit({ type: 'clock.create', id: clock.id, name: clock.name.trim(), max: clock.max, value: clock.value })
+        count++
+        knownIds.add(clock.id)
+      }
+      if (legacy.every(clock => knownIds.has(clock.id))) {
+        legacyClocksQueued.current = true
+        localStorage.removeItem(`dhol-countdowns-${session.roomId}`)
+      }
+    } catch { /* outbox retains queued operations; retry any remaining clocks on reconnect */ }
+  }, [ready, room, session.roomId, sync])
 
   useEffect(() => {
     if (room && ui.page >= pageCount(room.characters.length)) sync.ui.setPage(pageCount(room.characters.length) - 1)
@@ -258,8 +270,12 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
                 onChange={handleFearChange}
               />
               <CountdownTracker
-                clocks={clocks}
-                onChange={handleClocksChange}
+                clocks={room.clocks}
+                ready={ready}
+                onCreate={(name, max) => submit({ type: 'clock.create', id: crypto.randomUUID(), name, max })}
+                onAdjust={(id, delta) => submit({ type: 'clock.adjust', id, delta })}
+                onReset={id => submit({ type: 'clock.reset', id })}
+                onDelete={id => submit({ type: 'clock.delete', id })}
                 onLog={addRoomLog}
               />
             </div>

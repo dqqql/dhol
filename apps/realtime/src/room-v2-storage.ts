@@ -1,4 +1,4 @@
-import { displayedResourceMax, summaryFromSheet, type CharacterResources, type CharacterSheetJson, type CharacterSummary, type DiceRollRecord, type MutationAck, type RoomV2Model } from '@dhgc/shared/desktop'
+import { displayedResourceMax, summaryFromSheet, type CharacterResources, type CharacterSheetJson, type CharacterSummary, type CountdownClock, type DiceRollRecord, type MutationAck, type RoomV2Model } from '@dhgc/shared/desktop'
 
 export interface StoredMeta {
   roomId: string
@@ -15,6 +15,7 @@ type CharacterRow = { name: string; generation: number; position: number; source
 type CharacterHeader = Pick<CharacterRow, 'name' | 'generation' | 'position'>
 type ResourceRow = { resources_json: string }
 type DiceRow = { record_json: string }
+type ClockRow = { clock_json: string }
 type ReceiptRow = { payload_hash: string; seq: number; result_json: string }
 type SessionAccessRow = { room_id: string | null; invite_code: string | null; expires_at: string | null; member: number | null }
 export interface RoomV2SessionAccess { roomId: string | null; inviteCode: string | null; expiresAt: string | null; member: boolean }
@@ -36,6 +37,7 @@ export class RoomV2Storage {
       CREATE TABLE IF NOT EXISTS panel_v2_characters (name TEXT PRIMARY KEY, generation INTEGER NOT NULL, position INTEGER NOT NULL, source_json TEXT NOT NULL, summary_json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS panel_v2_resources (name TEXT PRIMARY KEY, resources_json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS panel_v2_dice (seq INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, record_json TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS panel_v2_clocks (id TEXT PRIMARY KEY, position INTEGER NOT NULL, clock_json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS panel_v2_receipts (actor TEXT NOT NULL, request_id TEXT NOT NULL, payload_hash TEXT NOT NULL, seq INTEGER NOT NULL, result_json TEXT NOT NULL, PRIMARY KEY (actor, request_id));
     `)
   }
@@ -81,7 +83,7 @@ export class RoomV2Storage {
     return true
   }
 
-  restore(meta: StoredMeta, state: { fear: number; xCard: RoomV2Model['xCard']; dice: DiceRollRecord[]; characters: Array<{ sheet: CharacterSheetJson; resources: CharacterResources; position: number }> }): boolean {
+  restore(meta: StoredMeta, state: { fear: number; xCard: RoomV2Model['xCard']; dice: DiceRollRecord[]; clocks?: CountdownClock[]; characters: Array<{ sheet: CharacterSheetJson; resources: CharacterResources; position: number }> }): boolean {
     if (!this.create(meta)) return false
     this.transaction(() => {
       state.characters.forEach((item, index) => {
@@ -90,6 +92,7 @@ export class RoomV2Storage {
         this.saveCharacter(summary.name, generation, item.position, item.sheet, summary, item.resources)
       })
       state.dice.slice(-50).forEach((roll, index) => this.saveDice(index + 1, roll))
+      state.clocks?.forEach((clock, index) => this.saveClock(clock, index))
       const seq = Math.max(1, state.characters.length, state.dice.length)
       this.storage.sql.exec('UPDATE panel_v2_meta SET seq = ?, fear = ?, xcard_json = ? WHERE id = 1', seq, state.fear, JSON.stringify(state.xCard))
     })
@@ -175,6 +178,22 @@ export class RoomV2Storage {
     this.storage.sql.exec('DELETE FROM panel_v2_dice')
   }
 
+  clocks(): CountdownClock[] {
+    return this.storage.sql.exec<ClockRow>('SELECT clock_json FROM panel_v2_clocks ORDER BY position').toArray().map(row => JSON.parse(row.clock_json) as CountdownClock)
+  }
+
+  clock(id: string): CountdownClock | null {
+    const row = this.storage.sql.exec<ClockRow>('SELECT clock_json FROM panel_v2_clocks WHERE id = ?', id).toArray()[0]
+    return row ? JSON.parse(row.clock_json) as CountdownClock : null
+  }
+
+  saveClock(clock: CountdownClock, position?: number): void {
+    const nextPosition = position ?? this.storage.sql.exec<{ position: number }>('SELECT COALESCE(MAX(position), -1) + 1 AS position FROM panel_v2_clocks').one().position
+    this.storage.sql.exec('INSERT INTO panel_v2_clocks (id, position, clock_json) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET clock_json = excluded.clock_json', clock.id, nextPosition, JSON.stringify(clock))
+  }
+
+  deleteClock(id: string): void { this.storage.sql.exec('DELETE FROM panel_v2_clocks WHERE id = ?', id) }
+
   snapshot(actor: string, pendingRequestIds: string[], onlineIds: ReadonlySet<string> = new Set()): { room: RoomV2Model; receipts: MutationAck[] } | null {
     return this.transaction(() => {
       const row = this.metaRow()
@@ -190,7 +209,7 @@ export class RoomV2Storage {
           protocolVersion: 2, roomId: meta.roomId, name: meta.name, inviteCode: meta.inviteCode,
           expiresAt: meta.expiresAt, seq: row.seq,
           members: meta.players.map(player => ({ ...player, online: onlineIds.has(player.id) })),
-          characters, fear: { value: row.fear, max: 12 }, dice,
+          characters, fear: { value: row.fear, max: 12 }, clocks: this.clocks(), dice,
           xCard: row.xcard_json ? JSON.parse(row.xcard_json) as RoomV2Model['xCard'] : { active: false, updatedAt: null },
         },
         receipts: this.receipts(actor, pendingRequestIds),
