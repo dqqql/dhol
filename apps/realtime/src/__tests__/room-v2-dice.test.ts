@@ -26,6 +26,7 @@ function fixture(options: RoomV2CommandOptions = {}, persistenceOrder?: string[]
     deleteCharacter: () => undefined,
     saveDice: (rollSeq, roll) => { expect(activeTransactions).toBe(1); persistenceOrder?.push(`save:${rollSeq}:${roll.actor_name}`); dice.push(roll) },
     clearDice: () => undefined,
+    clocks: () => [], clock: () => null, saveClock: () => undefined, deleteClock: () => undefined,
   }
   const commands = new RoomV2Commands(db, event => { expect(activeTransactions).toBe(0); persistenceOrder?.push(`publish:${event.seq}`); events.push(event) }, { ...options, onRollMetric: metric => { metrics.push(metric); options.onRollMetric?.(metric) } })
   return { commands, db, dice, events, metrics, receipts, seq: () => seq }

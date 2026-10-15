@@ -9,7 +9,7 @@ export class CommandFailure extends Error {
 }
 
 export interface CommitResult { ack: MutationAck; event: RoomEvent | null; duplicate: boolean; action?: 'created' | 'updated' }
-export type CommandStorage = Pick<RoomV2Storage, 'receipt' | 'metaRow' | 'roomExpiresAt' | 'characterHeader' | 'resources' | 'nextPosition' | 'transaction' | 'advance' | 'saveReceipt' | 'saveResources' | 'saveCharacter' | 'deleteCharacter' | 'saveDice' | 'clearDice'>
+export type CommandStorage = Pick<RoomV2Storage, 'receipt' | 'metaRow' | 'roomExpiresAt' | 'characterHeader' | 'resources' | 'nextPosition' | 'transaction' | 'advance' | 'saveReceipt' | 'saveResources' | 'saveCharacter' | 'deleteCharacter' | 'saveDice' | 'clearDice' | 'clocks' | 'clock' | 'saveClock' | 'deleteClock'>
 export interface RoomV2CommandOptions {
   now?: () => number
   hash?: (value: unknown) => Promise<string>
@@ -155,6 +155,21 @@ export class RoomV2Commands {
         return { event: { type: 'character.resourcesChanged', requestId, seq, name: command.name, generation: command.generation, resources }, write: () => this.db.saveResources(command.name, resources) }
       }
       const meta = this.db.metaRow()!
+      if (command.type === 'clock.create') {
+        if (this.db.clock(command.id)) throw new CommandFailure('INVALID_COMMAND', '倒计时 ID 已存在')
+        if (this.db.clocks().length >= 20) throw new CommandFailure('INVALID_COMMAND', '房间最多 20 个倒计时')
+        const clock = { id: command.id, name: command.name, value: command.value ?? 0, max: command.max }
+        return { event: { type: 'clock.changed', requestId, seq, clock }, write: () => this.db.saveClock(clock) }
+      }
+      if (command.type === 'clock.adjust' || command.type === 'clock.reset' || command.type === 'clock.delete') {
+        const previous = this.db.clock(command.id)
+        if (!previous) throw new CommandFailure('INVALID_COMMAND', '倒计时已不存在')
+        if (command.type === 'clock.delete') return { event: { type: 'clock.deleted', requestId, seq, id: command.id }, write: () => this.db.deleteClock(command.id) }
+        const value = command.type === 'clock.reset' ? 0 : Math.max(0, Math.min(previous.max, previous.value + command.delta))
+        if (value === previous.value) return { event: null, write: () => undefined }
+        const clock = { ...previous, value }
+        return { event: { type: 'clock.changed', requestId, seq, clock }, write: () => this.db.saveClock(clock) }
+      }
       if (command.type === 'room.adjustFear') {
         const value = Math.max(0, Math.min(12, meta.fear + command.delta))
         return value === meta.fear ? { event: null, write: () => undefined } : { event: { type: 'room.fearChanged', requestId, seq, fear: { value, max: 12 } }, write: () => undefined }

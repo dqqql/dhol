@@ -1,19 +1,21 @@
 import { useState } from 'react'
-
-export interface CountdownClock {
-  id: string
-  name: string
-  value: number
-  max: number
-}
+import type { CountdownClock } from '@dhgc/shared/desktop'
 
 export default function CountdownTracker({
   clocks,
-  onChange,
+  ready,
+  onCreate,
+  onAdjust,
+  onReset,
+  onDelete,
   onLog
 }: {
   clocks: CountdownClock[]
-  onChange: (clocks: CountdownClock[]) => void
+  ready: boolean
+  onCreate: (name: string, max: number) => void
+  onAdjust: (id: string, delta: 1 | -1) => void
+  onReset: (id: string) => void
+  onDelete: (id: string) => void
   onLog?: (text: string) => void
 }) {
   const [isAddOpen, setIsAddOpen] = useState(false)
@@ -21,32 +23,25 @@ export default function CountdownTracker({
   const [newMax, setNewMax] = useState(6)
   const [deleteTarget, setDeleteTarget] = useState<CountdownClock | null>(null)
 
-  const handleAdjust = (index: number, delta: number) => {
-    const next = [...clocks]
-    const clock = next[index]
-    if (!clock) return
-    clock.value = Math.max(0, Math.min(clock.max, clock.value + delta))
-    onLog?.(`倒计时【${clock.name}】推进至 ${clock.value}/${clock.max}`)
-    if (clock.value >= clock.max) {
+  const handleAdjust = (clock: CountdownClock, delta: 1 | -1) => {
+    const value = Math.max(0, Math.min(clock.max, clock.value + delta))
+    if (value === clock.value) return
+    onAdjust(clock.id, delta)
+    onLog?.(`倒计时【${clock.name}】推进至 ${value}/${clock.max}`)
+    if (value >= clock.max) {
       onLog?.(`倒计时【${clock.name}】已满格触发！`)
     }
-    onChange(next)
   }
 
-  const handleReset = (index: number) => {
-    const next = [...clocks]
-    if (next[index]) {
-      next[index].value = 0
-      onLog?.(`倒计时【${next[index].name}】已重置`)
-      onChange(next)
-    }
+  const handleReset = (clock: CountdownClock) => {
+    onReset(clock.id)
+    onLog?.(`倒计时【${clock.name}】已重置`)
   }
 
   const handleCreate = () => {
     const name = newName.trim() || '倒计时'
-    const next = [...clocks, { id: 'c' + Date.now(), name, value: 0, max: newMax }]
+    onCreate(name, newMax)
     onLog?.(`新建倒计时【${name}】(${newMax}步)`)
-    onChange(next)
     setIsAddOpen(false)
     setNewName('')
     setNewMax(6)
@@ -54,9 +49,8 @@ export default function CountdownTracker({
 
   const handleConfirmDelete = () => {
     if (deleteTarget) {
-      const next = clocks.filter(c => c.id !== deleteTarget.id)
+      onDelete(deleteTarget.id)
       onLog?.(`已删除倒计时【${deleteTarget.name}】`)
-      onChange(next)
       setDeleteTarget(null)
     }
   }
@@ -64,11 +58,11 @@ export default function CountdownTracker({
   return <section className="clocks-card" aria-labelledby="clocks-title">
     <div className="clocks-header">
       <h3 id="clocks-title" className="clocks-title">倒计时</h3>
-      <button type="button" onClick={() => setIsAddOpen(true)}>+ 新建</button>
+      <button type="button" disabled={!ready || clocks.length >= 20} onClick={() => setIsAddOpen(true)}>+ 新建</button>
     </div>
 
     <div className="clocks-list">
-      {clocks.map((clock, index) => {
+      {clocks.map(clock => {
         const isTriggered = clock.value >= clock.max
         const slots = Array.from({ length: clock.max }, (_, i) => i < clock.value)
         return <div key={clock.id} className={`clock-item ${isTriggered ? 'triggered' : ''}`}>
@@ -84,15 +78,15 @@ export default function CountdownTracker({
           </div>
           <div className="clock-item-foot">
             <div className="clock-steppers">
-              <button type="button" disabled={clock.value <= 0} onClick={() => handleAdjust(index, -1)}>−</button>
-              <button type="button" disabled={clock.value >= clock.max} onClick={() => handleAdjust(index, 1)}>+</button>
-              <button type="button" style={{ fontSize: '12px', padding: '0 8px' }} onClick={() => handleReset(index)}>重置</button>
+              <button type="button" disabled={!ready || clock.value <= 0} onClick={() => handleAdjust(clock, -1)}>−</button>
+              <button type="button" disabled={!ready || clock.value >= clock.max} onClick={() => handleAdjust(clock, 1)}>+</button>
+              <button type="button" disabled={!ready || clock.value === 0} style={{ fontSize: '12px', padding: '0 8px' }} onClick={() => handleReset(clock)}>重置</button>
             </div>
-            <button type="button" className="clock-del-btn" onClick={() => setDeleteTarget(clock)}>删除</button>
+            <button type="button" className="clock-del-btn" disabled={!ready} onClick={() => setDeleteTarget(clock)}>删除</button>
           </div>
         </div>
       })}
-      <div className="clock-new-box" onClick={() => setIsAddOpen(true)}>+ 新建倒计时</div>
+      {ready && clocks.length < 20 && <button type="button" className="clock-new-box" onClick={() => setIsAddOpen(true)}>+ 新建倒计时</button>}
     </div>
 
     {/* 新建倒计时弹窗 (滑块 2-12) */}
@@ -110,6 +104,7 @@ export default function CountdownTracker({
                 type="text"
                 placeholder="例如：援军抵达"
                 value={newName}
+                maxLength={60}
                 onChange={e => setNewName(e.target.value)}
                 style={{ width: '100%', marginTop: '6px' }}
               />
@@ -137,7 +132,7 @@ export default function CountdownTracker({
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
               <button type="button" onClick={() => setIsAddOpen(false)}>取消</button>
-              <button type="button" style={{ background: 'var(--ink)', color: '#fff' }} onClick={handleCreate}>创建</button>
+              <button type="button" disabled={!ready} style={{ background: 'var(--ink)', color: '#fff' }} onClick={handleCreate}>创建</button>
             </div>
           </div>
         </div>
@@ -157,7 +152,7 @@ export default function CountdownTracker({
           </p>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
             <button type="button" onClick={() => setDeleteTarget(null)}>取消</button>
-            <button type="button" className="btn-alert-confirm" onClick={handleConfirmDelete}>删除</button>
+            <button type="button" className="btn-alert-confirm" disabled={!ready} onClick={handleConfirmDelete}>删除</button>
           </div>
         </div>
       </div>

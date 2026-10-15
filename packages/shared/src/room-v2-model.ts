@@ -42,6 +42,7 @@ export interface RoomMember {
   nickname: string
   online: boolean
 }
+export interface CountdownClock { id: string; name: string; value: number; max: number }
 export interface RoomV2Model {
   protocolVersion: 2
   roomId: string
@@ -52,6 +53,7 @@ export interface RoomV2Model {
   members: RoomMember[]
   characters: CharacterSummary[]
   fear: { value: number; max: number }
+  clocks: CountdownClock[]
   dice: DiceRollRecord[]
   xCard: { active: boolean; updatedAt: string | null }
 }

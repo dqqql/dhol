@@ -15,6 +15,7 @@ export function createRoomV2Fixture(roomId = 'room-fixture', seq = 0): RoomV2Mod
     members: [{ id: 'player-a', nickname: '测试甲', online: true }, { id: 'player-b', nickname: '测试乙', online: true }],
     characters: [summaryFromSheet(sheet, resourcesFromSheet(sheet), 1, 0)],
     fear: { value: 0, max: 12 },
+    clocks: [],
     dice: [],
     xCard: { active: false, updatedAt: null },
   }

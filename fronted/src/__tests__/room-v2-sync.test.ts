@@ -17,6 +17,20 @@ function harness(roomId = 'room-fixture') {
 }
 
 describe('Room V2 sync', () => {
+  it('projects clock edits locally and applies broadcasts and reconnect snapshots for other members', () => {
+    const { sync, room } = harness()
+    const requestId = sync.submit({ type: 'clock.create', id: 'clock-1', name: '援军抵达', max: 4 })
+    expect(sync.getState().room?.clocks).toEqual([{ id: 'clock-1', name: '援军抵达', value: 0, max: 4 }])
+    const clock = sync.getState().room!.clocks[0]
+    sync.receive({ type: 'clock.changed', requestId, seq: 1, clock })
+    sync.receive({ type: 'clock.changed', requestId: 'player-b-step', seq: 2, clock: { ...clock, value: 1 } })
+    expect(sync.getState().room?.clocks[0].value).toBe(1)
+    sync.receive({ type: 'room.snapshot', protocolVersion: 2, room: { ...room, seq: 3, clocks: [{ ...clock, value: 2 }] }, receipts: [] })
+    expect(sync.getState().room?.clocks[0].value).toBe(2)
+    sync.receive({ type: 'clock.deleted', requestId: 'player-b-delete', seq: 4, id: clock.id })
+    expect(sync.getState().room?.clocks).toEqual([])
+    sync.destroy()
+  })
   it('drops an unsupported indicator command rejected by an older Worker without a request ID', () => {
     const { sync, room } = harness()
     const character = room.characters[0]

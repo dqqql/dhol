@@ -8,6 +8,7 @@ function fixture() {
   let failNext = false
   const receipts = new Map<string, { payload_hash: string; seq: number; result_json: string }>()
   const dice = new Map<string, unknown>()
+  const clocks = new Map<string, { id: string; name: string; value: number; max: number }>()
   const events: RoomEvent[] = []
   const db: CommandStorage = {
     receipt: (actor, requestId) => receipts.get(`${actor}:${requestId}`) ?? null,
@@ -19,11 +20,30 @@ function fixture() {
     saveReceipt: (actor, requestId, hash, receiptSeq, result) => { receipts.set(`${actor}:${requestId}`, { payload_hash: hash, seq: receiptSeq, result_json: JSON.stringify(result) }) },
     saveResources: () => undefined, saveCharacter: () => undefined, deleteCharacter: () => undefined,
     saveDice: (_seq, roll) => { dice.set(roll.id, roll) }, clearDice: () => { dice.clear() },
+    clocks: () => [...clocks.values()], clock: id => clocks.get(id) ?? null,
+    saveClock: clock => { clocks.set(clock.id, clock) }, deleteClock: id => { clocks.delete(id) },
   }
-  return { db, events, dice, commands: new RoomV2Commands(db, event => events.push(event)), fail: () => { failNext = true }, state: () => ({ seq, fear, receipts: receipts.size }) }
+  return { db, events, dice, clocks, commands: new RoomV2Commands(db, event => events.push(event)), fail: () => { failNext = true }, state: () => ({ seq, fear, receipts: receipts.size }) }
 }
 
 describe('Room V2 command commits', () => {
+  it('shares clock creation, concurrent adjustments, reset and deletion as sequenced events', async () => {
+    const room = fixture()
+    const create = { type: 'clock.create' as const, protocolVersion: 2 as const, requestId: 'create', id: 'clock-1', name: '援军抵达', max: 4 }
+    await room.commands.mutate('player-a', '甲', create)
+    await Promise.all([
+      room.commands.mutate('player-a', '甲', { type: 'clock.adjust', protocolVersion: 2, requestId: 'step-a', id: 'clock-1', delta: 1 }),
+      room.commands.mutate('player-b', '乙', { type: 'clock.adjust', protocolVersion: 2, requestId: 'step-b', id: 'clock-1', delta: 1 }),
+    ])
+    expect(room.clocks.get('clock-1')?.value).toBe(2)
+    await room.commands.mutate('player-b', '乙', { type: 'clock.reset', protocolVersion: 2, requestId: 'reset', id: 'clock-1' })
+    await room.commands.mutate('player-a', '甲', create)
+    expect(room.events).toHaveLength(4)
+    expect(room.clocks.get('clock-1')?.value).toBe(0)
+    await room.commands.mutate('player-b', '乙', { type: 'clock.delete', protocolVersion: 2, requestId: 'delete', id: 'clock-1' })
+    expect(room.clocks.size).toBe(0)
+    expect(room.events.map(event => event.seq)).toEqual([1, 2, 3, 4, 5])
+  })
   it('syncs six character indicators and compacts the row when a counter reaches zero', async () => {
     const room = fixture()
     let resources = { hope: 1, hopeMax: 6, hp: [false], stress: [false], armor: [false], indicators: [] as Array<{ id: string; name: string; value: number }> }

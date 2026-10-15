@@ -22,6 +22,7 @@ describe('Room V2 recovery contract', () => {
       saveReceipt: (actor, requestId, hash, receiptSeq, result) => { receipts.set(`${actor}:${requestId}`, { payload_hash: hash, seq: receiptSeq, result_json: JSON.stringify(result) }) },
       saveResources: (_name, next) => { resources = structuredClone(next) },
       saveCharacter: () => undefined, deleteCharacter: () => undefined, saveDice: () => undefined, clearDice: () => undefined,
+      clocks: () => [], clock: () => null, saveClock: () => undefined, deleteClock: () => undefined,
     }
     return { db, resources: () => resources, seq: () => seq }
   }
@@ -75,6 +76,7 @@ describe('Room V2 recovery contract', () => {
         resources = structuredClone(resourcesFromSheet(delivered))
       },
       deleteCharacter: () => undefined, saveDice: () => undefined, clearDice: () => undefined,
+      clocks: () => [], clock: () => null, saveClock: () => undefined, deleteClock: () => undefined,
     }
     const commands = new RoomV2Commands(db, () => undefined)
 

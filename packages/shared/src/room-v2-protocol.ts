@@ -1,7 +1,7 @@
 import type { DiceRollRecord, DiceRollRequest } from './dice-types'
 import { normalizeDiceRollRequest } from './dice'
 import { characterNameKey } from './character-panel'
-import type { CharacterResources, CharacterSummary, RoomMember, RoomV2Model, TrackResource } from './room-v2-model'
+import type { CharacterResources, CharacterSummary, CountdownClock, RoomMember, RoomV2Model, TrackResource } from './room-v2-model'
 
 export const ROOM_V2_PROTOCOL_VERSION = 2 as const
 export const ROOM_V2_SESSION_AUDIENCE = 'dhol-room-v2' as const
@@ -19,6 +19,10 @@ export type RoomCommand = MutationEnvelope & (
   | { type: 'dice.clearHistory' }
   | { type: 'xcard.set'; active: boolean }
   | { type: 'character.delete'; name: string; generation: number }
+  | { type: 'clock.create'; id: string; name: string; max: number; value?: number }
+  | { type: 'clock.adjust'; id: string; delta: 1 | -1 }
+  | { type: 'clock.reset'; id: string }
+  | { type: 'clock.delete'; id: string }
 )
 export type MutationCommand = ResourceCommand | RoomCommand
 export interface SyncRequest { type: 'room.sync'; protocolVersion: 2; afterSeq: number; pendingRequestIds: string[] }
@@ -37,6 +41,8 @@ export type RoomEvent = EventBase & (
   | { type: 'dice.rolled'; roll: DiceRollRecord }
   | { type: 'dice.historyCleared' }
   | { type: 'xcard.changed'; xCard: { active: boolean; updatedAt: string | null } }
+  | { type: 'clock.changed'; clock: CountdownClock }
+  | { type: 'clock.deleted'; id: string }
 )
 export interface RoomSnapshot { type: 'room.snapshot'; protocolVersion: 2; room: RoomV2Model; receipts: MutationAck[] }
 export interface RoomPresence { type: 'room.presence'; protocolVersion: 2; members: RoomMember[] }
@@ -60,6 +66,19 @@ export function parseMutationCommand(value: unknown): MutationCommand {
     try { command.name = characterNameKey(command.name) } catch { throw new Error('INVALID_COMMAND') }
   }
   switch (command.type) {
+    case 'clock.create':
+      if (typeof command.id === 'string' && /^[\w-]{1,128}$/.test(command.id) && typeof command.name === 'string' && command.name.trim().length > 0 && command.name.trim().length <= 60 && Number.isSafeInteger(command.max) && (command.max as number) >= 2 && (command.max as number) <= 12 && (command.value === undefined || (Number.isSafeInteger(command.value) && (command.value as number) >= 0 && (command.value as number) <= (command.max as number)))) {
+        command.name = command.name.trim()
+        return command as unknown as MutationCommand
+      }
+      break
+    case 'clock.adjust':
+      if (typeof command.id === 'string' && /^[\w-]{1,128}$/.test(command.id) && (command.delta === 1 || command.delta === -1)) return command as unknown as MutationCommand
+      break
+    case 'clock.reset':
+    case 'clock.delete':
+      if (typeof command.id === 'string' && /^[\w-]{1,128}$/.test(command.id)) return command as unknown as MutationCommand
+      break
     case 'character.adjustHope':
     case 'room.adjustFear':
       if (command.delta !== 1 && command.delta !== -1) break

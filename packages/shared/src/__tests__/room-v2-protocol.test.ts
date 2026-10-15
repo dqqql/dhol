@@ -17,4 +17,16 @@ describe('v2 protocol', () => {
     expect(parseSyncRequest({ type: 'room.sync', protocolVersion: 2, afterSeq: 12, pendingRequestIds: ['a'] }).afterSeq).toBe(12)
     expect(() => parseSyncRequest({ type: 'room.sync', protocolVersion: 2, afterSeq: -1, pendingRequestIds: [] })).toThrow('INVALID_COMMAND')
   })
+  it('validates clock commands before they reach storage', () => {
+    const base = { protocolVersion: 2, requestId: 'clock-1', id: 'clock-1' }
+    expect(parseMutationCommand({ ...base, type: 'clock.create', name: ' 援军 ', max: 6 })).toMatchObject({ name: '援军', max: 6 })
+    expect(parseMutationCommand({ ...base, type: 'clock.adjust', delta: 1 })).toMatchObject({ delta: 1 })
+    for (const command of [
+      { ...base, type: 'clock.create', name: ' ', max: 6 },
+      { ...base, type: 'clock.create', name: 'a', max: 13 },
+      { ...base, type: 'clock.create', name: 'a', max: 6, value: 7 },
+      { ...base, type: 'clock.adjust', delta: 2 },
+      { ...base, type: 'clock.reset', id: '../bad' },
+    ]) expect(() => parseMutationCommand(command)).toThrow('INVALID_COMMAND')
+  })
 })
