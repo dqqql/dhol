@@ -74,10 +74,13 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
   const ui = useSyncExternalStore(sync.ui.subscribe, sync.ui.getState)
   const room = state.room
   const ready = state.connection === 'ready'
+  // The Pages frontend can deploy before the realtime Worker. Older snapshots
+  // have no clocks field, so keep the room usable until the Worker is updated.
+  const clocksSupported = Array.isArray(room?.clocks)
   const submit = (command: Parameters<RoomSync['submit']>[0]) => { try { sync.submit(command) } catch { /* status explains the failure */ } }
 
   useEffect(() => {
-    if (!ready || !room || legacyClocksQueued.current) return
+    if (!ready || !room || !clocksSupported || legacyClocksQueued.current) return
     const legacy = loadLegacyCountdowns(localStorage, session.roomId)
     if (!legacy.length) return
     try {
@@ -94,7 +97,7 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
         localStorage.removeItem(`dhol-countdowns-${session.roomId}`)
       }
     } catch { /* outbox retains queued operations; retry any remaining clocks on reconnect */ }
-  }, [ready, room, session.roomId, sync])
+  }, [ready, room, clocksSupported, session.roomId, sync])
 
   useEffect(() => {
     if (room && ui.page >= pageCount(room.characters.length)) sync.ui.setPage(pageCount(room.characters.length) - 1)
@@ -270,14 +273,15 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
                 onChange={handleFearChange}
               />
               <CountdownTracker
-                clocks={room.clocks}
-                ready={ready}
+                clocks={clocksSupported ? room.clocks : []}
+                ready={ready && clocksSupported}
                 onCreate={(name, max) => submit({ type: 'clock.create', id: crypto.randomUUID(), name, max })}
                 onAdjust={(id, delta) => submit({ type: 'clock.adjust', id, delta })}
                 onReset={id => submit({ type: 'clock.reset', id })}
                 onDelete={id => submit({ type: 'clock.delete', id })}
                 onLog={addRoomLog}
               />
+              {!clocksSupported && <p role="status">房间服务尚未更新，倒计时暂不可用。</p>}
             </div>
           </section>
 
