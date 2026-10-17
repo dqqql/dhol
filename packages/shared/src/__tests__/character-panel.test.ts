@@ -90,6 +90,42 @@ describe('JSON delivery', () => {
     expect(replaced[0].resources.stress).toHaveLength(7)
     expect(summaryFromSheet(parsed, replaced[0].resources, 2, 0)).toMatchObject({ minorThreshold: '17', attributes: { agility: '+3' }, primaryWeaponRange: '远距离' })
   })
+  it('derives PBDH weapon attributes and ranges from the raw weapon fields', () => {
+    const sheet = {
+      ...dagger,
+      primaryWeaponName: '长剑',
+      primaryWeaponTrait: '物理/双手/近战',
+      primaryWeaponDamage: '敏捷: d10+3',
+      secondaryWeaponName: '改良魔杖',
+      secondaryWeaponTrait: '魔法/单手/远距离',
+      secondaryWeaponDamage: '知识：d6+4',
+    }
+    expect(summaryFromSheet(sheet, resourcesFromSheet(sheet), 1, 0)).toMatchObject({
+      primaryWeaponTrait: '敏捷',
+      primaryWeaponRange: '近战',
+      secondaryWeaponTrait: '知识',
+      secondaryWeaponRange: '远距离',
+    })
+  })
+  it('falls back to raw PBDH weapon fields when the sent display values are blank', () => {
+    const desktopView = {
+      version: 1 as const, evasion: '11', armorValue: '2', minorThreshold: '7', majorThreshold: '13',
+      attributes: { agility: '+2', strength: '0', finesse: '+1', instinct: '+1', presence: '-1', knowledge: '0' },
+      hpMax: 6, stressMax: 6, armorMax: 3,
+      primaryWeaponAttribute: '', primaryWeaponRange: '', secondaryWeaponAttribute: '', secondaryWeaponRange: '',
+    }
+    const sheet = {
+      ...dagger,
+      primaryWeaponName: '长剑',
+      primaryWeaponTrait: '物理/双手/近战',
+      primaryWeaponDamage: '敏捷: d10+3',
+      desktopView,
+    }
+    expect(summaryFromSheet(sheet, resourcesFromSheet(sheet), 1, 0)).toMatchObject({
+      primaryWeaponTrait: '敏捷',
+      primaryWeaponRange: '近战',
+    })
+  })
   it.each([
     [deliver({ ...dagger, name: ' ' }), 'INVALID_CHARACTER'],
     [deliver({ ...dagger, ruleSetId: 'other' }), 'INVALID_CHARACTER'],

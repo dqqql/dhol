@@ -42,6 +42,29 @@ function attribute(value: unknown): string | null {
     : display(value)
 }
 
+const WEAPON_ATTRIBUTE = /(敏捷|力量|灵巧|本能|风度|知识)/
+const WEAPON_RANGE = /(极远距离|远距离|近距离|近战|邻近|极远)/
+
+function weaponDisplay(sheet: CharacterSheetJson, slot: 'primary' | 'secondary'): { trait: string | null; range: string | null } {
+  const prefix = `${slot}Weapon`
+  const rawTrait = display(sheet[`${prefix}Trait`])
+  const rawDamage = display(sheet[`${prefix}Damage`])
+  const sentAttribute = display(slot === 'primary' ? sheet.desktopView?.primaryWeaponAttribute : sheet.desktopView?.secondaryWeaponAttribute)
+  const sentRange = display(slot === 'primary' ? sheet.desktopView?.primaryWeaponRange : sheet.desktopView?.secondaryWeaponRange)
+
+  return {
+    trait: sentAttribute
+      ?? display(sheet[`${prefix}Attribute`])
+      ?? rawDamage?.match(WEAPON_ATTRIBUTE)?.[1]
+      ?? rawTrait?.match(WEAPON_ATTRIBUTE)?.[1]
+      ?? null,
+    range: sentRange
+      ?? display(sheet[`${prefix}Range`] ?? sheet[`${prefix}Distance`])
+      ?? rawTrait?.match(WEAPON_RANGE)?.[1]
+      ?? null,
+  }
+}
+
 const BUILTIN_PROFESSIONS: Record<string, string> = {
   bard: '吟游诗人',
   druid: '德鲁伊',
@@ -158,6 +181,8 @@ export function resourcesFromSheet(sheet: CharacterSheetJson): CharacterResource
 
 export function summaryFromSheet(sheet: CharacterSheetJson, resources: CharacterResources, generation: number, position: number): CharacterSummary {
   const shownAttribute = (key: CharacterAttribute) => sheet.desktopView ? display(sheet.desktopView.attributes[key]) : attribute(sheet[key])
+  const primaryWeapon = weaponDisplay(sheet, 'primary')
+  const secondaryWeapon = weaponDisplay(sheet, 'secondary')
   return {
     name: characterNameKey(sheet.name), ruleSetId: sheet.ruleSetId, generation, position,
     resources, level: display(sheet.level), profession: professionFromSheet(sheet),
@@ -169,12 +194,12 @@ export function summaryFromSheet(sheet: CharacterSheetJson, resources: Character
       presence: shownAttribute('presence'), knowledge: shownAttribute('knowledge'),
     },
     primaryWeaponName: display(sheet.primaryWeaponName),
-    primaryWeaponTrait: display(sheet.desktopView?.primaryWeaponAttribute ?? sheet.primaryWeaponTrait),
-    primaryWeaponRange: display(sheet.desktopView?.primaryWeaponRange ?? sheet.primaryWeaponRange ?? sheet.primaryWeaponDistance),
+    primaryWeaponTrait: primaryWeapon.trait,
+    primaryWeaponRange: primaryWeapon.range,
     primaryWeaponDamage: display(sheet.primaryWeaponDamage),
     secondaryWeaponName: display(sheet.secondaryWeaponName),
-    secondaryWeaponTrait: display(sheet.desktopView?.secondaryWeaponAttribute ?? sheet.secondaryWeaponTrait),
-    secondaryWeaponRange: display(sheet.desktopView?.secondaryWeaponRange ?? sheet.secondaryWeaponRange ?? sheet.secondaryWeaponDistance),
+    secondaryWeaponTrait: secondaryWeapon.trait,
+    secondaryWeaponRange: secondaryWeapon.range,
     secondaryWeaponDamage: display(sheet.secondaryWeaponDamage),
     experiences: [
       ...experienceRows(sheet.ancestryExperience, sheet.ancestryExperienceValues, 'ancestry'),
