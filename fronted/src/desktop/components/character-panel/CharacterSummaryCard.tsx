@@ -28,7 +28,13 @@ function CharacterSummaryCard({ character, ready, onHope, onMark, onDetail, onNo
 
   return <article className="character-card" aria-labelledby={`character-${character.generation}`}>
     {indicators.length > 0 && <div className="character-indicators" aria-label={`${character.name}的指示物`}>
-      {indicators.map((indicator, index) => <button key={indicator.id} type="button" className={`character-indicator character-indicator--${index % 6}`} title={`${indicator.name}：${indicator.value}（左键增加，右键减少）`} aria-label={`${indicator.name} ${indicator.value}，左键增加，右键减少`} disabled={!ready} onClick={() => onAdjustIndicator(indicator.id, 1)} onContextMenu={event => { event.preventDefault(); if (ready) onAdjustIndicator(indicator.id, -1) }}>{indicator.value}</button>)}
+      {indicators.map((indicator, index) => <span key={indicator.id} className="character-indicator-anchor">
+        <button type="button" className={`character-indicator character-indicator--${index % 6}`} aria-label={`${indicator.name} ${indicator.value}，左键增加，右键减少`} aria-describedby={`indicator-tip-${character.generation}-${indicator.id}`} disabled={!ready} onClick={() => onAdjustIndicator(indicator.id, 1)} onContextMenu={event => { event.preventDefault(); if (ready) onAdjustIndicator(indicator.id, -1) }}>{indicator.value}</button>
+        <span id={`indicator-tip-${character.generation}-${indicator.id}`} className="character-indicator-tooltip" role="tooltip">
+          <strong>{indicator.name} · {indicator.value}</strong>
+          <span>左键增加 · 右键减少</span>
+        </span>
+      </span>)}
     </div>}
     <header className="character-card__identity">
       <div className="player-title-row">

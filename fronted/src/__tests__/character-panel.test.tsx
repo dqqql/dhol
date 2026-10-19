@@ -41,4 +41,14 @@ describe('character panel pagination', () => {
     expect(html).toContain('身经百战</strong><span>+2</span>')
     expect(html).toContain('走遍大陆</strong><span>+3</span>')
   })
+  it('uses a custom, labelled tooltip for each indicator', () => {
+    const item = character('阿岚', 0)
+    item.resources.indicators = [{ id: 'hope-die', name: '守护之光', value: 2 }]
+    const html = renderToStaticMarkup(<CharacterSummaryCard character={item} ready onHope={() => undefined} onMark={() => undefined} onDetail={() => undefined} onNotes={() => undefined} onDelete={() => undefined} onAddIndicator={() => undefined} onAdjustIndicator={() => undefined} onQuickRollStat={() => undefined} />)
+    expect(html).toContain('aria-describedby="indicator-tip-1-hope-die"')
+    expect(html).toContain('class="character-indicator-tooltip" role="tooltip"')
+    expect(html).toContain('守护之光 · 2')
+    expect(html).toContain('左键增加 · 右键减少')
+    expect(html).not.toContain('title="守护之光')
+  })
 })

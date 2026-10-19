@@ -72,7 +72,7 @@ export default function DesktopLanding({ onEnter, initialInviteCode = '' }: { on
         <header className="landing-window__head">
           <h1>匕首港</h1>
           <p className="landing-window__notice">
-            玩家请从SRD车卡器<a href="https://dhsheet.top" target="_blank" rel="noreferrer">dhsheet.top</a>直接发送角色卡至房间，无需文件导入
+            玩家请从SRD车卡器<a href="https://dhsheet.top" target="_blank" rel="noreferrer">dhsheet.top</a>或者pbdh车卡器<a href="https://daggerheart.cn/pbdh" target="_blank" rel="noreferrer">daggerheart.cn/pbdh</a>直接发送角色卡至房间，无需文件导入
           </p>
         </header>
 
