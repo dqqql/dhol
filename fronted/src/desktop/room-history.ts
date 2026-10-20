@@ -7,6 +7,24 @@ export interface HistoryRoomItem {
 const NICKNAME_KEY = 'dhol:desktop:v2:nickname'
 const ROOM_HISTORY_KEY = 'dhol:desktop:v2:room_history'
 const MAX_HISTORY_PER_NICKNAME = 16
+const OWNER_KEY_PREFIX = 'dhol:desktop:v2:owner:'
+
+export function getRoomOwnerKey(roomId: string, storage: Storage | null = getStorage()): string | null {
+  if (!storage) return null
+  try {
+    const key = storage.getItem(`${OWNER_KEY_PREFIX}${roomId}`)
+    return key && /^[a-f0-9]{64}$/.test(key) ? key : null
+  } catch { return null }
+}
+
+export function saveRoomOwnerKey(roomId: string, key: string, storage: Storage | null = getStorage()): void {
+  if (!storage || !roomId || !/^[a-f0-9]{64}$/.test(key)) return
+  try { storage.setItem(`${OWNER_KEY_PREFIX}${roomId}`, key) } catch { /* storage may be restricted */ }
+}
+
+export function clearRoomOwnerKey(roomId: string, storage: Storage | null = getStorage()): void {
+  try { storage?.removeItem(`${OWNER_KEY_PREFIX}${roomId}`) } catch { /* storage may be restricted */ }
+}
 
 function getStorage(): Storage | null {
   try {

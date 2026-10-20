@@ -8,6 +8,7 @@ export interface StoredMeta {
   expiresAt: string
   players: { id: string; nickname: string }[]
   protocolVersion: 2
+  ownerKeyHash?: string
 }
 
 type MetaRow = { room_json: string; seq: number; fear: number; xcard_json: string | null }

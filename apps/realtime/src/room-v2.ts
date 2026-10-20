@@ -2,6 +2,7 @@ import { DurableObject } from 'cloudflare:workers'
 import { parseMutationCommand, parseSyncRequest, type CharacterSheetJson, type MutationError, type RoomEvent, type RoomSnapshot } from '@dhgc/shared/desktop'
 import { CommandFailure, RoomV2Commands } from './room-v2-commands'
 import { verifyRoomV2Session, type RoomV2Session } from './room-v2-session'
+import { roomOwnerKeyHash } from './room-owner-key'
 import { isExpired, RoomV2Storage, type StoredMeta } from './room-v2-storage'
 
 export interface RoomV2Env {
@@ -98,7 +99,14 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
     if (url.pathname === '/internal/v2/delete' && request.method === 'DELETE') {
       const meta = this.db.meta()
       if (!meta) return json({ code: 'ROOM_NOT_FOUND' }, 404)
-      if (meta.players[0]?.id !== session.playerId) return json({ code: 'ROOM_DELETE_FORBIDDEN' }, 403)
+      if (meta.ownerKeyHash) {
+        const ownerKey = request.headers.get('X-Room-Owner-Key') ?? ''
+        if (!/^[a-f0-9]{64}$/.test(ownerKey) || meta.players[0]?.nickname !== session.nickname ||
+          await roomOwnerKeyHash(ownerKey) !== meta.ownerKeyHash) return json({ code: 'ROOM_DELETE_FORBIDDEN' }, 403)
+      } else if (meta.players[0]?.id !== session.playerId) {
+        // Rooms created before owner keys existed retain their original creator-session rule.
+        return json({ code: 'ROOM_DELETE_FORBIDDEN' }, 403)
+      }
       const expiresAt = meta.expiresAt
       try {
         await this.ctx.storage.deleteAlarm()

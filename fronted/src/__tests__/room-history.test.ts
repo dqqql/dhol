@@ -4,6 +4,9 @@ import {
   getSavedNickname,
   saveRoomHistoryItem,
   saveSavedNickname,
+  getRoomOwnerKey,
+  saveRoomOwnerKey,
+  clearRoomOwnerKey,
 } from '../desktop/room-history'
 
 class MemoryStorage implements Storage {
@@ -35,6 +38,17 @@ class MemoryStorage implements Storage {
 }
 
 describe('room history & nickname persistence', () => {
+  it('keeps the room owner key separate from public history and clears it after deletion', () => {
+    const storage = new MemoryStorage()
+    const key = 'a'.repeat(64)
+    saveRoomOwnerKey('room-1', key, storage)
+    saveRoomHistoryItem('甲', 'ABC123', '测试', storage)
+    expect(getRoomOwnerKey('room-1', storage)).toBe(key)
+    expect(getRoomOwnerKey('room-2', storage)).toBeNull()
+    expect(JSON.stringify(getRoomHistory('甲', storage))).not.toContain(key)
+    clearRoomOwnerKey('room-1', storage)
+    expect(getRoomOwnerKey('room-1', storage)).toBeNull()
+  })
   it('saves and reads nickname from storage', () => {
     const storage = new MemoryStorage()
     expect(getSavedNickname(storage)).toBe('')

@@ -1,6 +1,7 @@
 import { validateCharacterDelivery, type CharacterResources, type CharacterSheetJson, type DiceRollRecord, type RoomV2Model } from '@dhgc/shared/desktop'
 import { roomV2RateLimited } from './character-ingest'
 import { signRoomV2Session } from './room-v2-session'
+import { newRoomOwnerKey, roomOwnerKeyHash } from './room-owner-key'
 import type { RoomV2Env } from './room-v2'
 import type { StoredMeta } from './room-v2-storage'
 
@@ -26,12 +27,12 @@ function cors(request: Request, env: RoomV2Env, result: Response): Response {
   const headers = new Headers(result.headers)
   headers.set('Access-Control-Allow-Origin', origin)
   headers.set('Vary', 'Origin')
-  headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, Idempotency-Key')
+  headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, Idempotency-Key, X-Room-Owner-Key')
   headers.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
   return new Response(result.body, { status: result.status, headers })
 }
 
-async function sessionResponse(request: Request, env: RoomV2Env, room: RoomV2Model, player: { id: string; nickname: string }): Promise<Response> {
+async function sessionResponse(request: Request, env: RoomV2Env, room: RoomV2Model, player: { id: string; nickname: string }, ownerKey?: string): Promise<Response> {
   const token = await signRoomV2Session(env.SESSION_SECRET, {
     roomId: room.roomId, inviteCode: room.inviteCode, playerId: player.id, nickname: player.nickname,
   })
@@ -39,7 +40,7 @@ async function sessionResponse(request: Request, env: RoomV2Env, room: RoomV2Mod
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
   url.pathname = `/api/v2/rooms/${room.inviteCode}/ws`
   url.search = new URLSearchParams({ token }).toString()
-  return response({ session: { roomId: room.roomId, inviteCode: room.inviteCode, playerId: player.id, nickname: player.nickname, token, websocketUrl: url.toString() }, room })
+  return response({ session: { roomId: room.roomId, inviteCode: room.inviteCode, playerId: player.id, nickname: player.nickname, token, websocketUrl: url.toString() }, room, ...(ownerKey ? { ownerKey } : {}) })
 }
 
 async function create(request: Request, env: RoomV2Env): Promise<Response> {
@@ -54,15 +55,17 @@ async function create(request: Request, env: RoomV2Env): Promise<Response> {
   for (let attempt = 0; attempt < 8; attempt++) {
     const inviteCode = code()
     const player = { id: crypto.randomUUID(), nickname }
+    const ownerKey = newRoomOwnerKey()
     const meta: StoredMeta = {
       roomId: crypto.randomUUID(), name, inviteCode, createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + days * 86_400_000).toISOString(), players: [player], protocolVersion: 2,
+      ownerKeyHash: await roomOwnerKeyHash(ownerKey),
     }
     const result = await stub(env, inviteCode).fetch(internal('/internal/v2/create', { method: 'POST', body: JSON.stringify(meta) }))
     if (result.status === 409) continue
     if (!result.ok) return result
     const payload = await result.json() as { room: RoomV2Model; player: { id: string; nickname: string } }
-    return sessionResponse(request, env, payload.room, payload.player)
+    return sessionResponse(request, env, payload.room, payload.player, ownerKey)
   }
   return response({ code: 'INVITE_COLLISION' }, 503)
 }
@@ -114,13 +117,13 @@ async function restore(request: Request, env: RoomV2Env): Promise<Response> {
   const nickname = text(input.nickname, 24)
   if (!nickname) return response({ code: 'VALIDATION_ERROR' }, 400)
   for (let attempt = 0; attempt < 8; attempt++) {
-    const inviteCode = code(); const player = { id: crypto.randomUUID(), nickname }
-    const meta: StoredMeta = { roomId: crypto.randomUUID(), name: state.name, inviteCode, createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 3 * 86_400_000).toISOString(), players: [player], protocolVersion: 2 }
+    const inviteCode = code(); const player = { id: crypto.randomUUID(), nickname }; const ownerKey = newRoomOwnerKey()
+    const meta: StoredMeta = { roomId: crypto.randomUUID(), name: state.name, inviteCode, createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 3 * 86_400_000).toISOString(), players: [player], protocolVersion: 2, ownerKeyHash: await roomOwnerKeyHash(ownerKey) }
     const result = await stub(env, inviteCode).fetch(internal('/internal/v2/restore', { method: 'POST', body: JSON.stringify({ meta, state }) }))
     if (result.status === 409) continue
     if (!result.ok) return result
     const payload = await result.json() as { room: RoomV2Model; player: { id: string; nickname: string } }
-    return sessionResponse(request, env, payload.room, payload.player)
+    return sessionResponse(request, env, payload.room, payload.player, ownerKey)
   }
   return response({ code: 'INVITE_COLLISION' }, 503)
 }
@@ -141,7 +144,8 @@ export async function routeRoomV2(request: Request, env: RoomV2Env): Promise<Res
     const inviteCode = match[1].toUpperCase()
     const tail = match[2] ?? ''
     const token = url.searchParams.get('token')
-    const headers = token ? { Authorization: `Bearer ${token}` } : { Authorization: request.headers.get('authorization') ?? '' }
+    const headers = new Headers({ Authorization: token ? `Bearer ${token}` : request.headers.get('authorization') ?? '' })
+    if (tail === '' && request.method === 'DELETE') headers.set('X-Room-Owner-Key', request.headers.get('X-Room-Owner-Key') ?? '')
     if (tail === '/ws' && request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
       return stub(env, inviteCode).fetch(internal(`/internal/v2/ws?${url.searchParams.toString()}`, { headers: request.headers }))
     }

@@ -2,6 +2,8 @@ import { env, runInDurableObject } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
 import { summaryFromSheet, type RoomEvent } from '@dhgc/shared/desktop'
 import { signRoomV2Session } from '../room-v2-session'
+import { roomOwnerKeyHash } from '../room-owner-key'
+import { routeRoomV2 } from '../room-v2-http'
 import { RoomV2Commands } from '../room-v2-commands'
 import { RoomV2Storage, type StoredMeta } from '../room-v2-storage'
 import type { RoomV2DurableObject } from '../room-v2'
@@ -221,5 +223,52 @@ describe('Room V2 workerd integration', () => {
       method: 'POST', body: JSON.stringify({ playerId: 'late-player', nickname: '迟到者' }),
     }))
     expect(join.status).toBe(404)
+  })
+
+  it('requires the browser owner key and original nickname for new rooms, including after rejoining', async () => {
+    const room = { ...meta('WRK008'), ownerKeyHash: await roomOwnerKeyHash('a'.repeat(64)) }
+    const stub = env.ROOMS_V2.getByName(room.inviteCode)
+    const created = await stub.fetch(new Request('https://room-v2.internal/internal/v2/create', { method: 'POST', body: JSON.stringify(room) }))
+    expect(created.status).toBe(200)
+    await created.arrayBuffer()
+    const tokenFor = (playerId: string, nickname: string) => signRoomV2Session(env.SESSION_SECRET, {
+      roomId: room.roomId, inviteCode: room.inviteCode, playerId, nickname,
+    })
+    const remove = async (playerId: string, nickname: string, key?: string) => stub.fetch(new Request('https://room-v2.internal/internal/v2/delete', {
+      method: 'DELETE', headers: { Authorization: `Bearer ${await tokenFor(playerId, nickname)}`, ...(key ? { 'X-Room-Owner-Key': key } : {}) },
+    }))
+    expect((await remove('player-a', '甲')).status).toBe(403)
+    expect((await remove('player-b', '乙', 'a'.repeat(64))).status).toBe(403)
+    const joined = await stub.fetch(new Request('https://room-v2.internal/internal/v2/join', {
+      method: 'POST', body: JSON.stringify({ playerId: 'player-c', nickname: '甲' }),
+    }))
+    expect(joined.status).toBe(200)
+    await joined.arrayBuffer()
+    expect((await remove('player-c', '甲', 'b'.repeat(64))).status).toBe(403)
+    expect((await remove('player-c', '甲', 'a'.repeat(64))).status).toBe(200)
+  })
+
+  it('returns an owner key only on creation and forwards it for public deletion', async () => {
+    const created = await routeRoomV2(new Request('https://rooms.example/api/v2/rooms', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nickname: '甲', room_name: '密钥测试' }),
+    }), env)
+    expect(created?.status).toBe(200)
+    const payload = await created!.json() as { ownerKey: string; session: { inviteCode: string; token: string }; room: unknown }
+    expect(payload.ownerKey).toMatch(/^[a-f0-9]{64}$/)
+    expect(JSON.stringify(payload.room)).not.toContain('ownerKey')
+    const joined = await routeRoomV2(new Request('https://rooms.example/api/v2/rooms/join', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nickname: '甲', invite_code: payload.session.inviteCode }),
+    }), env)
+    const joinPayload = await joined!.json() as { ownerKey?: string; session: { token: string } }
+    expect(joinPayload.ownerKey).toBeUndefined()
+    const url = `https://rooms.example/api/v2/rooms/${payload.session.inviteCode}`
+    const denied = await routeRoomV2(new Request(url, { method: 'DELETE', headers: { Authorization: `Bearer ${joinPayload.session.token}` } }), env)
+    expect(denied?.status).toBe(403)
+    const removed = await routeRoomV2(new Request(url, {
+      method: 'DELETE', headers: { Authorization: `Bearer ${joinPayload.session.token}`, 'X-Room-Owner-Key': payload.ownerKey },
+    }), env)
+    expect(removed?.status).toBe(200)
   })
 })

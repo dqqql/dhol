@@ -13,7 +13,7 @@ import DicePanel, { type DicePanelTab, type RoomLogItem } from './components/Dic
 import RoomToolbar from './components/RoomToolbar'
 import BackupDialog from './components/BackupDialog'
 import { clearRoomBrowserState, loadLegacyCountdowns } from './room-browser-state'
-import { saveRoomHistoryItem } from './room-history'
+import { clearRoomOwnerKey, getRoomOwnerKey, saveRoomHistoryItem } from './room-history'
 import './components/character-panel/character-panel.css'
 
 export default function DesktopRoom({ session, onLeave }: { session: DesktopSession; onLeave: () => void }) {
@@ -34,6 +34,7 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const ownerKey = getRoomOwnerKey(session.roomId)
 
   // 房间流水记录持久化
   const roomLogStorageKey = `dhol-roomlog-${session.roomId}`
@@ -193,6 +194,7 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
 
   function leaveDeletedRoom() {
     try { clearRoomBrowserState(localStorage, session.roomId) } catch { /* storage may be unavailable */ }
+    clearRoomOwnerKey(session.roomId)
     onLeave()
   }
 
@@ -202,11 +204,10 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
     try {
       const response = await fetch(`${apiBase()}/api/v2/rooms/${session.inviteCode}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${session.token}` }
+        headers: { Authorization: `Bearer ${session.token}`, ...(ownerKey ? { 'X-Room-Owner-Key': ownerKey } : {}) }
       })
       const result = await response.json() as { code?: string }
       if (!response.ok) {
-        if (result.code === 'ROOM_DELETE_FORBIDDEN') throw new Error('只有房间创建者可以删除房间。')
         throw new Error('删除失败，房间数据尚未清除，请稍后重试。')
       }
       leaveDeletedRoom()
@@ -241,7 +242,7 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
       xCardNode={<XCard active={Boolean(room?.xCard.active)} ready={ready} onChange={handleXCardChange} />}
       onExport={() => sync.ui.setDialog('backup')}
       onLeave={onLeave}
-      onDelete={room?.members[0]?.id === session.playerId ? () => { setDeleteError(''); setDeleteOpen(true) } : undefined}
+      onDelete={room?.members[0]?.nickname === session.nickname && (ownerKey || room.members[0]?.id === session.playerId) ? () => { setDeleteError(''); setDeleteOpen(true) } : undefined}
     />
 
     <div className="desktop-workspace">

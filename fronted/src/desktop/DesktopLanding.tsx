@@ -1,8 +1,8 @@
 import { useState, useRef, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react'
 import { apiBase, type DesktopSession } from './desktop-api'
-import { getSavedNickname, saveSavedNickname, getRoomHistory, saveRoomHistoryItem, type HistoryRoomItem } from './room-history'
+import { getSavedNickname, saveSavedNickname, getRoomHistory, saveRoomHistoryItem, saveRoomOwnerKey, type HistoryRoomItem } from './room-history'
 
-interface SessionResponse { session: DesktopSession; room: { roomId: string; name?: string }; code?: string }
+interface SessionResponse { session: DesktopSession; room: { roomId: string; name?: string }; ownerKey?: string; code?: string }
 const errors: Record<string, string> = {
   ROOM_NOT_FOUND: '找不到这个房间。',
   ROOM_FULL: '房间已满。',
@@ -64,6 +64,7 @@ export default function DesktopLanding({ onEnter, initialInviteCode = '' }: { on
       const targetName = (result.room as { name?: string })?.name || roomName.trim() || '未命名房间'
       saveSavedNickname(currentNickname)
       saveRoomHistoryItem(currentNickname, result.session.inviteCode, targetName)
+      if (result.ownerKey) saveRoomOwnerKey(result.session.roomId, result.ownerKey)
 
       onEnter(result.session)
     } catch (cause) {
