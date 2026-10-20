@@ -13,6 +13,7 @@ import DicePanel, { type DicePanelTab, type RoomLogItem } from './components/Dic
 import RoomToolbar from './components/RoomToolbar'
 import BackupDialog from './components/BackupDialog'
 import { clearRoomBrowserState, loadLegacyCountdowns } from './room-browser-state'
+import { saveRoomHistoryItem } from './room-history'
 import './components/character-panel/character-panel.css'
 
 export default function DesktopRoom({ session, onLeave }: { session: DesktopSession; onLeave: () => void }) {
@@ -102,6 +103,12 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
   useEffect(() => {
     if (room && ui.page >= pageCount(room.characters.length)) sync.ui.setPage(pageCount(room.characters.length) - 1)
   }, [room, ui.page, sync])
+
+  useEffect(() => {
+    if (room?.name && session.nickname && session.inviteCode) {
+      saveRoomHistoryItem(session.nickname, session.inviteCode, room.name)
+    }
+  }, [room?.name, session.nickname, session.inviteCode])
 
   async function openDetail(character: CharacterSummary) {
     sync.ui.setDetail(character.name)
