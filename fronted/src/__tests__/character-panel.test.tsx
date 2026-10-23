@@ -21,16 +21,18 @@ describe('character panel pagination', () => {
     item.primaryWeaponName = '短弓'
     item.primaryWeaponTrait = '敏捷'
     item.primaryWeaponRange = '远距离'
-    item.primaryWeaponDamage = '1d8+2'
+    item.primaryWeaponDamage = '敏捷: 1d8+2'
     item.secondaryWeaponName = '短剑'
-    item.secondaryWeaponDamage = '1d6'
+    item.secondaryWeaponDamage = '灵巧：1d6'
     const html = renderToStaticMarkup(<CharacterSummaryCard character={item} ready onHope={() => undefined} onMark={() => undefined} onDetail={() => undefined} onNotes={() => undefined} onDelete={() => undefined} onAddIndicator={() => undefined} onAdjustIndicator={() => undefined} onQuickRollStat={() => undefined} />)
     expect(html).toContain('阿岚 敏捷+2，掷二元骰')
     expect(html.match(/掷二元骰/g)).toHaveLength(6)
     expect(html).toContain('短弓')
     expect(html).toContain('敏捷 · 远距离')
-    expect(html).toContain('class="weapon-info__damage">1d8+2</span>')
-    expect(html).toContain('class="weapon-info__damage">1d6</span>')
+    expect(html).toContain('class="weapon-info__stats"><span class="weapon-info__damage">1d8+2</span><span class="weapon-info__details">敏捷 · 远距离</span>')
+    expect(html).toContain('class="weapon-info__stats"><span class="weapon-info__damage">1d6</span><span class="weapon-info__details">属性 / 攻击距离未填写</span>')
+    expect(html).not.toContain('weapon-info__damage">敏捷')
+    expect(html).not.toContain('weapon-info__damage">灵巧')
     expect(html).not.toContain('主武器伤害')
   })
   it('renders one row for each named experience directly below the primary weapon', () => {

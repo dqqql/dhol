@@ -346,8 +346,9 @@
   color: var(--ink-secondary);
 }
 
+.weapon-info__stats { margin-left: auto; display: inline-flex; gap: 8px; align-items: baseline; justify-content: flex-end; text-align: right; }
 .weapon-info__damage { color: var(--red); font-weight: 900; white-space: nowrap; }
-.weapon-info__details { margin-left: auto; color: var(--ink-secondary); text-align: right; }
+.weapon-info__details { color: var(--ink-secondary); }
 
 .experience-info {
   display: flex;

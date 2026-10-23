@@ -7,6 +7,10 @@ const attributes: Array<[keyof CharacterSummary['attributes'], string]> = [
   ['instinct', '本能'], ['presence', '风度'], ['knowledge', '知识'],
 ]
 
+function weaponDamageDice(damage: string | null): string | null {
+  return damage?.replace(/^(?:敏捷|力量|灵巧|本能|风度|知识)\s*[：:]\s*/, '').trim() || null
+}
+
 function CharacterSummaryCard({ character, ready, onHope, onMark, onDetail, onNotes, onDelete, onAddIndicator, onAdjustIndicator, onQuickRollStat }: {
   character: CharacterSummary
   ready: boolean
@@ -23,6 +27,8 @@ function CharacterSummaryCard({ character, ready, onHope, onMark, onDetail, onNo
   const [indicatorName, setIndicatorName] = useState('')
   const [indicatorValue, setIndicatorValue] = useState('1')
   const value = (item: string | null) => item ?? '—'
+  const primaryDamageDice = weaponDamageDice(character.primaryWeaponDamage)
+  const secondaryDamageDice = weaponDamageDice(character.secondaryWeaponDamage)
   const hopeSlots = Array.from({ length: character.resources.hopeMax || 6 }, (_, i) => i < character.resources.hope)
   const indicators = character.resources.indicators ?? []
 
@@ -88,13 +94,13 @@ function CharacterSummaryCard({ character, ready, onHope, onMark, onDetail, onNo
       })}
     </dl>
     <div className="character-card__weapons">
-      <div className="weapon-info"><small>主武器</small><strong>{value(character.primaryWeaponName)}</strong>{character.primaryWeaponDamage && <span className="weapon-info__damage">{character.primaryWeaponDamage}</span>}<span className="weapon-info__details">{[character.primaryWeaponTrait, character.primaryWeaponRange].filter(Boolean).join(' · ') || '属性 / 攻击距离未填写'}</span></div>
+      <div className="weapon-info"><small>主武器</small><strong>{value(character.primaryWeaponName)}</strong><span className="weapon-info__stats">{primaryDamageDice && <span className="weapon-info__damage">{primaryDamageDice}</span>}<span className="weapon-info__details">{[character.primaryWeaponTrait, character.primaryWeaponRange].filter(Boolean).join(' · ') || '属性 / 攻击距离未填写'}</span></span></div>
       {character.experiences?.map((experience, index) => <div className="experience-info" key={`${experience.kind}-${index}`}>
         <small>{experience.kind === 'ancestry' ? '种族经历' : '经历'}</small>
         <strong>{experience.name}</strong>
         <span>{experience.bonus ?? '—'}</span>
       </div>)}
-      {character.secondaryWeaponName && <div className="weapon-info"><small>副武器</small><strong>{character.secondaryWeaponName}</strong>{character.secondaryWeaponDamage && <span className="weapon-info__damage">{character.secondaryWeaponDamage}</span>}<span className="weapon-info__details">{[character.secondaryWeaponTrait, character.secondaryWeaponRange].filter(Boolean).join(' · ') || '属性 / 攻击距离未填写'}</span></div>}
+      {character.secondaryWeaponName && <div className="weapon-info"><small>副武器</small><strong>{character.secondaryWeaponName}</strong><span className="weapon-info__stats">{secondaryDamageDice && <span className="weapon-info__damage">{secondaryDamageDice}</span>}<span className="weapon-info__details">{[character.secondaryWeaponTrait, character.secondaryWeaponRange].filter(Boolean).join(' · ') || '属性 / 攻击距离未填写'}</span></span></div>}
     </div>
     <footer>
       <button type="button" className="button button--primary btn-detail" onClick={onDetail}>完整信息</button>
