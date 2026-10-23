@@ -346,7 +346,8 @@
   color: var(--ink-secondary);
 }
 
-.weapon-info span { margin-left: auto; color: var(--ink-secondary); text-align: right; }
+.weapon-info__damage { color: var(--red); font-weight: 900; white-space: nowrap; }
+.weapon-info__details { margin-left: auto; color: var(--ink-secondary); text-align: right; }
 
 .experience-info {
   display: flex;
@@ -967,6 +968,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
   padding: 10px 14px;
   background: var(--surface-subtle);
   border-bottom: 1px solid var(--border);
@@ -978,6 +980,23 @@
   font-size: 15px;
   font-weight: 900;
   color: var(--ink);
+}
+
+.sheet-card-cell__head-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sheet-card-cell__domain-meta {
+  display: inline-flex;
+  gap: 8px;
+  color: var(--ink-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .sheet-card-chip {

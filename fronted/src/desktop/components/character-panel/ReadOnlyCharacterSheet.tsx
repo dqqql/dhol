@@ -91,6 +91,19 @@ const TYPE_CONFIG: Record<string, { label: string; cls: string }> = {
   variant:    { label: '野兽形态', cls: 'sheet-card-chip--variant' },
 }
 
+function DomainCardMeta({ card }: { card: SheetRecord }) {
+  if (card.type !== 'domain') return null
+  const level = scalar(card.level ?? card['等级'])
+  const recall = scalar(card.recallCost ?? card.recall ?? card['回想'])
+  if (level === null && recall === null) return null
+  return (
+    <span className="sheet-card-cell__domain-meta">
+      {level !== null && <span>等级 {level}</span>}
+      {recall !== null && <span>回想费用 {recall}</span>}
+    </span>
+  )
+}
+
 // ===== WEAPON / ARMOR CARDS =====
 function WeaponCard({ slot, name, trait, damage, feature }: { slot: string; name?: unknown; trait?: unknown; damage?: unknown; feature?: unknown }) {
   const weaponName = scalar(name)
@@ -503,7 +516,10 @@ export default function ReadOnlyCharacterSheet({ sheet: originalSheet, resources
                   <article key={String(card.id ?? i)} className="sheet-card-cell">
                     <header className="sheet-card-cell__head">
                       <h4 className="sheet-card-cell__title">{scalar(card.name)}</h4>
-                      <span className={`sheet-card-chip ${typeConf.cls}`}>{typeConf.label}</span>
+                      <div className="sheet-card-cell__head-meta">
+                        <DomainCardMeta card={card} />
+                        <span className={`sheet-card-chip ${typeConf.cls}`}>{typeConf.label}</span>
+                      </div>
                     </header>
                     {classStr && <div className="sheet-card-cell__sub">{classStr}</div>}
                     <div className="sheet-card-cell__body">
@@ -536,7 +552,10 @@ export default function ReadOnlyCharacterSheet({ sheet: originalSheet, resources
                   <article key={String(card.id ?? i)} className="sheet-card-cell">
                     <header className="sheet-card-cell__head">
                       <h4 className="sheet-card-cell__title">{scalar(card.name)}</h4>
-                      <span className={`sheet-card-chip ${typeConf.cls}`}>{typeConf.label}</span>
+                      <div className="sheet-card-cell__head-meta">
+                        <DomainCardMeta card={card} />
+                        <span className={`sheet-card-chip ${typeConf.cls}`}>{typeConf.label}</span>
+                      </div>
                     </header>
                     {classStr && <div className="sheet-card-cell__sub">{classStr}</div>}
                     <div className="sheet-card-cell__body">

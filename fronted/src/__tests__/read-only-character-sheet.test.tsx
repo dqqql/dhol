@@ -29,6 +29,15 @@ describe('read-only character sheet', () => {
     expect(html).toContain('金币（箱）')
     expect(html).toContain('1 / 1')
   })
+  it('shows domain level and recall cost, including zero, in equipped and vault cards', () => {
+    const html = renderToStaticMarkup(<ReadOnlyCharacterSheet sheet={{
+      ruleSetId: 'daggerheart', name: '阿岚', hope: 3,
+      cards: [{ id: 'domain-1', type: 'domain', name: '伊利亚特之书', level: 2, recallCost: 0 }],
+      inventory_cards: [{ id: 'domain-2', type: 'domain', name: '符文护符', 等级: 1, 回想: 2 }],
+    }} resources={{ hope: 3, hopeMax: 6, hp: [], stress: [], armor: [] }} />)
+    expect(html).toContain('等级 2</span><span>回想费用 0')
+    expect(html).toContain('等级 1</span><span>回想费用 2')
+  })
   it('shows formatted background without a raw source field list', () => {
     const html = renderToStaticMarkup(<ReadOnlyCharacterSheet sheet={{
       ruleSetId: 'daggerheart', name: '阿岚', hope: 3, cards: [], minorThreshold: '9', characterBackground: '刚修改的背景',
