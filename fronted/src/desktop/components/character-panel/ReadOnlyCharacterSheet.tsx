@@ -22,6 +22,47 @@ function list(value: unknown): string[] {
   return Array.isArray(value) ? value.map(scalar).filter((item): item is string => item !== null) : []
 }
 
+function numberedQuestions(fields: SheetRecord, key: string): string[] {
+  const grouped = list(fields[key])
+  if (grouped.length) return grouped.slice(0, 3)
+  return [1, 2, 3].map(index => scalar(fields[`${key}${index}`])).filter((item): item is string => item !== null)
+}
+
+function pbdhMotivationQuestions(sheet: CharacterSheetJson): { motivation: string; entries: { label: string; question: string; answer: string }[] } | null {
+  const source = record(sheet.pbdhSource)
+  const motivation = scalar(sheet.characterMotivation)
+  if (!source || !motivation || !Array.isArray(source.cards)) return null
+
+  const fields = source.cards.map(card => record(record(card)?.fields)).find(fields =>
+    fields && numberedQuestions(fields, '背景问题').length === 3 && numberedQuestions(fields, '关系问题').length === 3
+  )
+  if (!fields) return null
+  const questions = [...numberedQuestions(fields, '背景问题'), ...numberedQuestions(fields, '关系问题')]
+  const characters = [...motivation.matchAll(/\S/g)]
+  const compact = characters.map(match => match[0]).join('')
+  const locations: { start: number; end: number }[] = []
+  let cursor = 0
+  for (const question of questions) {
+    const start = compact.indexOf(question.replace(/\s+/gu, ''), cursor)
+    if (start < 0) return null
+    const end = start + question.replace(/\s+/gu, '').length
+    locations.push({ start: characters[start].index!, end: characters[end - 1].index! + characters[end - 1][0].length })
+    cursor = end
+  }
+
+  const opening = motivation.lastIndexOf('（', locations[0].start)
+  const closing = motivation.lastIndexOf('）')
+  if (opening < 0 || closing < locations[5].end || motivation.slice(closing + 1).trim()) return null
+  return {
+    motivation: motivation.slice(0, opening).trim(),
+    entries: questions.map((question, index) => ({
+      label: `${index < 3 ? '背景问题' : '关系问题'} ${index % 3 + 1}`,
+      question,
+      answer: motivation.slice(locations[index].end, index < 5 ? locations[index + 1].start : closing).trim(),
+    })),
+  }
+}
+
 // ===== SAFE INLINE MARKDOWN PARSER =====
 function renderInlineMarkdown(text: string): ReactNode[] {
   const parts: ReactNode[] = []
@@ -327,6 +368,8 @@ export default function ReadOnlyCharacterSheet({ sheet: originalSheet, resources
 
   // 5. Inventory Items
   const inventoryItems = list(sheet.inventory).filter(Boolean)
+  const pbdhQuestions = pbdhMotivationQuestions(sheet)
+  const motivation = pbdhQuestions?.motivation ?? scalar(sheet.characterMotivation)
 
   return (
     <article className="sheet-swiss-root">
@@ -478,10 +521,16 @@ export default function ReadOnlyCharacterSheet({ sheet: originalSheet, resources
                 <span className="sheet-backstory-title">动机</span>
               </header>
               <div className="sheet-backstory-body">
-                {scalar(sheet.characterMotivation) ? <p>{scalar(sheet.characterMotivation)}</p> : <span className="sheet-muted-text">（未填写动机）</span>}
+                {motivation ? <p>{motivation}</p> : <span className="sheet-muted-text">（未填写动机）</span>}
               </div>
             </div>
           </div>
+          {pbdhQuestions && <div className="sheet-backstory-questions">
+            {pbdhQuestions.entries.map(entry => <div className="sheet-backstory-col" key={entry.label}>
+              <header className="sheet-backstory-head"><span className="sheet-backstory-title">{entry.label}</span></header>
+              <div className="sheet-backstory-body"><strong>{entry.question}</strong><p>{entry.answer || '（未填写）'}</p></div>
+            </div>)}
+          </div>}
         </div>
       </section>
 

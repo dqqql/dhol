@@ -906,8 +906,18 @@
   gap: 1px;
 }
 
+.sheet-backstory-questions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  border: 1px solid var(--border);
+  border-top: 0;
+  background: var(--border);
+}
+
 @media (max-width: 768px) {
   .sheet-backstory-grid { grid-template-columns: 1fr; }
+  .sheet-backstory-questions { grid-template-columns: 1fr; }
 }
 
 .sheet-backstory-col {

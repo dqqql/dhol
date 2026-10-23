@@ -49,4 +49,23 @@ describe('read-only character sheet', () => {
     expect(html).not.toContain('完整角色字段')
     expect(html).not.toContain('sheet-source-details')
   })
+  it('moves PBDH background and relationship answers into six separate cells', () => {
+    const questions = {
+      背景问题: ['你来自哪里？', '你在寻找什么？', '谁是你的对手？'],
+      关系问题: ['谁帮助过你？', '你信任谁？', '你想保护谁？'],
+    }
+    const characterMotivation = '我要找到古书。（你来自哪里？ 山村。 你在寻找什么？ 一本古书。 谁是你的对手？ 旧日导师。 谁帮助过你？ 我的朋友。 你信任谁？ 同伴。 你想保护谁？ 家人。）'
+    const base = { ruleSetId: 'daggerheart' as const, name: '阿岚', hope: 3, characterMotivation }
+    const resources = { hope: 3, hopeMax: 6, hp: [], stress: [], armor: [] }
+    const pbdhHtml = renderToStaticMarkup(<ReadOnlyCharacterSheet sheet={{ ...base, pbdhSource: { cards: [{ fields: questions }] } }} resources={resources} />)
+    expect(pbdhHtml).toContain('class="sheet-backstory-questions"')
+    expect(pbdhHtml.match(/class="sheet-backstory-title">(?:背景|关系)问题 [123]/g)).toHaveLength(6)
+    expect(pbdhHtml).toContain('<p>我要找到古书。</p>')
+    expect(pbdhHtml).toContain('<strong>你在寻找什么？</strong><p>一本古书。</p>')
+    expect(pbdhHtml).not.toContain('家人。）')
+
+    const srdHtml = renderToStaticMarkup(<ReadOnlyCharacterSheet sheet={base} resources={resources} />)
+    expect(srdHtml).not.toContain('sheet-backstory-questions')
+    expect(srdHtml).toContain('家人。）')
+  })
 })
