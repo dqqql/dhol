@@ -1,4 +1,4 @@
-import { validateCharacterDelivery, type CharacterResources, type CharacterSheetJson, type DiceRollRecord, type RoomV2Model } from '@dhgc/shared/desktop'
+import { resourcesFromSheet, validateCharacterDelivery, type CharacterResources, type CharacterSheetJson, type DiceRollRecord, type RoomV2Model } from '@dhgc/shared/desktop'
 import { roomV2RateLimited } from './character-ingest'
 import { signRoomV2Session } from './room-v2-session'
 import { newRoomOwnerKey, roomOwnerKeyHash } from './room-owner-key'
@@ -93,13 +93,17 @@ function restoreState(value: unknown): { name: string; fear: number; xCard: Room
   const characters = backup.characters.map((entry, index) => {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new Error('INVALID_BACKUP')
     const item = entry as { name?: unknown; sheet?: unknown }
-    const delivery = validateCharacterDelivery({ schemaVersion: 1, sheet: item.sheet })
+    const sheetWithView = item.sheet && typeof item.sheet === 'object' && 'desktopView' in item.sheet && item.sheet.desktopView !== undefined
+    const delivery = validateCharacterDelivery({ schemaVersion: sheetWithView ? 2 : 1, sheet: item.sheet })
     const summary = summaries.get(delivery.sheet.name.trim())
     if (!summary || !summary.resources || !Array.isArray(summary.resources.hp) || !Array.isArray(summary.resources.stress) || !Array.isArray(summary.resources.armor)) throw new Error('INVALID_BACKUP')
     const resources = summary.resources
     if (resources.hp.some(mark => typeof mark !== 'boolean') || resources.stress.some(mark => typeof mark !== 'boolean') || resources.armor.some(mark => typeof mark !== 'boolean') || !Number.isInteger(resources.hope) || !Number.isInteger(resources.hopeMax) || resources.hope < 0 || resources.hope > resources.hopeMax) throw new Error('INVALID_BACKUP')
     if (resources.indicators !== undefined && (!Array.isArray(resources.indicators) || resources.indicators.length > 6 || new Set(resources.indicators.map(item => item?.id)).size !== resources.indicators.length || resources.indicators.some(item => !item || typeof item.id !== 'string' || !/^[\w-]{1,128}$/.test(item.id) || typeof item.name !== 'string' || !item.name.trim() || item.name.length > 32 || !Number.isSafeInteger(item.value) || item.value < 1 || item.value > 999))) throw new Error('INVALID_BACKUP')
-    if (resources.hp.length !== (delivery.sheet.hp as boolean[]).length || resources.stress.length !== (delivery.sheet.stress as boolean[]).length || resources.armor.length !== (delivery.sheet.armorBoxes as boolean[]).length) throw new Error('INVALID_BACKUP')
+    const initial = resourcesFromSheet(delivery.sheet)
+    if (resources.hp.length !== initial.hp.length && resources.hp.length !== (delivery.sheet.hp as boolean[]).length) throw new Error('INVALID_BACKUP')
+    if (resources.stress.length !== initial.stress.length && resources.stress.length !== (delivery.sheet.stress as boolean[]).length) throw new Error('INVALID_BACKUP')
+    if (resources.armor.length !== initial.armor.length && resources.armor.length !== (delivery.sheet.armorBoxes as boolean[]).length) throw new Error('INVALID_BACKUP')
     return { sheet: delivery.sheet, resources, position: Number.isSafeInteger(summary.position) ? summary.position : index }
   })
   if (room.dice.some(roll => !roll || typeof roll !== 'object' || typeof roll.id !== 'string' || typeof roll.actor_name !== 'string' || typeof roll.normalized_formula !== 'string' || !Array.isArray(roll.results))) throw new Error('INVALID_BACKUP')
