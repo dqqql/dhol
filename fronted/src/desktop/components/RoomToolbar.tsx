@@ -49,7 +49,7 @@ export default function RoomToolbar({
       </button>
       <div className="connection-badge" data-status={status}>
         <i aria-hidden="true" />
-        <span>{status === 'ready' ? '已连接' : status === 'expired' ? '已过期' : status === 'full' ? '房间已满' : '正在连接'}</span>
+        <span>{status === 'ready' ? '已连接' : status === 'expired' ? '已过期' : '正在连接'}</span>
       </div>
       {typeof activeCount === 'number' && <div className="member-count-badge">{activeCount}人在线</div>}
     </div>

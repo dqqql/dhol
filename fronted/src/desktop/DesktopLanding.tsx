@@ -5,7 +5,6 @@ import { getSavedNickname, saveSavedNickname, getRoomHistory, removeRoomHistoryI
 interface SessionResponse { session: DesktopSession; room: { roomId: string; name?: string }; ownerKey?: string; code?: string }
 const errors: Record<string, string> = {
   ROOM_NOT_FOUND: '找不到这个房间。',
-  ROOM_FULL: '房间已满：当前已有 8 人在线。',
   ROOM_EXPIRED: '房间已过期。',
   RATE_LIMITED: '操作太频繁，请稍后重试。',
   INVALID_BACKUP: '备份文件无效或不是新版房间备份。'

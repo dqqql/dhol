@@ -66,49 +66,46 @@ function nextPresence(socket: WebSocket): Promise<{ members: Array<{ id: string;
 }
 
 describe('Room V2 workerd integration', () => {
-  it('allows joining after more than sixteen member records have accumulated', async () => {
-    const { stub } = await createRoom('WRK010')
+  it('does not persist repeat joins and keeps signed sessions usable', async () => {
+    const { stub, room } = await createRoom('WRK010')
+    let lastPlayer: StoredMeta['players'][number] | undefined
     for (let index = 0; index < 16; index++) {
       const response = await stub.fetch(new Request('https://room-v2.internal/internal/v2/join', {
         method: 'POST', body: JSON.stringify({ playerId: `returning-${index}`, nickname: '重复加入的玩家' }),
       }))
       expect(response.status).toBe(200)
-      await response.arrayBuffer()
+      lastPlayer = (await response.json() as { player: StoredMeta['players'][number] }).player
     }
-    const response = await stub.fetch(new Request('https://room-v2.internal/internal/v2/join', {
-      method: 'POST', body: JSON.stringify({ playerId: 'new-player', nickname: '新玩家' }),
-    }))
-    expect(response.status).toBe(200)
-    const payload = await response.json() as { room: { members: Array<{ id: string }> } }
-    expect(payload.room.members).toHaveLength(19)
-    expect(payload.room.members.at(-1)?.id).toBe('new-player')
+    await runInDurableObject(stub, async (_, state) => {
+      expect(new RoomV2Storage(state.storage).meta()?.players).toEqual([room.players[0]])
+    })
+    const socket = await socketFor(stub, room, lastPlayer!)
+    const token = await signRoomV2Session(env.SESSION_SECRET, {
+      roomId: room.roomId, inviteCode: room.inviteCode, playerId: lastPlayer!.id, nickname: lastPlayer!.nickname,
+    })
+    const snapshot = await stub.fetch(new Request('https://room-v2.internal/internal/v2/snapshot', { headers: { Authorization: `Bearer ${token}` } }))
+    expect(snapshot.status).toBe(200)
+    expect((await snapshot.json() as { room: { members: Array<{ id: string }> } }).room.members.map(member => member.id)).toEqual(['player-a', lastPlayer!.id])
+    socket.close()
   })
 
-  it('limits distinct online players to eight, including direct WebSocket reconnects', async () => {
+  it('allows more than eight players online at once', async () => {
     const { stub, room } = await createRoom('WRK011')
-    const players = Array.from({ length: 9 }, (_, index) => ({ id: `online-${index}`, nickname: `玩家${index}` }))
-    await runInDurableObject(stub, async (_, state) => {
-      new RoomV2Storage(state.storage).updateMeta({ ...room, players })
-    })
     const sockets: WebSocket[] = []
-    for (const player of players.slice(0, 8)) sockets.push(await socketFor(stub, room, player))
-    sockets.push(await socketFor(stub, room, players[0]))
-
-    const join = await stub.fetch(new Request('https://room-v2.internal/internal/v2/join', {
-      method: 'POST', body: JSON.stringify({ playerId: 'another-player', nickname: '后来者' }),
-    }))
-    expect(join.status).toBe(409)
-    expect(await join.json()).toEqual({ code: 'ROOM_FULL' })
-
+    for (let index = 0; index < 10; index++) {
+      const player = { id: `online-${index}`, nickname: `玩家${index}` }
+      const joined = await stub.fetch(new Request('https://room-v2.internal/internal/v2/join', {
+        method: 'POST', body: JSON.stringify({ playerId: player.id, nickname: player.nickname }),
+      }))
+      expect(joined.status).toBe(200)
+      await joined.arrayBuffer()
+      sockets.push(await socketFor(stub, room, player))
+    }
     const token = await signRoomV2Session(env.SESSION_SECRET, {
-      roomId: room.roomId, inviteCode: room.inviteCode, playerId: players[8].id, nickname: players[8].nickname,
+      roomId: room.roomId, inviteCode: room.inviteCode, playerId: 'online-0', nickname: '玩家0',
     })
-    const denied = await stub.fetch(new Request(`https://room-v2.internal/internal/v2/ws?token=${token}`, { headers: { Upgrade: 'websocket' } }))
-    expect(denied.status).toBe(101)
-    const deniedSocket = denied.webSocket!
-    const closed = new Promise<CloseEvent>(resolve => deniedSocket.addEventListener('close', resolve, { once: true }))
-    deniedSocket.accept()
-    expect((await closed).code).toBe(4008)
+    const snapshot = await stub.fetch(new Request('https://room-v2.internal/internal/v2/snapshot', { headers: { Authorization: `Bearer ${token}` } }))
+    expect((await snapshot.json() as { room: { members: Array<{ online: boolean }> } }).room.members.filter(member => member.online)).toHaveLength(10)
     for (const socket of sockets) socket.close()
   })
 
@@ -151,7 +148,7 @@ describe('Room V2 workerd integration', () => {
 
     const lastTabClosed = nextPresence(first)
     third.close()
-    expect((await lastTabClosed).members.find(member => member.id === 'player-b')?.online).toBe(false)
+    expect((await lastTabClosed).members.find(member => member.id === 'player-b')).toBeUndefined()
     first.close()
   })
 

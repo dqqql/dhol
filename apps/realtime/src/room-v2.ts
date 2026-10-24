@@ -13,7 +13,6 @@ export interface RoomV2Env {
 }
 
 function json(body: unknown, status = 200): Response { return Response.json(body, { status }) }
-const MAX_ONLINE_PLAYERS = 8
 
 export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
   private readonly db: RoomV2Storage
@@ -28,11 +27,23 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
     ctx.blockConcurrencyWhile(async () => { this.db.initialize() })
   }
 
-  private onlineIds(exclude?: WebSocket): Set<string> {
-    return new Set(this.ctx.getWebSockets().filter(socket => socket !== exclude).flatMap(socket => {
+  private members(exclude?: WebSocket): NonNullable<ReturnType<RoomV2Storage['snapshot']>>['room']['members'] {
+    const owner = this.db.meta()?.players[0]
+    const online = new Map<string, { id: string; nickname: string; online: boolean }>()
+    for (const socket of this.ctx.getWebSockets()) {
+      if (socket === exclude) continue
       const session = socket.deserializeAttachment() as RoomV2Session | null
-      return session?.playerId ? [session.playerId] : []
-    }))
+      if (session?.playerId) online.set(session.playerId, { id: session.playerId, nickname: session.nickname, online: true })
+    }
+    return owner
+      ? [{ ...owner, online: online.has(owner.id) }, ...[...online.values()].filter(member => member.id !== owner.id)]
+      : [...online.values()]
+  }
+
+  private snapshot(actor: string, pendingRequestIds: string[]): ReturnType<RoomV2Storage['snapshot']> {
+    const data = this.db.snapshot(actor, pendingRequestIds)
+    if (data) data.room.members = this.members()
+    return data
   }
 
   private async session(request: Request): Promise<RoomV2Session | null> {
@@ -43,7 +54,7 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
     const session = await verifyRoomV2Session(this.env.SESSION_SECRET, token)
     if (!session) return null
     const access = this.db.sessionAccess(session.playerId)
-    if (!access || session.roomId !== access.roomId || session.inviteCode !== access.inviteCode || !access.member) return null
+    if (!access || session.roomId !== access.roomId || session.inviteCode !== access.inviteCode) return null
     return session
   }
 
@@ -62,24 +73,24 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
         this.db.resetAfterDelete()
         return json({ code: 'PERSISTENCE_FAILED' }, 503)
       }
-      return json({ room: this.db.snapshot('', [], this.onlineIds())!.room, player: meta.players[0] })
+      return json({ room: this.snapshot('', [])!.room, player: meta.players[0] })
     }
     if (url.pathname === '/internal/v2/restore' && request.method === 'POST') {
       const input = await request.json() as { meta: StoredMeta; state: Parameters<RoomV2Storage['restore']>[1] }
       if (!this.db.restore(input.meta, input.state)) return json({ code: 'INVITE_COLLISION' }, 409)
       try { await this.ctx.storage.setAlarm(Date.parse(input.meta.expiresAt)) }
       catch { await this.ctx.storage.deleteAll(); this.db.resetAfterDelete(); return json({ code: 'PERSISTENCE_FAILED' }, 503) }
-      return json({ room: this.db.snapshot('', [], this.onlineIds())!.room, player: input.meta.players[0] })
+      return json({ room: this.snapshot('', [])!.room, player: input.meta.players[0] })
     }
     if (url.pathname === '/internal/v2/join' && request.method === 'POST') {
       const input = await request.json() as { playerId: string; nickname: string }
       const meta = this.db.meta()
       if (!meta) return json({ code: 'ROOM_NOT_FOUND' }, 404)
       if (this.expired()) return json({ code: 'ROOM_EXPIRED' }, 410)
-      if (this.onlineIds().size >= MAX_ONLINE_PLAYERS) return json({ code: 'ROOM_FULL' }, 409)
-      meta.players.push({ id: input.playerId, nickname: input.nickname })
-      this.db.updateMeta(meta)
-      return json({ room: this.db.snapshot('', [], this.onlineIds())!.room, player: meta.players.at(-1) })
+      // Keep only the creator in persisted room metadata. Previous joins remain valid
+      // through their signed sessions, while repeat joins no longer grow the room record.
+      if (meta.players.length > 1) this.db.updateMeta({ ...meta, players: meta.players.slice(0, 1) })
+      return json({ room: this.snapshot('', [])!.room, player: { id: input.playerId, nickname: input.nickname } })
     }
     if (url.pathname === '/internal/v2/replace' && request.method === 'POST') {
       const meta = this.db.meta()
@@ -126,15 +137,10 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
       const [client, server] = Object.values(pair) as [WebSocket, WebSocket]
       server.serializeAttachment(session)
       this.ctx.acceptWebSocket(server, [`player:${session.playerId}`])
-      const online = this.onlineIds(server)
-      if (!online.has(session.playerId) && online.size >= MAX_ONLINE_PLAYERS) {
-        server.close(4008, 'ROOM_FULL')
-        return new Response(null, { status: 101, webSocket: client })
-      }
       this.broadcastPresence(server)
       return new Response(null, { status: 101, webSocket: client })
     }
-    if (url.pathname === '/internal/v2/snapshot' && request.method === 'GET') return json(this.db.snapshot(session.playerId, [], this.onlineIds()))
+    if (url.pathname === '/internal/v2/snapshot' && request.method === 'GET') return json(this.snapshot(session.playerId, []))
     if (url.pathname === '/internal/v2/export' && request.method === 'GET') return json(this.db.export())
     const characterMatch = url.pathname.match(/^\/internal\/v2\/characters\/([^/]+)$/)
     if (characterMatch && request.method === 'GET') {
@@ -152,7 +158,7 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
   private send(socket: WebSocket, value: unknown): void { socket.send(JSON.stringify(value)) }
 
   private sendSnapshot(socket: WebSocket, session: RoomV2Session, pendingRequestIds: string[]): void {
-    const data = this.db.snapshot(session.playerId, pendingRequestIds, this.onlineIds())
+    const data = this.snapshot(session.playerId, pendingRequestIds)
     if (!data) return
     const message: RoomSnapshot = { type: 'room.snapshot', protocolVersion: 2, ...data }
     this.send(socket, message)
@@ -166,12 +172,10 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
   }
 
   private broadcastPresence(excludeRecipient?: WebSocket, excludeOnline?: WebSocket): void {
-    const meta = this.db.meta()
-    if (!meta) return
-    const online = this.onlineIds(excludeOnline)
+    if (!this.db.meta()) return
     const message = JSON.stringify({
       type: 'room.presence', protocolVersion: 2,
-      members: meta.players.map(player => ({ ...player, online: online.has(player.id) })),
+      members: this.members(excludeOnline),
     })
     for (const socket of this.ctx.getWebSockets()) {
       if (socket === excludeRecipient) continue
@@ -184,7 +188,7 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
     const session = socket.deserializeAttachment() as RoomV2Session | null
     if (!session || session.exp <= Date.now() / 1000) { socket.close(1008, 'Session expired'); return }
     const access = this.db.sessionAccess(session.playerId)
-    if (!access || session.roomId !== access.roomId || session.inviteCode !== access.inviteCode || !access.member) { socket.close(1008, 'Session expired'); return }
+    if (!access || session.roomId !== access.roomId || session.inviteCode !== access.inviteCode) { socket.close(1008, 'Session expired'); return }
     if (isExpired(access.expiresAt)) { socket.close(1008, 'Room expired'); return }
     let input: unknown
     try { input = JSON.parse(typeof data === 'string' ? data : new TextDecoder().decode(data)) }

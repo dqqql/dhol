@@ -48,20 +48,6 @@ describe('Room V2 client', () => {
     client.destroy()
   })
 
-  it('shows a full room state without repeatedly reconnecting', () => {
-    const { socket } = fakeSocket()
-    let retries = 0
-    const client = new RoomClient({ roomId: 'room-a', websocketUrl: 'ws://room-a', socketFactory: () => socket,
-      setTimer: () => { retries++; return setTimeout(() => undefined, 1) }, pendingIds: () => [], afterSeq: () => 0,
-      onMessage: () => undefined, onStatus: () => undefined })
-    client.connect()
-    socket.onclose?.call(socket as WebSocket, { code: 4008, reason: 'ROOM_FULL' } as CloseEvent)
-    expect(client.connectionStatus).toBe('full')
-    client.connect()
-    expect(retries).toBe(0)
-    client.destroy()
-  })
-
   it('keeps a healthy socket connected during background reconciliation', () => {
     const { socket, sent } = fakeSocket()
     const statuses: string[] = []
