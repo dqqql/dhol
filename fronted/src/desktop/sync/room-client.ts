@@ -1,6 +1,6 @@
 import type { MutationCommand, RoomServerMessage, SyncRequest } from '@dhgc/shared/desktop'
 
-export type ConnectionStatus = 'disconnected' | 'connecting' | 'synchronizing' | 'ready' | 'reconnecting' | 'expired'
+export type ConnectionStatus = 'disconnected' | 'connecting' | 'synchronizing' | 'ready' | 'reconnecting' | 'expired' | 'full'
 export type RoomSocket = Pick<WebSocket, 'readyState' | 'onopen' | 'onmessage' | 'onclose' | 'onerror' | 'send' | 'close'>
 export interface RoomClientOptions {
   roomId: string
@@ -38,7 +38,7 @@ export class RoomClient {
     this.options.onStatus(status, reason)
   }
   connect(): void {
-    if (this.destroyed || this.socket || this.status === 'expired') return
+    if (this.destroyed || this.socket || this.status === 'expired' || this.status === 'full') return
     this.update(this.attempt ? 'reconnecting' : 'connecting')
     const socket = this.factory(this.options.websocketUrl)
     this.socket = socket
@@ -55,6 +55,7 @@ export class RoomClient {
     socket.onclose = event => {
       if (this.socket !== socket || this.destroyed) return
       this.socket = null
+      if (event.code === 4008) { this.update('full', '房间同时在线人数已达 8 人'); return }
       if (event.code === 1008 || /expired|retired/i.test(event.reason)) { this.update('expired', event.reason); return }
       this.update('reconnecting', event.reason || '连接中断')
       this.scheduleReconnect()

@@ -1,11 +1,11 @@
-import { useState, useRef, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react'
+import { useEffect, useState, useRef, type ChangeEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react'
 import { apiBase, type DesktopSession } from './desktop-api'
-import { getSavedNickname, saveSavedNickname, getRoomHistory, saveRoomHistoryItem, saveRoomOwnerKey, type HistoryRoomItem } from './room-history'
+import { getSavedNickname, saveSavedNickname, getRoomHistory, removeRoomHistoryItem, saveRoomHistoryItem, saveRoomOwnerKey, type HistoryRoomItem } from './room-history'
 
 interface SessionResponse { session: DesktopSession; room: { roomId: string; name?: string }; ownerKey?: string; code?: string }
 const errors: Record<string, string> = {
   ROOM_NOT_FOUND: '找不到这个房间。',
-  ROOM_FULL: '房间已满。',
+  ROOM_FULL: '房间已满：当前已有 8 人在线。',
   ROOM_EXPIRED: '房间已过期。',
   RATE_LIMITED: '操作太频繁，请稍后重试。',
   INVALID_BACKUP: '备份文件无效或不是新版房间备份。'
@@ -25,7 +25,25 @@ export default function DesktopLanding({ onEnter, initialInviteCode = '' }: { on
   })
   const [animKey, setAnimKey] = useState(0)
   const [flyingCode, setFlyingCode] = useState<string | null>(null)
+  const [historyMenu, setHistoryMenu] = useState<{ nickname: string; code: string; x: number; y: number } | null>(null)
   const joinButtonRef = useRef<HTMLButtonElement | null>(null)
+  const historyMenuRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!historyMenu) return
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!historyMenuRef.current?.contains(event.target as Node)) setHistoryMenu(null)
+    }
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') setHistoryMenu(null)
+    }
+    document.addEventListener('pointerdown', closeOnOutsideClick)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [historyMenu])
 
   function refreshHistory(targetNickname: string) {
     const trimmed = targetNickname.trim()
@@ -86,6 +104,7 @@ export default function DesktopLanding({ onEnter, initialInviteCode = '' }: { on
 
   function handleSelectHistoryRoom(room: HistoryRoomItem, cardEl: HTMLElement) {
     if (busy || flyingCode) return
+    setHistoryMenu(null)
     const currentNickname = nickname.trim()
     if (!currentNickname) return
 
@@ -141,6 +160,27 @@ export default function DesktopLanding({ onEnter, initialInviteCode = '' }: { on
         setFlyingCode(null)
       })
     }, 450)
+  }
+
+  function openHistoryMenu(event: MouseEvent<HTMLButtonElement>, room: HistoryRoomItem) {
+    event.preventDefault()
+    if (busy || flyingCode) return
+    setHistoryMenu({
+      nickname: nickname.trim(),
+      code: room.code,
+      x: Math.max(8, Math.min(event.clientX, window.innerWidth - 150)),
+      y: Math.max(8, Math.min(event.clientY, window.innerHeight - 55))
+    })
+  }
+
+  function deleteHistoryRoom() {
+    if (!historyMenu) return
+    if (!removeRoomHistoryItem(historyMenu.nickname, historyMenu.code)) {
+      setError('删除历史记录失败，请重试。')
+    } else {
+      setHistoryRooms(getRoomHistory(nickname))
+    }
+    setHistoryMenu(null)
   }
 
   async function chooseBackup(event: ChangeEvent<HTMLInputElement>) {
@@ -284,7 +324,7 @@ export default function DesktopLanding({ onEnter, initialInviteCode = '' }: { on
           <section className="landing-history" aria-label="曾加入的房间">
             <header className="landing-history__head">
               <span className="landing-history__title">曾加入的房间</span>
-              <span className="landing-history__tip">点击直接进入</span>
+              <span className="landing-history__tip">左键进入 · 右键删除记录</span>
             </header>
             <div className="landing-history__grid">
               {historyRooms.map((room, index) => {
@@ -297,6 +337,7 @@ export default function DesktopLanding({ onEnter, initialInviteCode = '' }: { on
                     className={`landing-history-card${isFading ? ' landing-history-card--fading' : ''}${isFlyingSource ? ' landing-history-card--flying-source' : ''}`}
                     style={{ animationDelay: `${index * 70}ms` }}
                     onClick={event => handleSelectHistoryRoom(room, event.currentTarget)}
+                    onContextMenu={event => openHistoryMenu(event, room)}
                     title={`加入房间：${room.name} (${room.code})`}
                     disabled={busy || flyingCode !== null}
                   >
@@ -306,6 +347,11 @@ export default function DesktopLanding({ onEnter, initialInviteCode = '' }: { on
                 )
               })}
             </div>
+            {historyMenu && (
+              <div ref={historyMenuRef} className="landing-history-menu" role="menu" aria-label="历史房间操作" style={{ left: historyMenu.x, top: historyMenu.y }}>
+                <button type="button" role="menuitem" onClick={deleteHistoryRoom}>删除记录</button>
+              </div>
+            )}
           </section>
         )}
       </div>

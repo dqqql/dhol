@@ -134,3 +134,26 @@ export function saveRoomHistoryItem(
     /* ignore storage errors */
   }
 }
+
+export function removeRoomHistoryItem(nickname: string, code: string, storage: Storage | null = getStorage()): boolean {
+  if (!storage) return false
+  const normNick = nickname.trim()
+  const normCode = code.trim().toUpperCase()
+  if (!normNick || !/^[A-Z0-9]{6}$/.test(normCode)) return false
+  try {
+    const raw = storage.getItem(ROOM_HISTORY_KEY)
+    if (!raw) return false
+    const map = JSON.parse(raw) as Record<string, unknown>
+    if (!map || typeof map !== 'object' || Array.isArray(map)) return false
+    const list = map[normNick]
+    if (!Array.isArray(list)) return false
+    const remaining = list.filter(item => typeof item?.code !== 'string' || item.code.toUpperCase() !== normCode)
+    if (remaining.length === list.length) return false
+    if (remaining.length) map[normNick] = remaining
+    else delete map[normNick]
+    storage.setItem(ROOM_HISTORY_KEY, JSON.stringify(map))
+    return true
+  } catch {
+    return false
+  }
+}

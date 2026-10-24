@@ -66,6 +66,52 @@ function nextPresence(socket: WebSocket): Promise<{ members: Array<{ id: string;
 }
 
 describe('Room V2 workerd integration', () => {
+  it('allows joining after more than sixteen member records have accumulated', async () => {
+    const { stub } = await createRoom('WRK010')
+    for (let index = 0; index < 16; index++) {
+      const response = await stub.fetch(new Request('https://room-v2.internal/internal/v2/join', {
+        method: 'POST', body: JSON.stringify({ playerId: `returning-${index}`, nickname: '重复加入的玩家' }),
+      }))
+      expect(response.status).toBe(200)
+      await response.arrayBuffer()
+    }
+    const response = await stub.fetch(new Request('https://room-v2.internal/internal/v2/join', {
+      method: 'POST', body: JSON.stringify({ playerId: 'new-player', nickname: '新玩家' }),
+    }))
+    expect(response.status).toBe(200)
+    const payload = await response.json() as { room: { members: Array<{ id: string }> } }
+    expect(payload.room.members).toHaveLength(19)
+    expect(payload.room.members.at(-1)?.id).toBe('new-player')
+  })
+
+  it('limits distinct online players to eight, including direct WebSocket reconnects', async () => {
+    const { stub, room } = await createRoom('WRK011')
+    const players = Array.from({ length: 9 }, (_, index) => ({ id: `online-${index}`, nickname: `玩家${index}` }))
+    await runInDurableObject(stub, async (_, state) => {
+      new RoomV2Storage(state.storage).updateMeta({ ...room, players })
+    })
+    const sockets: WebSocket[] = []
+    for (const player of players.slice(0, 8)) sockets.push(await socketFor(stub, room, player))
+    sockets.push(await socketFor(stub, room, players[0]))
+
+    const join = await stub.fetch(new Request('https://room-v2.internal/internal/v2/join', {
+      method: 'POST', body: JSON.stringify({ playerId: 'another-player', nickname: '后来者' }),
+    }))
+    expect(join.status).toBe(409)
+    expect(await join.json()).toEqual({ code: 'ROOM_FULL' })
+
+    const token = await signRoomV2Session(env.SESSION_SECRET, {
+      roomId: room.roomId, inviteCode: room.inviteCode, playerId: players[8].id, nickname: players[8].nickname,
+    })
+    const denied = await stub.fetch(new Request(`https://room-v2.internal/internal/v2/ws?token=${token}`, { headers: { Upgrade: 'websocket' } }))
+    expect(denied.status).toBe(101)
+    const deniedSocket = denied.webSocket!
+    const closed = new Promise<CloseEvent>(resolve => deniedSocket.addEventListener('close', resolve, { once: true }))
+    deniedSocket.accept()
+    expect((await closed).code).toBe(4008)
+    for (const socket of sockets) socket.close()
+  })
+
   it('broadcasts a countdown to another member and includes it in later snapshots', async () => {
     const { stub, room } = await createRoom('WRK007')
     const first = await socketFor(stub, room, room.players[0])

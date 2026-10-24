@@ -261,12 +261,20 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
         </div>
       )}
 
-      {!room && state.connection !== 'expired' ? (
+      {state.connection === 'full' && (
+        <div className="expired-state" role="alert">
+          <h2>房间已满</h2>
+          <p>当前已有 8 人在线，请稍后重试。</p>
+          <button className="button button--primary" onClick={onLeave}>返回首页</button>
+        </div>
+      )}
+
+      {!room && state.connection !== 'expired' && state.connection !== 'full' ? (
         <div className="loading-state" role="status">
           <span />
           <p>正在建立安全连接并同步房间…</p>
         </div>
-      ) : room && (
+      ) : room && state.connection !== 'full' && (
         <div className="desktop-content">
           {/* 模块一：状态 (恐惧点 + 倒计时) */}
           <section className="section-block">

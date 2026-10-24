@@ -13,6 +13,7 @@ export interface RoomV2Env {
 }
 
 function json(body: unknown, status = 200): Response { return Response.json(body, { status }) }
+const MAX_ONLINE_PLAYERS = 8
 
 export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
   private readonly db: RoomV2Storage
@@ -75,7 +76,7 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
       const meta = this.db.meta()
       if (!meta) return json({ code: 'ROOM_NOT_FOUND' }, 404)
       if (this.expired()) return json({ code: 'ROOM_EXPIRED' }, 410)
-      if (meta.players.length >= 16) return json({ code: 'ROOM_FULL' }, 409)
+      if (this.onlineIds().size >= MAX_ONLINE_PLAYERS) return json({ code: 'ROOM_FULL' }, 409)
       meta.players.push({ id: input.playerId, nickname: input.nickname })
       this.db.updateMeta(meta)
       return json({ room: this.db.snapshot('', [], this.onlineIds())!.room, player: meta.players.at(-1) })
@@ -125,6 +126,11 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
       const [client, server] = Object.values(pair) as [WebSocket, WebSocket]
       server.serializeAttachment(session)
       this.ctx.acceptWebSocket(server, [`player:${session.playerId}`])
+      const online = this.onlineIds(server)
+      if (!online.has(session.playerId) && online.size >= MAX_ONLINE_PLAYERS) {
+        server.close(4008, 'ROOM_FULL')
+        return new Response(null, { status: 101, webSocket: client })
+      }
       this.broadcastPresence(server)
       return new Response(null, { status: 101, webSocket: client })
     }

@@ -3,6 +3,7 @@ import {
   getRoomHistory,
   getSavedNickname,
   saveRoomHistoryItem,
+  removeRoomHistoryItem,
   saveSavedNickname,
   getRoomOwnerKey,
   saveRoomOwnerKey,
@@ -116,6 +117,18 @@ describe('room history & nickname persistence', () => {
     expect(listB[0].code).toBe('ROOM02')
 
     expect(listC).toHaveLength(0)
+  })
+
+  it('removes one saved room for the current nickname only', () => {
+    const storage = new MemoryStorage()
+    saveRoomHistoryItem('玩家甲', 'ROOM01', '甲的房间', storage)
+    saveRoomHistoryItem('玩家甲', 'ROOM02', '另一个房间', storage)
+    saveRoomHistoryItem('玩家乙', 'ROOM01', '乙的房间', storage)
+
+    expect(removeRoomHistoryItem('玩家甲', 'room01', storage)).toBe(true)
+    expect(getRoomHistory('玩家甲', storage).map(room => room.code)).toEqual(['ROOM02'])
+    expect(getRoomHistory('玩家乙', storage).map(room => room.code)).toEqual(['ROOM01'])
+    expect(removeRoomHistoryItem('玩家甲', 'ROOM01', storage)).toBe(false)
   })
 
   it('rejects invalid room codes or empty nicknames safely', () => {
