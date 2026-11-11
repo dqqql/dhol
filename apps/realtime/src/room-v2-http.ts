@@ -6,6 +6,8 @@ import type { RoomV2Env } from './room-v2'
 import type { StoredMeta } from './room-v2-storage'
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+// Kept in the v2 wire format for older clients; room lifetime is no longer enforced.
+const NO_EXPIRY = '9999-12-31T23:59:59.999Z'
 function code(): string {
   const bytes = new Uint8Array(6)
   crypto.getRandomValues(bytes)
@@ -50,15 +52,13 @@ async function create(request: Request, env: RoomV2Env): Promise<Response> {
   const name = text(input.room_name ?? input.name, 60) || 'Untitled Room'
   const nickname = text(input.nickname, 24)
   if (!nickname || input.room_type !== undefined) return response({ code: 'VALIDATION_ERROR' }, 400)
-  const days = input.duration_days === undefined ? 3 : input.duration_days
-  if (typeof days !== 'number' || !Number.isInteger(days) || days < 1 || days > 365) return response({ code: 'VALIDATION_ERROR' }, 400)
   for (let attempt = 0; attempt < 8; attempt++) {
     const inviteCode = code()
     const player = { id: crypto.randomUUID(), nickname }
     const ownerKey = newRoomOwnerKey()
     const meta: StoredMeta = {
       roomId: crypto.randomUUID(), name, inviteCode, createdAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + days * 86_400_000).toISOString(), players: [player], protocolVersion: 2,
+      expiresAt: NO_EXPIRY, players: [player], protocolVersion: 2,
       ownerKeyHash: await roomOwnerKeyHash(ownerKey),
     }
     const result = await stub(env, inviteCode).fetch(internal('/internal/v2/create', { method: 'POST', body: JSON.stringify(meta) }))
@@ -122,7 +122,7 @@ async function restore(request: Request, env: RoomV2Env): Promise<Response> {
   if (!nickname) return response({ code: 'VALIDATION_ERROR' }, 400)
   for (let attempt = 0; attempt < 8; attempt++) {
     const inviteCode = code(); const player = { id: crypto.randomUUID(), nickname }; const ownerKey = newRoomOwnerKey()
-    const meta: StoredMeta = { roomId: crypto.randomUUID(), name: state.name, inviteCode, createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 3 * 86_400_000).toISOString(), players: [player], protocolVersion: 2, ownerKeyHash: await roomOwnerKeyHash(ownerKey) }
+    const meta: StoredMeta = { roomId: crypto.randomUUID(), name: state.name, inviteCode, createdAt: new Date().toISOString(), expiresAt: NO_EXPIRY, players: [player], protocolVersion: 2, ownerKeyHash: await roomOwnerKeyHash(ownerKey) }
     const result = await stub(env, inviteCode).fetch(internal('/internal/v2/restore', { method: 'POST', body: JSON.stringify({ meta, state }) }))
     if (result.status === 409) continue
     if (!result.ok) return result

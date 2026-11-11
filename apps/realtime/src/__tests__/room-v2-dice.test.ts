@@ -14,7 +14,6 @@ function fixture(options: RoomV2CommandOptions = {}, persistenceOrder?: string[]
   const db: CommandStorage = {
     receipt: (actor, requestId) => receipts.get(`${actor}:${requestId}`) ?? null,
     metaRow: () => ({ room_json: '{}', seq, fear: 0, xcard_json: null }),
-    roomExpiresAt: () => '2030-01-01T00:00:00.000Z',
     characterHeader: () => null,
     resources: () => null,
     nextPosition: () => 0,
@@ -63,7 +62,7 @@ describe('Room V2 dice hot path', () => {
     }
     room.db = {
       meta: () => { throw new Error('complete meta must stay cold') },
-      sessionAccess: (playerId: string) => ({ roomId: 'room', inviteCode: 'ABC123', expiresAt: '2030-01-01T00:00:00.000Z', member: playerId === 'player-a' }),
+      sessionAccess: (playerId: string) => ({ roomId: 'room', inviteCode: 'ABC123', expiresAt: '2020-01-01T00:00:00.000Z', member: playerId === 'player-a' }),
     }
     room.commands = { mutate: async () => ({ ack: { type: 'operation.ack', requestId: 'roll-hot', seq: 1 }, event: null, duplicate: false }) }
     const socket = {
@@ -77,12 +76,9 @@ describe('Room V2 dice hot path', () => {
   })
 
   it.each([
-    [{ roomId: 'room', inviteCode: 'ABC123', expiresAt: '2030-01-01T00:00:00.000Z', member: false }, 'Session expired'],
-    [{ roomId: 'another-room', inviteCode: 'ABC123', expiresAt: '2030-01-01T00:00:00.000Z', member: true }, 'Session expired'],
-    [{ roomId: 'room', inviteCode: 'ABC123', expiresAt: '2020-01-01T00:00:00.000Z', member: true }, 'Room expired'],
-    [{ roomId: 'room', inviteCode: 'ABC123', expiresAt: null as unknown as string, member: true }, 'Room expired'],
-    [{ roomId: 'room', inviteCode: 'ABC123', expiresAt: 'not-a-date', member: true }, 'Room expired'],
-  ])('rejects missing membership, mismatched rooms, and expired rooms using minimal access data', async (access, expectedReason) => {
+    [null, 'Session expired'],
+    [{ roomId: 'another-room', inviteCode: 'ABC123', member: true }, 'Session expired'],
+  ])('rejects missing room access and mismatched rooms using minimal access data', async (access, expectedReason) => {
     const room = Object.create(RoomV2DurableObject.prototype) as unknown as {
       db: Record<string, unknown>
       commands: Record<string, unknown>

@@ -13,7 +13,6 @@ function fixture() {
   const db: CommandStorage = {
     receipt: (actor, requestId) => receipts.get(`${actor}:${requestId}`) ?? null,
     metaRow: () => ({ room_json: '{}', seq, fear, xcard_json: null }),
-    roomExpiresAt: () => '2030-01-01',
     characterHeader: () => null, resources: () => null, nextPosition: () => 0,
     transaction: callback => { if (failNext) { failNext = false; throw new Error('disk failed') } return callback() },
     advance: (next, nextFear) => { seq = next; if (nextFear !== undefined) fear = nextFear },

@@ -1,5 +1,5 @@
 import { characterNameKey, resourcesFromSheet, rollDicePool, summaryFromSheet, type CharacterSheetJson, type DiceRollRecord, type MutationAck, type MutationCommand, type MutationError, type RoomEvent } from '@dhgc/shared/desktop'
-import { isExpired, RoomV2Storage } from './room-v2-storage'
+import { RoomV2Storage } from './room-v2-storage'
 import { summarizeRollServerMetrics, type RollCommandMetric } from './room-v2-metrics'
 
 export type { RollCommandMetric } from './room-v2-metrics'
@@ -9,7 +9,7 @@ export class CommandFailure extends Error {
 }
 
 export interface CommitResult { ack: MutationAck; event: RoomEvent | null; duplicate: boolean; action?: 'created' | 'updated' }
-export type CommandStorage = Pick<RoomV2Storage, 'receipt' | 'metaRow' | 'roomExpiresAt' | 'characterHeader' | 'resources' | 'nextPosition' | 'transaction' | 'advance' | 'saveReceipt' | 'saveResources' | 'saveCharacter' | 'deleteCharacter' | 'saveDice' | 'clearDice' | 'clocks' | 'clock' | 'saveClock' | 'deleteClock'>
+export type CommandStorage = Pick<RoomV2Storage, 'receipt' | 'metaRow' | 'characterHeader' | 'resources' | 'nextPosition' | 'transaction' | 'advance' | 'saveReceipt' | 'saveResources' | 'saveCharacter' | 'deleteCharacter' | 'saveDice' | 'clearDice' | 'clocks' | 'clock' | 'saveClock' | 'deleteClock'>
 export interface RoomV2CommandOptions {
   now?: () => number
   hash?: (value: unknown) => Promise<string>
@@ -101,8 +101,7 @@ export class RoomV2Commands {
       return { ...result, duplicate: true, event: null }
     }
     const meta = this.db.metaRow()
-    const expiresAt = this.db.roomExpiresAt()
-    if (!meta || isExpired(expiresAt)) throw new CommandFailure('ROOM_EXPIRED', '房间已过期')
+    if (!meta) throw new CommandFailure('ROOM_EXPIRED', '房间不存在')
     const seq = meta.seq + 1
     const change = build(seq)
     const ack: MutationAck = { type: 'operation.ack', requestId, seq: change.event ? seq : meta.seq }

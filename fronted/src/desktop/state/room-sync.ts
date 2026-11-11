@@ -70,6 +70,7 @@ export class RoomSync {
   private readonly setTimer: NonNullable<RoomClientOptions['setTimer']>
   private readonly clearTimer: NonNullable<RoomClientOptions['clearTimer']>
   private destroyed = false
+  private staleOutbox = false
   private viewState: RoomSyncState = { room: null, connection: 'disconnected', save: 'saved', reason: null }
   readonly options: RoomSyncOptions
 
@@ -85,7 +86,7 @@ export class RoomSync {
       pendingIds: () => this.outbox.list().map(entry => entry.command.requestId),
       afterSeq: () => this.confirmed.getState().room?.seq ?? 0,
       onMessage: message => this.receive(message),
-      onStatus: (status, reason) => { this.connection = status; this.reason = reason ?? null; this.emit() },
+      onStatus: (status, reason) => { this.connection = status; this.reason = reason ?? (this.staleOutbox ? '超过 30 天的未确认操作已停止重发，请核对房间状态' : null); this.emit() },
     })
     this.emit()
   }
@@ -161,6 +162,15 @@ export class RoomSync {
       else this.outbox.acknowledge(receipt.requestId, receipt.seq)
     }
     for (const entry of this.outbox.list()) {
+      if (entry.ackSeq !== null && appliedSeq >= entry.ackSeq) this.finish(entry.command.requestId)
+    }
+    if (this.outbox.discardExpired() > 0) {
+      this.staleOutbox = true
+      this.save = 'failed'
+      this.reason = '超过 30 天的未确认操作已停止重发，请核对房间状态'
+      this.ui.setNotice(this.reason)
+    }
+    for (const entry of this.outbox.list()) {
       const command = entry.command
       if ('generation' in command) {
         const character = this.confirmed.getState().room?.characters.find(item => item.name === command.name)
@@ -172,7 +182,7 @@ export class RoomSync {
     }
     if (this.highestSeenSeq > appliedSeq) { this.client.sync(); return }
     this.client.ready()
-    for (const entry of this.outbox.list()) this.client.send(entry.command)
+    for (const entry of this.outbox.list()) if (entry.ackSeq === null) this.client.send(entry.command)
     this.emit()
   }
 

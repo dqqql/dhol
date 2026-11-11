@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { RoomSocket } from '../desktop/sync/room-client'
 import { RoomSync } from '../desktop/state/room-sync'
+import { OUTBOX_RETRY_WINDOW_MS } from '../desktop/sync/room-outbox'
 import { createRoomV2Fixture } from '../../../packages/shared/src/__tests__/fixtures/room-v2-fixture'
 
 function harness(roomId = 'room-fixture') {
@@ -17,6 +18,33 @@ function harness(roomId = 'room-fixture') {
 }
 
 describe('Room V2 sync', () => {
+  it('does not resend a locally queued operation past the receipt retention window', () => {
+    const data = new Map<string, string>()
+    data.set('dhol:desktop:v2:outbox:room-fixture:player-a', JSON.stringify([{
+      command: { type: 'room.adjustFear', protocolVersion: 2, requestId: 'stale', delta: 1 },
+      ackSeq: null, createdAtMs: Date.now() - OUTBOX_RETRY_WINDOW_MS - 1,
+    }]))
+    const storage = { getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => { data.set(key, value) }, removeItem: (key: string) => { data.delete(key) } }
+    const sync = new RoomSync({ roomId: 'room-fixture', actorId: 'player-a', websocketUrl: 'ws://example.test', storage })
+    sync.receive({ type: 'room.snapshot', protocolVersion: 2, room: createRoomV2Fixture('room-fixture'), receipts: [] })
+    expect(sync.pending()).toEqual([])
+    expect(sync.getState()).toMatchObject({ save: 'failed', reason: expect.stringContaining('核对房间状态') })
+    sync.destroy()
+  })
+  it('uses a persisted acknowledgement after the server receipt has been cleaned', () => {
+    const data = new Map<string, string>()
+    data.set('dhol:desktop:v2:outbox:room-fixture:player-a', JSON.stringify([{
+      command: { type: 'room.adjustFear', protocolVersion: 2, requestId: 'acknowledged', delta: 1 },
+      ackSeq: 1, createdAtMs: Date.now() - OUTBOX_RETRY_WINDOW_MS - 1,
+    }]))
+    const storage = { getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => { data.set(key, value) }, removeItem: (key: string) => { data.delete(key) } }
+    const sync = new RoomSync({ roomId: 'room-fixture', actorId: 'player-a', websocketUrl: 'ws://example.test', storage })
+    sync.receive({ type: 'room.snapshot', protocolVersion: 2, room: { ...createRoomV2Fixture('room-fixture'), seq: 1 }, receipts: [] })
+    expect(sync.pending()).toEqual([])
+    expect(sync.getState().save).toBe('saved')
+    sync.destroy()
+  })
+
   it('projects clock edits locally and applies broadcasts and reconnect snapshots for other members', () => {
     const { sync, room } = harness()
     const requestId = sync.submit({ type: 'clock.create', id: 'clock-1', name: '援军抵达', max: 4 })

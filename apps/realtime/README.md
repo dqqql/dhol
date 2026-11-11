@@ -25,6 +25,21 @@ Every `/api/rooms` legacy route, including subpaths and WebSocket attempts, now
 returns HTTP 410 with `LEGACY_ROOMS_RETIRED`. It does not open a Durable Object.
 Other unknown API routes return HTTP 404.
 
+Room V2 data is retained until the room owner explicitly deletes it. New rooms
+do not schedule an expiry alarm. Existing rooms ignore their historical
+`expiresAt` value, and any previously scheduled alarm only cancels itself.
+The `expiresAt` field remains in the v2 response for older clients and is set
+to year 9999 for new rooms. Session tokens still expire after 12 hours; users
+can rejoin a retained room to obtain a new session. The browser's recent-room
+list is only a local shortcut, not a room backup.
+
+Room V2 receipts are retained for 31 days so reconnecting clients can resolve
+lost acknowledgements without repeating mutations. A room prunes expired
+receipts in batches during later writes; idle rooms do not run cleanup work.
+Receipts created before this schema change receive a fresh 31-day grace period.
+The desktop outbox stops automatic retries after 30 days and asks the user to
+check the current room state.
+
 Browser character delivery uses the six-character Room V2 code. Configure its
 comma-separated browser origin allowlist with `CHARACTER_INGEST_ORIGINS`; this
 CORS setting is separate from `ALLOWED_ORIGIN` and is not an authentication

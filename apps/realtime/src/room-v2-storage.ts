@@ -18,14 +18,11 @@ type ResourceRow = { resources_json: string }
 type DiceRow = { record_json: string }
 type ClockRow = { clock_json: string }
 type ReceiptRow = { payload_hash: string; seq: number; result_json: string }
-type SessionAccessRow = { room_id: string | null; invite_code: string | null; expires_at: string | null; member: number | null }
-export interface RoomV2SessionAccess { roomId: string | null; inviteCode: string | null; expiresAt: string | null; member: boolean }
-
-export function isExpired(expiresAt: string | null | undefined, now = Date.now()): boolean {
-  if (!expiresAt) return true
-  const expiry = Date.parse(expiresAt)
-  return !Number.isFinite(expiry) || expiry <= now
-}
+const RECEIPT_RETENTION_MS = 31 * 24 * 60 * 60 * 1000
+const RECEIPT_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000
+const RECEIPT_CLEANUP_BATCH = 500
+type SessionAccessRow = { room_id: string | null; invite_code: string | null; member: number | null }
+export interface RoomV2SessionAccess { roomId: string | null; inviteCode: string | null; member: boolean }
 
 export class RoomV2Storage {
   private deleted = false
@@ -39,8 +36,12 @@ export class RoomV2Storage {
       CREATE TABLE IF NOT EXISTS panel_v2_resources (name TEXT PRIMARY KEY, resources_json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS panel_v2_dice (seq INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, record_json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS panel_v2_clocks (id TEXT PRIMARY KEY, position INTEGER NOT NULL, clock_json TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS panel_v2_receipts (actor TEXT NOT NULL, request_id TEXT NOT NULL, payload_hash TEXT NOT NULL, seq INTEGER NOT NULL, result_json TEXT NOT NULL, PRIMARY KEY (actor, request_id));
+      CREATE TABLE IF NOT EXISTS panel_v2_receipts (actor TEXT NOT NULL, request_id TEXT NOT NULL, payload_hash TEXT NOT NULL, seq INTEGER NOT NULL, result_json TEXT NOT NULL, created_at_ms INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (actor, request_id));
+      CREATE TABLE IF NOT EXISTS panel_v2_receipt_gc (id INTEGER PRIMARY KEY CHECK (id = 1), legacy_epoch_ms INTEGER NOT NULL, last_pruned_at_ms INTEGER NOT NULL DEFAULT 0);
     `)
+    const columns = this.storage.sql.exec<{ name: string }>('PRAGMA table_info(panel_v2_receipts)').toArray()
+    if (!columns.some(column => column.name === 'created_at_ms')) this.storage.sql.exec('ALTER TABLE panel_v2_receipts ADD COLUMN created_at_ms INTEGER NOT NULL DEFAULT 0')
+    this.storage.sql.exec('INSERT OR IGNORE INTO panel_v2_receipt_gc (id, legacy_epoch_ms) VALUES (1, ?)', Date.now())
   }
 
   metaRow(): MetaRow | null {
@@ -55,26 +56,19 @@ export class RoomV2Storage {
     return row ? JSON.parse(row.room_json) as StoredMeta : null
   }
 
-  roomExpiresAt(): string | null {
-    if (this.deleted) return null
-    const row = this.storage.sql.exec<{ expires_at: string | null }>("SELECT json_extract(room_json, '$.expiresAt') AS expires_at FROM panel_v2_meta WHERE id = 1").toArray()[0]
-    return row?.expires_at ?? null
-  }
-
   sessionAccess(playerId: string): RoomV2SessionAccess | null {
     if (this.deleted) return null
     const row = this.storage.sql.exec<SessionAccessRow>(`
       SELECT
         json_extract(room_json, '$.roomId') AS room_id,
         json_extract(room_json, '$.inviteCode') AS invite_code,
-        json_extract(room_json, '$.expiresAt') AS expires_at,
         EXISTS (
           SELECT 1 FROM json_each(room_json, '$.players')
           WHERE json_extract(value, '$.id') = ?
         ) AS member
       FROM panel_v2_meta WHERE id = 1
     `, playerId).toArray()[0]
-    return row ? { roomId: row.room_id, inviteCode: row.invite_code, expiresAt: row.expires_at, member: row.member === 1 } : null
+    return row ? { roomId: row.room_id, inviteCode: row.invite_code, member: row.member === 1 } : null
   }
 
   create(meta: StoredMeta): boolean {
@@ -153,7 +147,19 @@ export class RoomV2Storage {
   }
 
   saveReceipt(actor: string, requestId: string, hash: string, seq: number, result: unknown): void {
-    this.storage.sql.exec('INSERT INTO panel_v2_receipts (actor, request_id, payload_hash, seq, result_json) VALUES (?, ?, ?, ?, ?)', actor, requestId, hash, seq, JSON.stringify(result))
+    const now = Date.now()
+    this.storage.sql.exec('INSERT INTO panel_v2_receipts (actor, request_id, payload_hash, seq, result_json, created_at_ms) VALUES (?, ?, ?, ?, ?, ?)', actor, requestId, hash, seq, JSON.stringify(result), now)
+    const gc = this.storage.sql.exec<{ legacy_epoch_ms: number; last_pruned_at_ms: number }>('SELECT legacy_epoch_ms, last_pruned_at_ms FROM panel_v2_receipt_gc WHERE id = 1').one()
+    if (now - gc.last_pruned_at_ms < RECEIPT_CLEANUP_INTERVAL_MS) return
+    const cutoff = now - RECEIPT_RETENTION_MS
+    this.storage.sql.exec(`DELETE FROM panel_v2_receipts WHERE rowid IN (
+      SELECT rowid FROM panel_v2_receipts
+      WHERE (created_at_ms > 0 AND created_at_ms < ?)
+         OR (created_at_ms = 0 AND ? <= ?)
+      LIMIT ${RECEIPT_CLEANUP_BATCH}
+    )`, cutoff, gc.legacy_epoch_ms, cutoff)
+    const deleted = this.storage.sql.exec<{ count: number }>('SELECT changes() AS count').one().count
+    if (deleted < RECEIPT_CLEANUP_BATCH) this.storage.sql.exec('UPDATE panel_v2_receipt_gc SET last_pruned_at_ms = ? WHERE id = 1', now)
   }
 
   saveResources(name: string, resources: CharacterResources): void {

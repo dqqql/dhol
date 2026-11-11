@@ -66,6 +66,43 @@ function nextPresence(socket: WebSocket): Promise<{ members: Array<{ id: string;
 }
 
 describe('Room V2 workerd integration', () => {
+  it('migrates existing receipt tables without losing their retry records', async () => {
+    const { stub } = await createRoom('WRK013')
+    await runInDurableObject(stub, async (_, state) => {
+      state.storage.sql.exec('DROP TABLE panel_v2_receipts')
+      state.storage.sql.exec('CREATE TABLE panel_v2_receipts (actor TEXT NOT NULL, request_id TEXT NOT NULL, payload_hash TEXT NOT NULL, seq INTEGER NOT NULL, result_json TEXT NOT NULL, PRIMARY KEY (actor, request_id))')
+      state.storage.sql.exec('INSERT INTO panel_v2_receipts (actor, request_id, payload_hash, seq, result_json) VALUES (?, ?, ?, ?, ?)', 'player-a', 'legacy-request', 'hash', 1, '{}')
+      const db = new RoomV2Storage(state.storage)
+      db.initialize()
+      expect(db.receipt('player-a', 'legacy-request')).not.toBeNull()
+      expect(state.storage.sql.exec<{ created_at_ms: number }>('SELECT created_at_ms FROM panel_v2_receipts WHERE request_id = ?', 'legacy-request').one().created_at_ms).toBe(0)
+    })
+  })
+
+  it('prunes expired receipts while retaining recent and newly migrated receipts', async () => {
+    const { stub } = await createRoom('WRK012')
+    await runInDurableObject(stub, async (_, state) => {
+      const db = new RoomV2Storage(state.storage)
+      const now = Date.now()
+      const day = 24 * 60 * 60 * 1000
+      const add = (id: string, createdAtMs: number) => state.storage.sql.exec(
+        'INSERT INTO panel_v2_receipts (actor, request_id, payload_hash, seq, result_json, created_at_ms) VALUES (?, ?, ?, 1, ?, ?)',
+        'player-a', id, 'hash', '{}', createdAtMs,
+      )
+      add('expired', now - 32 * day)
+      add('recent', now - day)
+      add('legacy', 0)
+      db.saveReceipt('player-a', 'trigger', 'hash', 2, {})
+      expect(db.receipt('player-a', 'expired')).toBeNull()
+      expect(db.receipt('player-a', 'legacy')).not.toBeNull()
+      expect(db.receipt('player-a', 'recent')).not.toBeNull()
+      state.storage.sql.exec('UPDATE panel_v2_receipt_gc SET legacy_epoch_ms = ?, last_pruned_at_ms = 0 WHERE id = 1', now - 32 * day)
+      db.saveReceipt('player-a', 'next-trigger', 'hash', 3, {})
+      expect(db.receipt('player-a', 'legacy')).toBeNull()
+      expect(db.receipt('player-a', 'recent')).not.toBeNull()
+    })
+  })
+
   it('does not persist repeat joins and keeps signed sessions usable', async () => {
     const { stub, room } = await createRoom('WRK010')
     let lastPlayer: StoredMeta['players'][number] | undefined
@@ -107,6 +144,22 @@ describe('Room V2 workerd integration', () => {
     const snapshot = await stub.fetch(new Request('https://room-v2.internal/internal/v2/snapshot', { headers: { Authorization: `Bearer ${token}` } }))
     expect((await snapshot.json() as { room: { members: Array<{ online: boolean }> } }).room.members.filter(member => member.online)).toHaveLength(10)
     for (const socket of sockets) socket.close()
+  })
+
+  it('keeps a legacy room after its old expiry alarm and still allows joining', async () => {
+    const { stub, room } = await createRoom('WRK009')
+    await runInDurableObject(stub, async (instance, state) => {
+      const legacy = { ...room, expiresAt: '2020-01-01T00:00:00.000Z' }
+      state.storage.sql.exec('UPDATE panel_v2_meta SET room_json = ? WHERE id = 1', JSON.stringify(legacy))
+      await state.storage.setAlarm(Date.now() + 60_000)
+      await instance.alarm()
+      expect(await state.storage.getAlarm()).toBeNull()
+      expect(new RoomV2Storage(state.storage).meta()?.roomId).toBe(room.roomId)
+    })
+    const joined = await stub.fetch(new Request('https://room-v2.internal/internal/v2/join', {
+      method: 'POST', body: JSON.stringify({ playerId: 'late-player', nickname: '迟到玩家' }),
+    }))
+    expect(joined.status).toBe(200)
   })
 
   it('broadcasts a countdown to another member and includes it in later snapshots', async () => {

@@ -3,7 +3,7 @@ import { parseMutationCommand, parseSyncRequest, type CharacterSheetJson, type M
 import { CommandFailure, RoomV2Commands } from './room-v2-commands'
 import { verifyRoomV2Session, type RoomV2Session } from './room-v2-session'
 import { roomOwnerKeyHash } from './room-owner-key'
-import { isExpired, RoomV2Storage, type StoredMeta } from './room-v2-storage'
+import { RoomV2Storage, type StoredMeta } from './room-v2-storage'
 
 export interface RoomV2Env {
   ROOMS_V2: DurableObjectNamespace<RoomV2DurableObject>
@@ -58,35 +58,22 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
     return session
   }
 
-  private expired(): boolean {
-    return isExpired(this.db.roomExpiresAt())
-  }
-
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url)
     if (url.pathname === '/internal/v2/create' && request.method === 'POST') {
       const meta = await request.json() as StoredMeta
       if (!this.db.create(meta)) return json({ code: 'INVITE_COLLISION' }, 409)
-      try { await this.ctx.storage.setAlarm(Date.parse(meta.expiresAt)) }
-      catch {
-        await this.ctx.storage.deleteAll()
-        this.db.resetAfterDelete()
-        return json({ code: 'PERSISTENCE_FAILED' }, 503)
-      }
       return json({ room: this.snapshot('', [])!.room, player: meta.players[0] })
     }
     if (url.pathname === '/internal/v2/restore' && request.method === 'POST') {
       const input = await request.json() as { meta: StoredMeta; state: Parameters<RoomV2Storage['restore']>[1] }
       if (!this.db.restore(input.meta, input.state)) return json({ code: 'INVITE_COLLISION' }, 409)
-      try { await this.ctx.storage.setAlarm(Date.parse(input.meta.expiresAt)) }
-      catch { await this.ctx.storage.deleteAll(); this.db.resetAfterDelete(); return json({ code: 'PERSISTENCE_FAILED' }, 503) }
       return json({ room: this.snapshot('', [])!.room, player: input.meta.players[0] })
     }
     if (url.pathname === '/internal/v2/join' && request.method === 'POST') {
       const input = await request.json() as { playerId: string; nickname: string }
       const meta = this.db.meta()
       if (!meta) return json({ code: 'ROOM_NOT_FOUND' }, 404)
-      if (this.expired()) return json({ code: 'ROOM_EXPIRED' }, 410)
       // Keep only the creator in persisted room metadata. Previous joins remain valid
       // through their signed sessions, while repeat joins no longer grow the room record.
       if (meta.players.length > 1) this.db.updateMeta({ ...meta, players: meta.players.slice(0, 1) })
@@ -95,7 +82,6 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
     if (url.pathname === '/internal/v2/replace' && request.method === 'POST') {
       const meta = this.db.meta()
       if (!meta) return json({ code: 'ROOM_NOT_FOUND' }, 404)
-      if (isExpired(meta.expiresAt)) return json({ code: 'ROOM_EXPIRED' }, 410)
       const input = await request.json() as { requestId: string; sheet: CharacterSheetJson }
       try {
         const result = await this.commands.replace('delivery', input.requestId, input.sheet)
@@ -119,19 +105,16 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
         // Rooms created before owner keys existed retain their original creator-session rule.
         return json({ code: 'ROOM_DELETE_FORBIDDEN' }, 403)
       }
-      const expiresAt = meta.expiresAt
       try {
         await this.ctx.storage.deleteAlarm()
         await this.ctx.storage.deleteAll()
       } catch {
-        try { await this.ctx.storage.setAlarm(Date.parse(expiresAt)) } catch { /* best-effort expiry recovery */ }
         return json({ code: 'PERSISTENCE_FAILED' }, 503)
       }
       this.db.resetAfterDelete()
       for (const socket of this.ctx.getWebSockets()) socket.close(1008, 'Room deleted')
       return json({ ok: true })
     }
-    if (this.expired()) return json({ code: 'ROOM_EXPIRED' }, 410)
     if (url.pathname === '/internal/v2/ws' && request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
       const pair = new WebSocketPair()
       const [client, server] = Object.values(pair) as [WebSocket, WebSocket]
@@ -189,7 +172,6 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
     if (!session || session.exp <= Date.now() / 1000) { socket.close(1008, 'Session expired'); return }
     const access = this.db.sessionAccess(session.playerId)
     if (!access || session.roomId !== access.roomId || session.inviteCode !== access.inviteCode) { socket.close(1008, 'Session expired'); return }
-    if (isExpired(access.expiresAt)) { socket.close(1008, 'Room expired'); return }
     let input: unknown
     try { input = JSON.parse(typeof data === 'string' ? data : new TextDecoder().decode(data)) }
     catch { this.send(socket, { type: 'operation.error', requestId: '', code: 'INVALID_COMMAND', message: '无效 JSON' }); return }
@@ -219,12 +201,7 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
   }
 
   async alarm(): Promise<void> {
-    const meta = this.db.meta()
-    if (!meta) return
-    if (!isExpired(meta.expiresAt)) { await this.ctx.storage.setAlarm(Date.parse(meta.expiresAt)); return }
-    for (const socket of this.ctx.getWebSockets()) socket.close(1008, 'Room expired')
+    // Existing rooms may still have an alarm from the old three-day policy.
     await this.ctx.storage.deleteAlarm()
-    await this.ctx.storage.deleteAll()
-    this.db.resetAfterDelete()
   }
 }
