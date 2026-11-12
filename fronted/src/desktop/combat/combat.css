@@ -226,6 +226,14 @@
   transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease;
 }
 
+.character-card.is-targetable * {
+  pointer-events: none !important;
+}
+
+.character-card.is-targetable .character-indicator-tooltip {
+  display: none;
+}
+
 .character-card.is-targetable:hover {
   border-color: var(--combat-accent);
   box-shadow: 0 0 0 2px var(--combat-accent), 8px 8px 0 rgba(59, 107, 155, 0.18);
@@ -261,12 +269,10 @@
 /* 底部杀戮尖塔式手牌坞站 */
 .enemy-hand-dock {
   position: fixed;
-  left: 50%;
+  left: 0;
+  right: 0;
   bottom: 0;
-  transform: translateX(-50%);
   z-index: 750;
-  width: max-content;
-  max-width: calc(100vw - 16px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -275,32 +281,38 @@
 
 .enemy-action-bar {
   pointer-events: auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 10px;
-  padding: 10px 14px;
+  position: fixed;
+  bottom: 14px;
+  z-index: 60;
+  width: 224px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
   background: var(--combat-surface);
   color: var(--combat-ink);
   border: 2px solid var(--combat-border);
   box-shadow: 6px 6px 0 var(--combat-shadow);
-  max-width: calc(100vw - 24px);
 }
 
 .enemy-action-bar__info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  display: grid;
+  gap: 6px;
   font-size: 13px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--combat-divider);
 }
 
 .enemy-action-attacker,
 .enemy-action-target {
-  display: inline-flex;
+  display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 6px;
+  gap: 4px 6px;
+}
+
+.enemy-action-attacker b {
+  font-size: 15px;
+  font-weight: 900;
 }
 
 .enemy-action-attacker small,
@@ -316,28 +328,30 @@
 }
 
 .enemy-action-target {
+  font-size: 12px;
   color: var(--combat-ink-secondary);
 }
 
 .enemy-action-target.is-locked {
+  font-size: 13px;
   color: var(--combat-accent-hover);
   font-weight: 800;
 }
 
 .enemy-action-bar__controls {
-  display: flex;
-  align-items: center;
+  display: grid;
   gap: 8px;
 }
 
 .enemy-adv-toggle {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   border: 1px solid #CBD5E1;
   background: var(--combat-head);
 }
 
 .enemy-adv-toggle button {
-  padding: 5px 8px;
+  padding: 5px 6px;
   font-size: 12px;
   border: none;
   background: transparent;
@@ -349,8 +363,14 @@
   color: #fff;
 }
 
+.enemy-action-buttons {
+  display: grid;
+  gap: 6px;
+}
+
 .btn-confirm-attack {
-  padding: 7px 16px;
+  width: 100%;
+  padding: 8px 12px;
   font-size: 14px;
   font-weight: 900;
   border: 1px solid #CBD5E1;
@@ -373,8 +393,9 @@
 }
 
 .btn-cancel-attack {
-  padding: 7px 12px;
-  font-size: 13px;
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 12px;
   background: #fff;
   border-color: #94A3B8;
   color: var(--combat-border);
@@ -778,8 +799,8 @@
     margin: 0 clamp(-88px, calc((100vw - 40px - 240px * var(--hand-count, 2)) / (2 * (var(--hand-count, 2) - 1))), -10px);
   }
   .enemy-action-bar {
-    flex-direction: column;
-    align-items: stretch;
+    width: min(200px, calc(100vw - 24px));
+    padding: 10px;
   }
 }
 

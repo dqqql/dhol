@@ -22,7 +22,6 @@ export default function EnemyHandDock({
   onRemoveCard,
   onConfirmAttack,
   onCancel,
-  onPointerInsideSelectedChange,
   onSelectedAnchorChange,
   onMeasureCardRect,
 }: {
@@ -39,11 +38,12 @@ export default function EnemyHandDock({
   onRemoveCard: (instanceId: string) => void
   onConfirmAttack: () => void
   onCancel: () => void
-  onPointerInsideSelectedChange: (inside: boolean) => void
   onSelectedAnchorChange: (point: Point2D | null) => void
   onMeasureCardRect: (instanceId: string, rect: DOMRect | null) => void
 }) {
   const cardRefs = useRef(new Map<string, HTMLElement>())
+  const actionBarRef = useRef<HTMLDivElement>(null)
+  const [actionBarPos, setActionBarPos] = useState<{ id: string; left: number } | null>(null)
 
   const measureAnchor = useCallback(() => {
     if (!selectedId) {
@@ -60,13 +60,19 @@ export default function EnemyHandDock({
       x: rect.left + rect.width / 2,
       y: rect.top + 8,
     })
+    const barWidth = actionBarRef.current?.offsetWidth || 224
+    setActionBarPos({
+      id: selectedId,
+      left: Math.max(12, Math.round(rect.left - 14 - barWidth)),
+    })
   }, [selectedId, onSelectedAnchorChange])
 
   useEffect(() => {
-    measureAnchor()
+    const rafId = window.requestAnimationFrame(measureAnchor)
     const timer = window.setTimeout(measureAnchor, 220)
     window.addEventListener('resize', measureAnchor)
     return () => {
+      window.cancelAnimationFrame(rafId)
       window.clearTimeout(timer)
       window.removeEventListener('resize', measureAnchor)
     }
@@ -94,6 +100,7 @@ export default function EnemyHandDock({
   }, [defeatingIds, onMeasureCardRect])
 
   const selectedCard = selectedId ? hand.find(item => item.instanceId === selectedId) ?? null : null
+  const actionBarLeft = selectedId && actionBarPos?.id === selectedId ? actionBarPos.left : null
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
   if (hand.length === 0) return null
@@ -102,24 +109,30 @@ export default function EnemyHandDock({
 
   return (
     <div className="enemy-hand-dock" aria-label="敌人手牌区">
-      {/* 选中手牌后的上方动作条 */}
+      {/* 选中手牌后的左侧方形确认框 */}
       {selectedCard && (
-        <div className="enemy-action-bar" role="region" aria-label="攻击确认栏">
+        <div
+          ref={actionBarRef}
+          className="enemy-action-bar"
+          role="region"
+          aria-label="攻击确认栏"
+          style={actionBarLeft === null ? { visibility: 'hidden' } : { left: `${actionBarLeft}px` }}
+        >
           <div className="enemy-action-bar__info">
-            <span className="enemy-action-attacker">
+            <div className="enemy-action-attacker">
               <b>{selectedCard.name}</b>
               <small>{formatSignedModifier(selectedCard.attackModifier)} · {selectedCard.damageFormula}</small>
-            </span>
-            <span className="enemy-action-arrow" aria-hidden="true">➔</span>
+            </div>
             {targetCharacter ? (
-              <span className="enemy-action-target is-locked">
+              <div className="enemy-action-target is-locked">
+                <span className="enemy-action-arrow" aria-hidden="true">➔</span>
                 <b>{targetCharacter.name}</b>
                 <small>闪避 {targetCharacter.evasion ?? '未填'}</small>
-              </span>
+              </div>
             ) : (
-              <span className="enemy-action-target">
-                请点击上方玩家角色卡选择目标
-              </span>
+              <div className="enemy-action-target">
+                点击上方角色卡锁定目标
+              </div>
             )}
           </div>
 
@@ -141,17 +154,19 @@ export default function EnemyHandDock({
                 </button>
               ))}
             </div>
-            <button
-              type="button"
-              className={`btn-confirm-attack ${targetCharacter ? 'is-ready' : ''}`}
-              disabled={!ready || !targetCharacter || attacking}
-              onClick={onConfirmAttack}
-            >
-              {attacking ? '掷骰结算中…' : '确定攻击'}
-            </button>
-            <button type="button" className="btn-cancel-attack" disabled={attacking} onClick={onCancel}>
-              取消
-            </button>
+            <div className="enemy-action-buttons">
+              <button
+                type="button"
+                className={`btn-confirm-attack ${targetCharacter ? 'is-ready' : ''}`}
+                disabled={!ready || !targetCharacter || attacking}
+                onClick={onConfirmAttack}
+              >
+                {attacking ? '掷骰结算中…' : '确定攻击'}
+              </button>
+              <button type="button" className="btn-cancel-attack" disabled={attacking} onClick={onCancel}>
+                取消
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -188,12 +203,6 @@ export default function EnemyHandDock({
                 }}
                 onMouseEnter={() => setHoveredId(card.instanceId)}
                 onMouseLeave={() => setHoveredId(curr => (curr === card.instanceId ? null : curr))}
-                onPointerEnter={() => {
-                  if (isSelected) onPointerInsideSelectedChange(true)
-                }}
-                onPointerLeave={() => {
-                  if (isSelected) onPointerInsideSelectedChange(false)
-                }}
                 onTransitionEnd={() => {
                   if (isSelected) measureAnchor()
                 }}
@@ -201,7 +210,6 @@ export default function EnemyHandDock({
                   event.stopPropagation()
                   if (isDefeating) return
                   if (!isSelected) {
-                    onPointerInsideSelectedChange(true)
                     onSelectCard(card.instanceId)
                   }
                 }}

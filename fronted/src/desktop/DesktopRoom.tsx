@@ -61,8 +61,6 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
   const [selectedTargetKey, setSelectedTargetKey] = useState<string | null>(null)
   const [attackAdvantage, setAttackAdvantage] = useState<AttackRollAdvantage>('normal')
   const [attacking, setAttacking] = useState(false)
-  const [pointerInsideCard, setPointerInsideCard] = useState(true)
-  const [pointerInActionBar, setPointerInActionBar] = useState(false)
   const [pointerPos, setPointerPos] = useState<Point2D | null>(null)
   const [hoveringTargetCard, setHoveringTargetCard] = useState(false)
   const [selectedCardAnchor, setSelectedCardAnchor] = useState<Point2D | null>(null)
@@ -327,11 +325,10 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
     }
   }, [targetingActive, selectedTargetCharacter, selectedTargetKey, ui.page])
 
-  // 瞄准状态下的全局鼠标位置（未锁定目标时跟随）与 Esc 取消
+  // 瞄准状态下的全局鼠标位置（仅在鼠标位于角色卡内时显示箭头）与 Esc 取消
   useEffect(() => {
     if (!targetingActive) {
       setHoveringTargetCard(false)
-      setPointerInActionBar(false)
       return
     }
     const onKeyDown = (event: KeyboardEvent) => {
@@ -348,15 +345,20 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
       }
     }
     const onPointerMove = (event: PointerEvent) => {
-      setPointerPos({ x: event.clientX, y: event.clientY })
       const targetEl = event.target instanceof Element ? event.target.closest('[data-target-card="true"]') : null
-      const actionBarEl = event.target instanceof Element ? event.target.closest('.enemy-action-bar') : null
       setHoveringTargetCard(Boolean(targetEl))
-      setPointerInActionBar(Boolean(actionBarEl))
+      if (targetEl) {
+        setPointerPos({ x: event.clientX, y: event.clientY })
+      }
     }
+    const clearHover = () => setHoveringTargetCard(false)
     window.addEventListener('pointermove', onPointerMove, { passive: true })
+    document.addEventListener('pointerleave', clearHover)
+    window.addEventListener('blur', clearHover)
     return () => {
       window.removeEventListener('pointermove', onPointerMove)
+      document.removeEventListener('pointerleave', clearHover)
+      window.removeEventListener('blur', clearHover)
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [targetingActive, attacking, selectedTargetCharacter])
@@ -785,13 +787,12 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
             setSelectedEnemyId(null)
             setSelectedTargetKey(null)
           }}
-          onPointerInsideSelectedChange={setPointerInsideCard}
           onSelectedAnchorChange={setSelectedCardAnchor}
           onMeasureCardRect={handleMeasureCardRect}
         />
         <AimingArrowOverlay
           from={
-            targetingActive && ((selectedTargetCharacter && lockedTargetAnchor) || (!selectedTargetCharacter && !pointerInsideCard && !pointerInActionBar))
+            targetingActive && ((selectedTargetCharacter && lockedTargetAnchor) || (!selectedTargetCharacter && hoveringTargetCard && pointerPos))
               ? selectedCardAnchor
               : null
           }
@@ -799,7 +800,7 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
             targetingActive
               ? (selectedTargetCharacter && lockedTargetAnchor
                   ? lockedTargetAnchor
-                  : (!selectedTargetCharacter && !pointerInsideCard && !pointerInActionBar ? pointerPos : null))
+                  : (!selectedTargetCharacter && hoveringTargetCard ? pointerPos : null))
               : null
           }
           hasTargetHover={Boolean(selectedTargetCharacter && lockedTargetAnchor) || hoveringTargetCard}
