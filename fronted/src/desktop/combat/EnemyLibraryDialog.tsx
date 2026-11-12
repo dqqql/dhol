@@ -163,8 +163,6 @@ export default function EnemyLibraryDialog({
     setHint(alsoAddToHand ? `已保存【${name}】并加入底部手牌。` : `已保存【${name}】到敌人库。`)
   }
 
-  const parsedPreview = parseDamageFormula(form.damageFormula)
-
   function field(key: keyof EnemyFormState, label: string, min?: number, max?: number) {
     return <label className="enemy-field">
       <span>{label}</span>
@@ -182,8 +180,6 @@ export default function EnemyLibraryDialog({
         <div className="modal-bar">
           <div className="enemy-library-bar-title">
             <h2 id="enemy-library-title">敌人库</h2>
-            <span className="enemy-library-badge">库 {library.length}</span>
-            <span className="enemy-library-badge enemy-library-badge--red">手牌 {handCount}</span>
           </div>
           <div className="enemy-library-bar-actions">
             <div className="enemy-editor-anchor" ref={editorRef}>
@@ -219,9 +215,6 @@ export default function EnemyLibraryDialog({
                         </div>
                       </div>
                     ))}
-                    <small className={`enemy-formula-preview ${parsedPreview.kind === 'error' ? 'is-error' : ''}`}>
-                      {parsedPreview.kind === 'error' ? parsedPreview.message : `伤害：${parsedPreview.normalized}`}
-                    </small>
                     {error && <p className="enemy-form-error" role="alert">{error}</p>}
                     <div className="enemy-form-actions">
                       <button type="submit">保存到库</button>

@@ -86,22 +86,6 @@
   gap: 8px;
 }
 
-.enemy-library-badge {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 800;
-  padding: 2px 8px;
-  border: 1px solid var(--combat-border);
-  background: var(--surface);
-  color: var(--combat-ink);
-}
-
-.enemy-library-badge--red {
-  background: var(--combat-accent);
-  border-color: var(--combat-accent);
-  color: #fff;
-}
-
 .enemy-library-bar-actions {
   display: flex;
   flex-wrap: wrap;
@@ -148,17 +132,6 @@
   padding: 7px 9px;
   font-family: var(--font-mono);
   font-size: 14px;
-}
-
-.enemy-formula-preview {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--combat-accent);
-}
-
-.enemy-formula-preview.is-error {
-  color: #B91C1C;
 }
 
 .enemy-form-error {
@@ -863,7 +836,6 @@
 .enemy-editor-track .enemy-field { grid-template-columns: 1fr 70px; align-items: center; }
 .enemy-form-actions { flex-wrap: wrap; }
 .enemy-form-actions button { padding: 8px 10px; font-size: 12px; }
-.enemy-form-popover .enemy-formula-preview { color: var(--combat-accent); }
 .enemy-form-popover .is-error, .enemy-form-popover .enemy-form-error { color: #B91C1C; }
 .enemy-hand-card:focus-within { z-index: 50 !important; }
 @keyframes enemy-hp-mark {
