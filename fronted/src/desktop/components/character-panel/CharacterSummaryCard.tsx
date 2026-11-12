@@ -11,9 +11,26 @@ function weaponDamageDice(damage: string | null): string | null {
   return damage?.replace(/^(?:敏捷|力量|灵巧|本能|风度|知识)\s*[：:]\s*/, '').trim() || null
 }
 
-function CharacterSummaryCard({ character, ready, onHope, onMark, onDetail, onNotes, onDelete, onAddIndicator, onAdjustIndicator, onQuickRollStat }: {
+function CharacterSummaryCard({
+  character,
+  ready,
+  targetingActive = false,
+  isSelectedTarget = false,
+  onSelectTarget,
+  onHope,
+  onMark,
+  onDetail,
+  onNotes,
+  onDelete,
+  onAddIndicator,
+  onAdjustIndicator,
+  onQuickRollStat,
+}: {
   character: CharacterSummary
   ready: boolean
+  targetingActive?: boolean
+  isSelectedTarget?: boolean
+  onSelectTarget?: () => void
   onHope: (delta: 1 | -1) => void
   onMark: (resource: TrackResource, index: number, marked: boolean) => void
   onDetail: () => void
@@ -32,7 +49,26 @@ function CharacterSummaryCard({ character, ready, onHope, onMark, onDetail, onNo
   const hopeSlots = Array.from({ length: character.resources.hopeMax || 6 }, (_, i) => i < character.resources.hope)
   const indicators = character.resources.indicators ?? []
 
-  return <article className="character-card" aria-labelledby={`character-${character.generation}`}>
+  return <article
+    className={[
+      'character-card',
+      targetingActive ? 'is-targetable' : '',
+      isSelectedTarget ? 'is-target-selected' : '',
+    ].filter(Boolean).join(' ')}
+    data-target-card={targetingActive ? 'true' : undefined}
+    aria-labelledby={`character-${character.generation}`}
+    onClickCapture={event => {
+      if (!targetingActive || !onSelectTarget) return
+      event.preventDefault()
+      event.stopPropagation()
+      onSelectTarget()
+    }}
+  >
+    {targetingActive && (
+      <div className="character-target-banner" aria-hidden="true">
+        {isSelectedTarget ? `已锁定 · 闪避 ${value(character.evasion)}` : `点击锁定 · 闪避 ${value(character.evasion)}`}
+      </div>
+    )}
     {indicators.length > 0 && <div className="character-indicators" aria-label={`${character.name}的指示物`}>
       {indicators.map((indicator, index) => <span key={indicator.id} className="character-indicator-anchor">
         <button type="button" className={`character-indicator character-indicator--${index % 6}`} aria-label={`${indicator.name} ${indicator.value}，左键增加，右键减少`} aria-describedby={`indicator-tip-${character.generation}-${indicator.id}`} disabled={!ready} onClick={() => onAdjustIndicator(indicator.id, 1)} onContextMenu={event => { event.preventDefault(); if (ready) onAdjustIndicator(indicator.id, -1) }}>{indicator.value}</button>

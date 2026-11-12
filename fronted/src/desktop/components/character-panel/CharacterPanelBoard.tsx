@@ -6,11 +6,14 @@ import { charactersOnPage, pageCount } from './pagination'
 
 const CharacterNotesDialog = lazy(() => import('./CharacterNotesDialog'))
 
-export default function CharacterPanelBoard({ roomId, characters, page, ready, onPage, onHope, onMark, onDetail, onDelete, onAddIndicator, onAdjustIndicator, onQuickRollStat }: {
+export default function CharacterPanelBoard({ roomId, characters, page, ready, targetingActive = false, selectedTargetKey = null, onSelectTarget, onPage, onHope, onMark, onDetail, onDelete, onAddIndicator, onAdjustIndicator, onQuickRollStat }: {
   roomId: string
   characters: CharacterSummary[]
   page: number
   ready: boolean
+  targetingActive?: boolean
+  selectedTargetKey?: string | null
+  onSelectTarget?: (character: CharacterSummary) => void
   onPage: (page: number) => void
   onHope: (character: CharacterSummary, delta: 1 | -1) => void
   onMark: (character: CharacterSummary, resource: TrackResource, index: number, marked: boolean) => void
@@ -32,21 +35,27 @@ export default function CharacterPanelBoard({ roomId, characters, page, ready, o
       <h2 className="section-title">玩家</h2>
     </div>
     <div className="character-grid">
-      {charactersOnPage(characters, safePage).map(character => (
-        <CharacterSummaryCard
-          key={`${character.name}:${character.generation}`}
-          character={character}
-          ready={ready}
-          onHope={delta => onHope(character, delta)}
-          onMark={(resource, index, marked) => onMark(character, resource, index, marked)}
-          onDetail={() => onDetail(character)}
-          onNotes={() => setNotesTarget(character)}
-          onDelete={() => setDeleteTarget(character)}
-          onAddIndicator={(name, value) => onAddIndicator(character, name, value)}
-          onAdjustIndicator={(id, delta) => onAdjustIndicator(character, id, delta)}
-          onQuickRollStat={onQuickRollStat}
-        />
-      ))}
+      {charactersOnPage(characters, safePage).map(character => {
+        const key = `${character.name}:${character.generation}`
+        return (
+          <CharacterSummaryCard
+            key={key}
+            character={character}
+            ready={ready}
+            targetingActive={targetingActive}
+            isSelectedTarget={selectedTargetKey === key}
+            onSelectTarget={onSelectTarget ? () => onSelectTarget(character) : undefined}
+            onHope={delta => onHope(character, delta)}
+            onMark={(resource, index, marked) => onMark(character, resource, index, marked)}
+            onDetail={() => onDetail(character)}
+            onNotes={() => setNotesTarget(character)}
+            onDelete={() => setDeleteTarget(character)}
+            onAddIndicator={(name, value) => onAddIndicator(character, name, value)}
+            onAdjustIndicator={(id, delta) => onAdjustIndicator(character, id, delta)}
+            onQuickRollStat={onQuickRollStat}
+          />
+        )
+      })}
     </div>
     {notesTarget && <Suspense fallback={<NotesLoadingDialog name={notesTarget.name} onClose={() => setNotesTarget(null)} />}><CharacterNotesDialog key={`${roomId}:${notesTarget.name}`} storageKey={`dhol-notes-${roomId}-${encodeURIComponent(notesTarget.name)}`} name={notesTarget.name} onClose={() => setNotesTarget(null)} /></Suspense>}
     {pages > 1 && (

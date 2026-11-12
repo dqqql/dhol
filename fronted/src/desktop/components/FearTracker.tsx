@@ -1,8 +1,11 @@
-export default function FearTracker({ value, max, ready, onChange }: {
+import type { ReactNode } from 'react'
+
+export default function FearTracker({ value, max, ready, onChange, combatSlot }: {
   value: number
   max: number
   ready: boolean
   onChange: (delta: 1 | -1) => void
+  combatSlot?: ReactNode
 }) {
   const pips = Array.from({ length: max }, (_, i) => i < value)
 
@@ -16,12 +19,17 @@ export default function FearTracker({ value, max, ready, onChange }: {
   }
 
   return <section className="fear-card" aria-labelledby="fear-title">
-    <div className="fear-top">
-      <h3 id="fear-title" className="fear-title">恐惧</h3>
-    </div>
-    <div className="fear-val-row">
-      <div className="fear-num">{value}</div>
-      <div className="fear-max">/ {max}</div>
+    <div className="fear-header-grid">
+      <div className="fear-header-left">
+        <div className="fear-top">
+          <h3 id="fear-title" className="fear-title">恐惧</h3>
+        </div>
+        <div className="fear-val-row">
+          <div className="fear-num">{value}</div>
+          <div className="fear-max">/ {max}</div>
+        </div>
+      </div>
+      {combatSlot && <div className="fear-combat-slot">{combatSlot}</div>}
     </div>
     <div className="fear-pips">
       {pips.map((filled, i) => <div key={i} className={`fear-pip ${filled ? 'filled' : ''}`} />)}
