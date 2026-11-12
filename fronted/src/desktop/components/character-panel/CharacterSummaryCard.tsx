@@ -56,6 +56,7 @@ function CharacterSummaryCard({
       isSelectedTarget ? 'is-target-selected' : '',
     ].filter(Boolean).join(' ')}
     data-target-card={targetingActive ? 'true' : undefined}
+    data-character-key={`${character.name}:${character.generation}`}
     aria-labelledby={`character-${character.generation}`}
     onClickCapture={event => {
       if (!targetingActive || !onSelectTarget) return

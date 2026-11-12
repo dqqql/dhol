@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatSignedModifier, parseDamageFormula } from './damage-formula'
 import type { EnemyTemplate } from './enemy-types'
 
@@ -56,11 +56,35 @@ export default function EnemyLibraryDialog({
   onAddToHand: (template: EnemyTemplate) => void
   onClearHand: () => void
 }) {
-  const [formOpen, setFormOpen] = useState(() => library.length === 0)
+  const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<EnemyFormState>(DEFAULT_FORM)
   const [error, setError] = useState('')
   const [hint, setHint] = useState('')
+
+  const editorRef = useRef<HTMLDivElement>(null)
+  const createButtonRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (!formOpen) return
+    editorRef.current?.querySelector('input')?.focus()
+    const close = () => { setFormOpen(false); setError('') }
+    const outside = (event: PointerEvent) => {
+      if (!editorRef.current?.contains(event.target as Node)) close()
+    }
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation()
+        close()
+        createButtonRef.current?.focus()
+      }
+    }
+    document.addEventListener('pointerdown', outside)
+    document.addEventListener('keydown', escape, true)
+    return () => {
+      document.removeEventListener('pointerdown', outside)
+      document.removeEventListener('keydown', escape, true)
+    }
+  }, [formOpen, editingId])
 
   function openCreate() {
     setEditingId(null)
@@ -141,215 +165,107 @@ export default function EnemyLibraryDialog({
 
   const parsedPreview = parseDamageFormula(form.damageFormula)
 
+  function field(key: keyof EnemyFormState, label: string, min?: number, max?: number) {
+    return <label className="enemy-field">
+      <span>{label}</span>
+      <input type={min === undefined ? 'text' : 'number'} min={min} max={max} step={min === undefined ? undefined : 1}
+        maxLength={key === 'name' ? 48 : undefined} value={form[key]}
+        placeholder={key === 'name' ? '例如：蛮力丧尸' : key === 'damageFormula' ? '1d8+2' : undefined}
+        onChange={event => setForm(prev => ({ ...prev, [key]: event.target.value }))} />
+    </label>
+  }
+
   return (
-    <div
-      className="modal-overlay show"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="enemy-library-title"
-      onClick={event => {
-        if (event.target === event.currentTarget) onClose()
-      }}
-    >
+    <div className="modal-overlay show" role="dialog" aria-modal="true" aria-labelledby="enemy-library-title"
+      onClick={event => { if (event.target === event.currentTarget) onClose() }}>
       <div className="modal-box enemy-library-modal">
         <div className="modal-bar">
           <div className="enemy-library-bar-title">
-            <h2 id="enemy-library-title">战斗 · 敌人库</h2>
+            <h2 id="enemy-library-title">敌人库</h2>
             <span className="enemy-library-badge">库 {library.length}</span>
             <span className="enemy-library-badge enemy-library-badge--red">手牌 {handCount}</span>
           </div>
           <div className="enemy-library-bar-actions">
-            <button type="button" className="button--primary" onClick={openCreate}>+ 新建敌人</button>
-            <button
-              type="button"
-              className="button--ghost"
-              onClick={() => setHint('批量导入功能将在下一步版本中支持（将支持预设区间与文本/JSON 导入）。')}
-            >
-              批量导入
-            </button>
-            {handCount > 0 && (
-              <button
-                type="button"
-                className="button--ghost"
-                onClick={() => {
-                  onClearHand()
-                  setHint('已清空当前手牌。')
-                }}
-              >
-                清空手牌
-              </button>
-            )}
+            <div className="enemy-editor-anchor" ref={editorRef}>
+              <button ref={createButtonRef} type="button" className="button--primary" aria-expanded={formOpen}
+                aria-controls="enemy-editor" onClick={() => formOpen ? setFormOpen(false) : openCreate()}>+ 添加敌人</button>
+              {formOpen && (
+                <form id="enemy-editor" className="enemy-form-popover enemy-card-face" aria-label={editingId ? '编辑敌人' : '添加敌人'}
+                  onSubmit={event => { event.preventDefault(); submitForm(false) }}>
+                  <div className="enemy-editor-heading">
+                    <strong>{editingId ? '编辑敌人' : '添加敌人'}</strong>
+                    <button type="button" aria-label="关闭敌人编辑" onClick={() => setFormOpen(false)}>×</button>
+                  </div>
+                  <header className="enemy-card-head">
+                    {field('name', '名字')}
+                    <div className="enemy-card-hp-strip" aria-hidden="true"><span style={{ width: '100%' }} /></div>
+                  </header>
+                  <div className="enemy-card-combat-stats">
+                    {field('attackModifier', '命中加值', -50, 100)}
+                    {field('damageFormula', '伤害骰')}
+                    <div className="enemy-threshold-fields">
+                      {field('majorThreshold', '重度阈值', 0, 999)}
+                      {field('severeThreshold', '严重阈值', 0, 999)}
+                    </div>
+                    {field('difficulty', '难度', 1, 99)}
+                  </div>
+                  <div className="enemy-card-tracks">
+                    {(['hpMax', 'stressMax'] as const).map(key => (
+                      <div key={key} className="enemy-editor-track">
+                        {field(key, key === 'hpMax' ? '生命点' : '压力点', key === 'hpMax' ? 1 : 0, key === 'hpMax' ? 30 : 20)}
+                        <div className="enemy-track-pips" aria-hidden="true">
+                          {Array.from({ length: Math.min(key === 'hpMax' ? 30 : 20, Math.max(0, Number(form[key]) || 0)) }, (_, i) =>
+                            <span key={i} className={`enemy-pip enemy-pip--${key === 'hpMax' ? 'hp' : 'stress'}`} />)}
+                        </div>
+                      </div>
+                    ))}
+                    <small className={`enemy-formula-preview ${parsedPreview.kind === 'error' ? 'is-error' : ''}`}>
+                      {parsedPreview.kind === 'error' ? parsedPreview.message : `伤害：${parsedPreview.normalized}`}
+                    </small>
+                    {error && <p className="enemy-form-error" role="alert">{error}</p>}
+                    <div className="enemy-form-actions">
+                      <button type="submit">保存到库</button>
+                      <button type="button" className="btn-enemy-primary" onClick={() => submitForm(true)}>保存并加入手牌</button>
+                    </div>
+                  </div>
+                </form>
+              )}
+            </div>
+            {handCount > 0 && <button type="button" onClick={() => { onClearHand(); setHint('已清空当前手牌。') }}>清空手牌</button>}
             <button type="button" onClick={onClose}>关闭</button>
           </div>
         </div>
-
         <div className="modal-content enemy-library-body">
-          {hint && (
-            <div className="enemy-library-hint" role="status">
-              <span>{hint}</span>
-              <button type="button" onClick={() => setHint('')}>关闭提示</button>
-            </div>
-          )}
-
-          {formOpen && (
-            <form
-              className="enemy-form-card"
-              onSubmit={event => {
-                event.preventDefault()
-                submitForm(false)
-              }}
-            >
-              <div className="enemy-form-head">
-                <h3>{editingId ? '编辑敌人模板' : '新建敌人'}</h3>
-                <button type="button" className="button--ghost" onClick={() => { setFormOpen(false); setError('') }}>收起</button>
-              </div>
-              <div className="enemy-form-grid">
-                <label className="enemy-field enemy-field--wide">
-                  <span>名字</span>
-                  <input
-                    autoFocus
-                    maxLength={48}
-                    placeholder="例如：蛮力丧尸"
-                    value={form.name}
-                    onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
-                  />
-                </label>
-                <label className="enemy-field">
-                  <span>生命点</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={30}
-                    step={1}
-                    value={form.hpMax}
-                    onChange={e => setForm(prev => ({ ...prev, hpMax: e.target.value }))}
-                  />
-                </label>
-                <label className="enemy-field">
-                  <span>压力点</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={20}
-                    step={1}
-                    value={form.stressMax}
-                    onChange={e => setForm(prev => ({ ...prev, stressMax: e.target.value }))}
-                  />
-                </label>
-                <label className="enemy-field">
-                  <span>重度阈值</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={999}
-                    step={1}
-                    value={form.majorThreshold}
-                    onChange={e => setForm(prev => ({ ...prev, majorThreshold: e.target.value }))}
-                  />
-                </label>
-                <label className="enemy-field">
-                  <span>严重阈值</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={999}
-                    step={1}
-                    value={form.severeThreshold}
-                    onChange={e => setForm(prev => ({ ...prev, severeThreshold: e.target.value }))}
-                  />
-                </label>
-                <label className="enemy-field">
-                  <span>难度</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={99}
-                    step={1}
-                    value={form.difficulty}
-                    onChange={e => setForm(prev => ({ ...prev, difficulty: e.target.value }))}
-                  />
-                </label>
-                <label className="enemy-field">
-                  <span>攻击加值</span>
-                  <input
-                    type="number"
-                    min={-50}
-                    max={100}
-                    step={1}
-                    value={form.attackModifier}
-                    onChange={e => setForm(prev => ({ ...prev, attackModifier: e.target.value }))}
-                  />
-                </label>
-                <label className="enemy-field enemy-field--wide">
-                  <span>伤害骰（支持骰池或固定值，如 1d8+3、2d6+1d4、4）</span>
-                  <input
-                    placeholder="1d8+3"
-                    value={form.damageFormula}
-                    onChange={e => setForm(prev => ({ ...prev, damageFormula: e.target.value }))}
-                  />
-                  <small className={`enemy-formula-preview ${parsedPreview.kind === 'error' ? 'is-error' : ''}`}>
-                    {parsedPreview.kind === 'error'
-                      ? parsedPreview.message
-                      : parsedPreview.kind === 'flat'
-                        ? `固定伤害：${parsedPreview.normalized}`
-                        : `解析公式：${parsedPreview.normalized}`}
-                  </small>
-                </label>
-              </div>
-
-              {error && <p className="enemy-form-error" role="alert">{error}</p>}
-
-              <div className="enemy-form-actions">
-                <button type="button" onClick={() => { setFormOpen(false); setError('') }}>取消</button>
-                <button type="submit">仅保存到库</button>
-                <button type="button" className="btn-enemy-primary" onClick={() => submitForm(true)}>
-                  保存并加入手牌
-                </button>
-              </div>
-            </form>
-          )}
-
-          {library.length === 0 ? (
-            <div className="enemy-library-empty">
-              <p>敌人库暂无敌人，点击上方「+ 新建敌人」创建你的第一张敌人卡。</p>
-            </div>
-          ) : (
+          {hint && <div className="enemy-library-hint" role="status"><span>{hint}</span><button type="button" onClick={() => setHint('')}>关闭提示</button></div>}
+          {library.length === 0 ? <div className="enemy-library-empty"><p>敌人库暂无敌人，点击「+ 添加敌人」创建第一张敌人卡。</p></div> : (
             <div className="enemy-library-list">
               {library.map(item => (
                 <article key={item.id} className="enemy-lib-row">
-                  <div className="enemy-lib-main">
-                    <div className="enemy-lib-name-row">
-                      <strong>{item.name}</strong>
-                      <span className="enemy-lib-diff">难度 {item.difficulty}</span>
+                  <div className="enemy-card-face">
+                    <header className="enemy-card-head">
+                      <div className="enemy-card-title-wrap"><strong className="enemy-card-name">{item.name}</strong><span className="enemy-card-mini-hp">{item.hpMax}/{item.hpMax}</span></div>
+                      <div className="enemy-card-hp-strip" aria-hidden="true"><span style={{ width: '100%' }} /></div>
+                    </header>
+                    <div className="enemy-card-combat-stats">
+                      <div className="enemy-stat-cell"><span>命中加值</span><b>{formatSignedModifier(item.attackModifier)}</b></div>
+                      <div className="enemy-stat-cell"><span>伤害骰</span><b>{item.damageFormula}</b></div>
+                      <div className="enemy-stat-cell"><span>阈值(重/严)</span><b>{item.majorThreshold} / {item.severeThreshold}</b></div>
+                      <div className="enemy-stat-cell"><span>难度</span><b>{item.difficulty}</b></div>
                     </div>
-                    <div className="enemy-lib-stats">
-                      <span>生命 <b>{item.hpMax}</b></span>
-                      <span>压力 <b>{item.stressMax}</b></span>
-                      <span>阈值 <b>{item.majorThreshold}/{item.severeThreshold}</b></span>
-                      <span>命中 <b>{formatSignedModifier(item.attackModifier)}</b></span>
-                      <span>伤害 <b>{item.damageFormula}</b></span>
+                    <div className="enemy-card-tracks">
+                      {([['生命', item.hpMax, 'hp'], ['压力', item.stressMax, 'stress']] as const).map(([label, max, resource]) => (
+                        <div className="enemy-track-row" key={resource}>
+                          <div className="enemy-track-label"><span>{label}</span><b>0/{max}</b></div>
+                          <div className="enemy-track-pips" aria-hidden="true">{Array.from({ length: max }, (_, i) => <span key={i} className={`enemy-pip enemy-pip--${resource}`} />)}</div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                   <div className="enemy-lib-actions">
-                    <button
-                      type="button"
-                      className="btn-enemy-primary"
-                      onClick={() => {
-                        onAddToHand(item)
-                        setHint(`已将【${item.name}】加入底部手牌。`)
-                      }}
-                    >
-                      加入手牌
-                    </button>
+                    <button type="button" className="btn-enemy-primary" onClick={() => { onAddToHand(item); setHint(`已将【${item.name}】加入底部手牌。`) }}>加入手牌</button>
                     <button type="button" onClick={() => onDuplicateTemplate(item.id)}>复制</button>
                     <button type="button" onClick={() => openEdit(item)}>编辑</button>
-                    <button
-                      type="button"
-                      className="button--danger"
-                      onClick={() => onDeleteTemplate(item.id)}
-                    >
-                      删除
-                    </button>
+                    <button type="button" className="button--danger" onClick={() => onDeleteTemplate(item.id)}>删除</button>
                   </div>
                 </article>
               ))}

@@ -16,8 +16,6 @@ export default function EnemyHandDock({
   advantage,
   attacking,
   ready,
-  collapsed,
-  onToggleCollapse,
   onSelectCard,
   onChangeAdvantage,
   onUpdateMark,
@@ -35,8 +33,6 @@ export default function EnemyHandDock({
   advantage: AttackRollAdvantage
   attacking: boolean
   ready: boolean
-  collapsed: boolean
-  onToggleCollapse: () => void
   onSelectCard: (instanceId: string | null) => void
   onChangeAdvantage: (mode: AttackRollAdvantage) => void
   onUpdateMark: (instanceId: string, resource: 'hp' | 'stress', nextMarked: number) => void
@@ -50,7 +46,7 @@ export default function EnemyHandDock({
   const cardRefs = useRef(new Map<string, HTMLElement>())
 
   const measureAnchor = useCallback(() => {
-    if (!selectedId || collapsed) {
+    if (!selectedId) {
       onSelectedAnchorChange(null)
       return
     }
@@ -64,7 +60,7 @@ export default function EnemyHandDock({
       x: rect.left + rect.width / 2,
       y: rect.top + 8,
     })
-  }, [selectedId, collapsed, onSelectedAnchorChange])
+  }, [selectedId, onSelectedAnchorChange])
 
   useEffect(() => {
     measureAnchor()
@@ -105,9 +101,9 @@ export default function EnemyHandDock({
   const mid = (hand.length - 1) / 2
 
   return (
-    <div className={`enemy-hand-dock ${collapsed ? 'is-collapsed' : ''}`} aria-label="敌人手牌区">
+    <div className="enemy-hand-dock" aria-label="敌人手牌区">
       {/* 选中手牌后的上方动作条 */}
-      {selectedCard && !collapsed && (
+      {selectedCard && (
         <div className="enemy-action-bar" role="region" aria-label="攻击确认栏">
           <div className="enemy-action-bar__info">
             <span className="enemy-action-attacker">
@@ -160,26 +156,18 @@ export default function EnemyHandDock({
         </div>
       )}
 
-      {/* 右下/顶部收起控制条 */}
-      <div className="enemy-hand-tab-row">
-        <button
-          type="button"
-          className="enemy-hand-toggle"
-          onClick={onToggleCollapse}
+        <div
+          className="enemy-hand-fan"
+          style={{ ['--hand-count' as string]: Math.max(2, hand.length) }}
+          onScroll={measureAnchor}
         >
-          {collapsed ? `展开敌人手牌 (${hand.length})` : `收起手牌 (${hand.length})`}
-        </button>
-      </div>
-
-      {!collapsed && (
-        <div className="enemy-hand-fan">
           {hand.map((card, index) => {
             const isSelected = card.instanceId === selectedId
             const isDefeating = defeatingIds.has(card.instanceId)
             const isHovered = card.instanceId === hoveredId
             const offsetFromMid = index - mid
-            const angle = isSelected || isHovered ? 0 : Math.max(-10, Math.min(10, offsetFromMid * 2.4))
-            const archY = isSelected || isHovered ? 0 : Math.min(18, Math.pow(offsetFromMid, 2) * 2.4)
+            const angle = isSelected ? 0 : Math.max(-10, Math.min(10, offsetFromMid * 2.4))
+            const archY = isSelected ? 0 : Math.min(18, Math.pow(offsetFromMid, 2) * 2.4)
             const zIndex = isSelected ? 40 : isHovered ? 30 : 10 + index
             const hpPct = Math.round(((card.hpMax - card.hpMarked) / card.hpMax) * 100)
 
@@ -218,7 +206,7 @@ export default function EnemyHandDock({
                   }
                 }}
               >
-                {/* 头部：正常状态主要露出这部分 */}
+                {/* 头部：名字与简要血条 */}
                 <header
                   className="enemy-card-head"
                   onClick={event => {
@@ -240,7 +228,7 @@ export default function EnemyHandDock({
                   </div>
                 </header>
 
-                {/* 中部：悬停 / 选中时显露攻击加值、伤害阈值、伤害骰、难度 */}
+                {/* 中部：默认与选中时均展示攻击加值、伤害阈值、伤害骰、难度 */}
                 <div className="enemy-card-combat-stats">
                   <div className="enemy-stat-cell">
                     <span>命中加值</span>
@@ -366,7 +354,6 @@ export default function EnemyHandDock({
             )
           })}
         </div>
-      )}
     </div>
   )
 }

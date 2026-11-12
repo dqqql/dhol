@@ -57,7 +57,6 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
   const [combatDialogOpen, setCombatDialogOpen] = useState(false)
   const [enemyLibrary, setEnemyLibrary] = useState<EnemyTemplate[]>(() => loadEnemyLibrary(localStorage))
   const [enemyHand, setEnemyHand] = useState<EnemyHandCard[]>(() => loadEnemyHand(localStorage, session.roomId))
-  const [handCollapsed, setHandCollapsed] = useState(false)
   const [selectedEnemyId, setSelectedEnemyId] = useState<string | null>(null)
   const [selectedTargetKey, setSelectedTargetKey] = useState<string | null>(null)
   const [attackAdvantage, setAttackAdvantage] = useState<AttackRollAdvantage>('normal')
@@ -67,6 +66,7 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
   const [pointerPos, setPointerPos] = useState<Point2D | null>(null)
   const [hoveringTargetCard, setHoveringTargetCard] = useState(false)
   const [selectedCardAnchor, setSelectedCardAnchor] = useState<Point2D | null>(null)
+  const [lockedTargetAnchor, setLockedTargetAnchor] = useState<Point2D | null>(null)
   const [defeatingIds, setDefeatingIds] = useState<Set<string>>(() => new Set())
   const [flights, setFlights] = useState<LightAbsorbFlight[]>([])
   const [absorbingPulse, setAbsorbingPulse] = useState(false)
@@ -263,7 +263,7 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
         method: 'DELETE',
         headers: { Authorization: `Bearer ${session.token}`, ...(ownerKey ? { 'X-Room-Owner-Key': ownerKey } : {}) }
       })
-      const result = await response.json() as { code?: string }
+      await response.json()
       if (!response.ok) {
         throw new Error('删除失败，房间数据尚未清除，请稍后重试。')
       }
@@ -285,7 +285,7 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
 
   // 战斗系统：当前选中的手牌 & 目标玩家角色
   const selectedEnemy = selectedEnemyId ? enemyHand.find(item => item.instanceId === selectedEnemyId) ?? null : null
-  const targetingActive = Boolean(selectedEnemy && !handCollapsed)
+  const targetingActive = Boolean(selectedEnemy)
   const selectedTargetCharacter = targetingActive && room && selectedTargetKey
     ? room.characters.find(c => `${c.name}:${c.generation}` === selectedTargetKey) ?? null
     : null
@@ -299,12 +299,53 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
     return id
   }, [])
 
-  // 瞄准状态下的全局鼠标位置与 Esc 取消
+  // 锁定目标角色卡后，固定箭头终点坐标并随滚动/缩放同步
+  useEffect(() => {
+    if (!targetingActive || !selectedTargetCharacter || !selectedTargetKey) {
+      setLockedTargetAnchor(null)
+      return
+    }
+    const measureTarget = () => {
+      const targetEl = Array.from(document.querySelectorAll('[data-character-key]'))
+        .find(el => el.getAttribute('data-character-key') === selectedTargetKey)
+      if (!targetEl) {
+        setLockedTargetAnchor(null)
+        return
+      }
+      const rect = targetEl.getBoundingClientRect()
+      setLockedTargetAnchor({
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+      })
+    }
+    measureTarget()
+    window.addEventListener('resize', measureTarget)
+    window.addEventListener('scroll', measureTarget, { capture: true, passive: true })
+    return () => {
+      window.removeEventListener('resize', measureTarget)
+      window.removeEventListener('scroll', measureTarget, { capture: true })
+    }
+  }, [targetingActive, selectedTargetCharacter, selectedTargetKey, ui.page])
+
+  // 瞄准状态下的全局鼠标位置（未锁定目标时跟随）与 Esc 取消
   useEffect(() => {
     if (!targetingActive) {
       setHoveringTargetCard(false)
       setPointerInActionBar(false)
       return
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !attacking) {
+        setSelectedEnemyId(null)
+        setSelectedTargetKey(null)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    if (selectedTargetCharacter) {
+      setHoveringTargetCard(false)
+      return () => {
+        window.removeEventListener('keydown', onKeyDown)
+      }
     }
     const onPointerMove = (event: PointerEvent) => {
       setPointerPos({ x: event.clientX, y: event.clientY })
@@ -313,19 +354,12 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
       setHoveringTargetCard(Boolean(targetEl))
       setPointerInActionBar(Boolean(actionBarEl))
     }
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !attacking) {
-        setSelectedEnemyId(null)
-        setSelectedTargetKey(null)
-      }
-    }
     window.addEventListener('pointermove', onPointerMove, { passive: true })
-    window.addEventListener('keydown', onKeyDown)
     return () => {
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [targetingActive, attacking])
+  }, [targetingActive, attacking, selectedTargetCharacter])
 
   function handleSaveEnemyTemplate(draft: Omit<EnemyTemplate, 'id' | 'createdAt'>, editingId: string | null, alsoAddToHand: boolean) {
     let savedTemplate: EnemyTemplate
@@ -372,7 +406,6 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
 
   function handleAddTemplateToHand(template: EnemyTemplate) {
     setEnemyHand(prev => [...prev, createHandCardFromTemplate(template, prev.map(item => item.name))])
-    setHandCollapsed(false)
   }
 
   const handleMeasureCardRect = useCallback((instanceId: string, rect: DOMRect | null) => {
@@ -411,25 +444,18 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
   }
 
   function handleUpdateEnemyMark(instanceId: string, resource: 'hp' | 'stress', nextMarked: number) {
-    let defeatedCardName: string | null = null
-    let becameDefeated = false
+    const card = enemyHand.find(item => item.instanceId === instanceId)
+    if (!card || defeatingIds.has(instanceId)) return
+    const max = resource === 'hp' ? card.hpMax : card.stressMax
+    const clamped = Math.max(0, Math.min(max, nextMarked))
+    const becameDefeated = resource === 'hp' && card.hpMarked < card.hpMax && clamped === card.hpMax
 
-    setEnemyHand(prev => prev.map(card => {
-      if (card.instanceId !== instanceId) return card
-      if (resource === 'hp') {
-        const clamped = Math.max(0, Math.min(card.hpMax, nextMarked))
-        if (clamped >= card.hpMax && !defeatingIds.has(instanceId)) {
-          becameDefeated = true
-          defeatedCardName = card.name
-        }
-        return { ...card, hpMarked: clamped }
-      }
-      const clamped = Math.max(0, Math.min(card.stressMax, nextMarked))
-      return { ...card, stressMarked: clamped }
-    }))
+    setEnemyHand(prev => prev.map(item => item.instanceId === instanceId
+      ? { ...item, [resource === 'hp' ? 'hpMarked' : 'stressMarked']: clamped }
+      : item))
 
     if (becameDefeated) {
-      if (defeatedCardName) addRoomLog(`${defeatedCardName} 生命耗尽，已击败`, '战斗')
+      addRoomLog(`${card.name} 生命耗尽，已击败`, '战斗')
       setDefeatingIds(prev => new Set(prev).add(instanceId))
       scheduleCombatTimer(() => triggerDefeatFlight(instanceId), 480)
     }
@@ -684,7 +710,6 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
                     onClick={() => setCombatDialogOpen(true)}
                   >
                     <span className="btn-combat-entry__title">战斗</span>
-                    <span className="btn-combat-entry__meta">手牌 {enemyHand.length} · 库 {enemyLibrary.length}</span>
                   </button>
                 }
               />
@@ -748,12 +773,6 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
           advantage={attackAdvantage}
           attacking={attacking}
           ready={ready}
-          collapsed={handCollapsed}
-          onToggleCollapse={() => {
-            setHandCollapsed(prev => !prev)
-            setSelectedEnemyId(null)
-            setSelectedTargetKey(null)
-          }}
           onSelectCard={id => {
             setSelectedEnemyId(id)
             setSelectedTargetKey(null)
@@ -771,9 +790,19 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
           onMeasureCardRect={handleMeasureCardRect}
         />
         <AimingArrowOverlay
-          from={targetingActive && !pointerInsideCard && !pointerInActionBar ? selectedCardAnchor : null}
-          to={targetingActive && !pointerInsideCard && !pointerInActionBar ? pointerPos : null}
-          hasTargetHover={hoveringTargetCard}
+          from={
+            targetingActive && ((selectedTargetCharacter && lockedTargetAnchor) || (!selectedTargetCharacter && !pointerInsideCard && !pointerInActionBar))
+              ? selectedCardAnchor
+              : null
+          }
+          to={
+            targetingActive
+              ? (selectedTargetCharacter && lockedTargetAnchor
+                  ? lockedTargetAnchor
+                  : (!selectedTargetCharacter && !pointerInsideCard && !pointerInActionBar ? pointerPos : null))
+              : null
+          }
+          hasTargetHover={Boolean(selectedTargetCharacter && lockedTargetAnchor) || hoveringTargetCard}
           flights={flights}
         />
       </>

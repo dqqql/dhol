@@ -42,7 +42,7 @@ export default function AimingArrowOverlay({
         <svg className="combat-arrow-svg">
           <defs>
             <filter id="combat-arrow-glow" x="-30%" y="-30%" width="160%" height="160%">
-              <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="#E6332A" floodOpacity="0.6" />
+              <feDropShadow dx="0" dy="0" stdDeviation="2.5" floodColor="#3B6B9B" floodOpacity="0.35" />
             </filter>
           </defs>
           <path
