@@ -627,13 +627,6 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
   }
 
   return <main className="desktop-app">
-    {/* X卡全局暂停横幅 */}
-    {room?.xCard.active && (
-      <div className="xcard-alert-bar show">
-        暂停中 · X卡已触发
-      </div>
-    )}
-
     {/* 攻击战报浮层 */}
     {combatToast && (
       <div className={`combat-toast is-${combatToast.outcome}`} role="status" aria-live="polite">
@@ -659,16 +652,24 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
       </div>
     )}
 
-    <RoomToolbar
-      roomName={room?.name ?? '正在同步房间'}
-      inviteCode={session.inviteCode}
-      status={state.connection}
-      activeCount={room?.members.filter(m => m.online).length}
-      xCardNode={<XCard active={Boolean(room?.xCard.active)} ready={ready} onChange={handleXCardChange} />}
-      onExport={() => sync.ui.setDialog('backup')}
-      onLeave={onLeave}
-      onDelete={room?.members[0]?.nickname === session.nickname && (ownerKey || room.members[0]?.id === session.playerId) ? () => { setDeleteError(''); setDeleteOpen(true) } : undefined}
-    />
+    <div className="room-topbar">
+      {/* X卡全局暂停横幅 */}
+      {room?.xCard.active && (
+        <div className="xcard-alert-bar show">
+          暂停中 · X卡已触发
+        </div>
+      )}
+      <RoomToolbar
+        roomName={room?.name ?? '正在同步房间'}
+        inviteCode={session.inviteCode}
+        status={state.connection}
+        activeCount={room?.members.filter(m => m.online).length}
+        xCardNode={<XCard active={Boolean(room?.xCard.active)} ready={ready} onChange={handleXCardChange} />}
+        onExport={() => sync.ui.setDialog('backup')}
+        onLeave={onLeave}
+        onDelete={room?.members[0]?.nickname === session.nickname && (ownerKey || room.members[0]?.id === session.playerId) ? () => { setDeleteError(''); setDeleteOpen(true) } : undefined}
+      />
+    </div>
 
     <div className="desktop-workspace">
       {ui.notice && (

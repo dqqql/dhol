@@ -137,12 +137,15 @@ input, select, textarea {
 }
 .room-share__popover input { min-width: 0; width: 100%; }
 
-.room-toolbar {
-  border-bottom: 2px solid var(--border);
-  background: var(--surface);
+.room-topbar {
   position: sticky;
   top: 0;
   z-index: 100;
+}
+
+.room-toolbar {
+  border-bottom: 2px solid var(--border);
+  background: var(--surface);
   display: flex;
   justify-content: space-between;
   align-items: stretch;
