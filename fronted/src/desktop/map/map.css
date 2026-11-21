@@ -37,14 +37,13 @@
 
 /* 顶部栏 */
 .room-map-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
   padding: 12px 20px;
   background: var(--surface-subtle, #ECECE7);
   border-bottom: 2px solid var(--border, #111111);
   gap: 16px;
-  flex-wrap: wrap;
 }
 
 .room-map-header-left {
@@ -61,17 +60,6 @@
   color: var(--ink, #0A0A0A);
 }
 
-.room-map-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  font-size: 12px;
-  font-weight: 800;
-  background: var(--surface-active, #E0E0DA);
-  border: 1px solid var(--border, #111111);
-  color: var(--ink-secondary, #4A4A45);
-}
-
 .room-map-header-hint {
   margin: 0;
   font-size: 13px;
@@ -83,6 +71,7 @@
 }
 
 .room-map-close {
+  justify-self: end;
   min-height: 32px;
   padding: 4px 14px;
   font-size: 13px;
@@ -611,14 +600,15 @@
 }
 
 .room-map-range-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
+  position: relative;
+  height: 16px;
   line-height: 1.2;
 }
 
 .room-map-range-header output {
+  position: absolute;
+  white-space: nowrap;
+  transition: left 0.16s ease, transform 0.16s ease;
   color: var(--ink-secondary, #4A4A45);
   font-variant-numeric: tabular-nums;
 }
@@ -757,4 +747,14 @@
   .room-map-range-shrink {
     animation: none;
   }
+}
+
+.room-map-header-left { flex-wrap: wrap; }
+.room-map-header-left h2 { white-space: nowrap; }
+.room-map-header > .room-map-status-bar { justify-self: center; }
+
+@media (max-width: 768px) {
+  .room-map-header { grid-template-columns: minmax(0, 1fr) auto; }
+  .room-map-header > .room-map-status-bar { grid-column: 1 / -1; grid-row: 2; }
+  .room-map-close { grid-column: 2; grid-row: 1; }
 }

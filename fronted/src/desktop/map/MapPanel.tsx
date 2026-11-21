@@ -6,6 +6,8 @@ import { clamp, mapPoint, simplifyStroke, MAP_RANGES, tokenTouchesRange } from '
 import TokenIcon from './token-icons'
 import './map.css'
 
+const RANGE_STEPS = [{ label: '关闭', radius: 0, color: '#64748B' }, ...MAP_RANGES] as const
+
 const DEFAULT_VIEW = { x: 5, y: 10, zoom: 1 }
 const VIEW_WIDTH = 15
 const VIEW_HEIGHT = 10
@@ -177,7 +179,7 @@ function TokenEditor({
       const trackWidth = Math.max(1, rect.width - padding * 2)
       const offset = clientX - rect.left - padding
       const ratio = Math.max(0, Math.min(1, offset / trackWidth))
-      const nearest = Math.round(ratio * (MAP_RANGES.length - 1))
+      const nearest = Math.round(ratio * (RANGE_STEPS.length - 1))
       onRangeChange(nearest)
     }
     updateIndex(event.clientX)
@@ -210,7 +212,7 @@ function TokenEditor({
   }
 
   const hasChanges = (name.trim() && name.trim() !== token.name) || (color && color !== token.labelColor)
-  const currentRange = MAP_RANGES[rangeIndex]
+  const currentRange = RANGE_STEPS[rangeIndex]
 
   return (
     <form className="room-map-token-editor" onSubmit={handleSubmit}>
@@ -265,8 +267,10 @@ function TokenEditor({
       <div className="room-map-editor-actions">
         <div className="room-map-range-control">
           <div className="room-map-range-header">
-            <span>距离</span>
-            <output>{currentRange.label} · {currentRange.radius} 格</output>
+            <output style={{
+              left: `calc(8px + (100% - 16px) * ${rangeIndex / (RANGE_STEPS.length - 1)})`,
+              transform: `translateX(${rangeIndex === 0 ? '0' : rangeIndex === RANGE_STEPS.length - 1 ? '-100%' : '-50%'})`,
+            }}>{currentRange.radius ? `${currentRange.label} ${currentRange.radius}格` : '关闭'}</output>
           </div>
           <div
             ref={trackRef}
@@ -279,12 +283,12 @@ function TokenEditor({
             <div
               className="room-map-range-track-fill"
               style={{
-                width: `calc(8px + (100% - 16px) * ${rangeIndex / 3})`,
+                width: `calc(8px + (100% - 16px) * ${rangeIndex / (RANGE_STEPS.length - 1)})`,
                 backgroundColor: currentRange.color,
               }}
             />
             <div className="room-map-range-nodes">
-              {MAP_RANGES.map((range, index) => {
+              {RANGE_STEPS.map((range, index) => {
                 const isActive = index === rangeIndex
                 const isPassed = index <= rangeIndex
                 return (
@@ -293,11 +297,11 @@ function TokenEditor({
                     type="button"
                     className={`room-map-range-node ${isActive ? 'is-active' : ''} ${isPassed ? 'is-passed' : ''}`}
                     style={{
-                      left: `calc(8px + (100% - 16px) * ${index / 3})`,
+                      left: `calc(8px + (100% - 16px) * ${index / (RANGE_STEPS.length - 1)})`,
                       '--node-color': range.color,
                     } as React.CSSProperties}
-                    title={`${range.label}（${range.radius} 格）`}
-                    aria-label={`${range.label} ${range.radius} 格`}
+                    title={range.radius ? `${range.label} ${range.radius}格` : '关闭'}
+                    aria-label={range.radius ? `${range.label} ${range.radius}格` : '关闭范围显示'}
                     onClick={(e) => {
                       e.stopPropagation()
                       onRangeChange(index)
@@ -311,10 +315,10 @@ function TokenEditor({
               className="room-map-range-native-input"
               aria-label="距离"
               min="0"
-              max="3"
+              max={RANGE_STEPS.length - 1}
               step="1"
               value={rangeIndex}
-              aria-valuetext={`${currentRange.label}，${currentRange.radius} 格`}
+              aria-valuetext={currentRange.radius ? `${currentRange.label} ${currentRange.radius}格` : '关闭'}
               style={{ accentColor: currentRange.color }}
               onChange={event => onRangeChange(Number(event.target.value))}
             />
@@ -362,12 +366,10 @@ function RangeRings({
     <g className="room-map-range-rings" transform={`translate(${center[0]} ${center[1]})`} pointerEvents="none">
       {exitingRange && (
         <g key={`exiting-${animationKey}`} className="room-map-range-shrink">
-          <rect
-            x={-(footprint - 1) / 2 - exitingRange.radius}
-            y={-(footprint - 1) / 2 - exitingRange.radius}
-            width={footprint - 1 + 2 * exitingRange.radius}
-            height={footprint - 1 + 2 * exitingRange.radius}
-            rx={exitingRange.radius}
+          <circle
+            cx={0}
+            cy={0}
+            r={exitingRange.radius + (footprint - 1) / 2}
             fill={exitingRange.color}
             fillOpacity={0.07}
             stroke={exitingRange.color}
@@ -377,12 +379,10 @@ function RangeRings({
         </g>
       )}
       <g key={`active-${animationKey}`} className={exitingRange ? 'room-map-range-expand' : undefined}>
-        <rect
-          x={-(footprint - 1) / 2 - currentRange.radius}
-          y={-(footprint - 1) / 2 - currentRange.radius}
-          width={footprint - 1 + 2 * currentRange.radius}
-          height={footprint - 1 + 2 * currentRange.radius}
-          rx={currentRange.radius}
+        <circle
+          cx={0}
+          cy={0}
+          r={currentRange.radius + (footprint - 1) / 2}
           fill={currentRange.color}
           fillOpacity={0.07}
           stroke={currentRange.color}
@@ -454,7 +454,7 @@ export default function MapPanel({
   const failures = [...sync.mapFailures().values()].filter(item => !projected.erased.has(item.stroke.id))
   const pendingCount = pending.filter(item => item.command.type.startsWith('map.')).length
   const selected = projected.tokens.get(selectedId)
-  const activeRange = MAP_RANGES[rangeIndex]
+  const activeRange = rangeIndex > 0 ? MAP_RANGES[rangeIndex - 1] : null
   const rangeSource = selected ? {
     ...selected,
     x: dragged?.id === selected.id ? dragged.anchor[0] : selected.x,
@@ -728,9 +728,8 @@ export default function MapPanel({
       <header className="room-map-header">
         <div className="room-map-header-left">
           <h2 id="room-map-heading">房间地图</h2>
-          <span className="room-map-badge">40 × 40 格</span>
+          <p className="room-map-header-hint">右键移动 左键选中 滚轮缩放</p>
         </div>
-        <p className="room-map-header-hint">右键移动 左键选中 滚轮缩放</p>
         <div className="room-map-status-bar">
           <p className="room-map-status" role="status">
             <span
@@ -977,7 +976,7 @@ export default function MapPanel({
           <line x1="19.4" y1="20" x2="20.6" y2="20" stroke="#888882" strokeWidth=".06" strokeLinecap="round" />
           <line x1="20" y1="19.4" x2="20" y2="20.6" stroke="#888882" strokeWidth=".06" strokeLinecap="round" />
 
-          {rangeCenter && selected && (
+          {rangeCenter && selected && activeRange && (
             <RangeRings key={selected.id} center={rangeCenter} footprint={mapTokenSize(selected)} activeRange={activeRange} />
           )}
 
@@ -1065,7 +1064,7 @@ export default function MapPanel({
                   )
                 )
                 const isSelected = selectedId === token.id
-                const inRange = !isSelected && rangeSource !== null && tokenTouchesRange(rangeSource, activeRange.radius, token)
+                const inRange = !isSelected && rangeSource !== null && activeRange !== null && tokenTouchesRange(rangeSource, activeRange.radius, token)
 
                 return (
                   <g
@@ -1099,7 +1098,7 @@ export default function MapPanel({
                     )}
 
                     <TokenIcon image={token.image} x={centerX - size / 2} y={centerY - size / 2} size={size} />
-                    {inRange && (
+                    {inRange && activeRange && (
                       <circle className="room-map-range-highlight" cx={centerX} cy={centerY} r={size / 2 + 0.035}
                         fill="none" stroke={activeRange.color} strokeWidth="0.065" pointerEvents="none" />
                     )}
