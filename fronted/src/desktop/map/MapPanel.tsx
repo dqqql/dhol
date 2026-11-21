@@ -333,9 +333,11 @@ function TokenEditor({
 
 function RangeRings({
   center,
+  footprint,
   activeRange,
 }: {
   center: MapPoint
+  footprint: number
   activeRange: (typeof MAP_RANGES)[number]
 }) {
   const [exitingRange, setExitingRange] = useState<(typeof MAP_RANGES)[number] | null>(null)
@@ -360,10 +362,12 @@ function RangeRings({
     <g className="room-map-range-rings" transform={`translate(${center[0]} ${center[1]})`} pointerEvents="none">
       {exitingRange && (
         <g key={`exiting-${animationKey}`} className="room-map-range-shrink">
-          <circle
-            cx={0}
-            cy={0}
-            r={exitingRange.radius}
+          <rect
+            x={-(footprint - 1) / 2 - exitingRange.radius}
+            y={-(footprint - 1) / 2 - exitingRange.radius}
+            width={footprint - 1 + 2 * exitingRange.radius}
+            height={footprint - 1 + 2 * exitingRange.radius}
+            rx={exitingRange.radius}
             fill={exitingRange.color}
             fillOpacity={0.07}
             stroke={exitingRange.color}
@@ -373,10 +377,12 @@ function RangeRings({
         </g>
       )}
       <g key={`active-${animationKey}`} className={exitingRange ? 'room-map-range-expand' : undefined}>
-        <circle
-          cx={0}
-          cy={0}
-          r={currentRange.radius}
+        <rect
+          x={-(footprint - 1) / 2 - currentRange.radius}
+          y={-(footprint - 1) / 2 - currentRange.radius}
+          width={footprint - 1 + 2 * currentRange.radius}
+          height={footprint - 1 + 2 * currentRange.radius}
+          rx={currentRange.radius}
           fill={currentRange.color}
           fillOpacity={0.07}
           stroke={currentRange.color}
@@ -449,9 +455,14 @@ export default function MapPanel({
   const pendingCount = pending.filter(item => item.command.type.startsWith('map.')).length
   const selected = projected.tokens.get(selectedId)
   const activeRange = MAP_RANGES[rangeIndex]
-  const rangeCenter: MapPoint | null = selected ? [
-    (dragged?.id === selected.id ? dragged.anchor[0] : selected.x) + mapTokenSize(selected) / 2,
-    (dragged?.id === selected.id ? dragged.anchor[1] : selected.y) + mapTokenSize(selected) / 2,
+  const rangeSource = selected ? {
+    ...selected,
+    x: dragged?.id === selected.id ? dragged.anchor[0] : selected.x,
+    y: dragged?.id === selected.id ? dragged.anchor[1] : selected.y,
+  } : null
+  const rangeCenter: MapPoint | null = rangeSource ? [
+    rangeSource.x + mapTokenSize(rangeSource) / 2,
+    rangeSource.y + mapTokenSize(rangeSource) / 2,
   ] : null
   const syncFailure = sync.getState().save === 'failed' ? sync.getState().reason : null
 
@@ -967,7 +978,7 @@ export default function MapPanel({
           <line x1="20" y1="19.4" x2="20" y2="20.6" stroke="#888882" strokeWidth=".06" strokeLinecap="round" />
 
           {rangeCenter && selected && (
-            <RangeRings key={selected.id} center={rangeCenter} activeRange={activeRange} />
+            <RangeRings key={selected.id} center={rangeCenter} footprint={mapTokenSize(selected)} activeRange={activeRange} />
           )}
 
           {/* 笔迹层 */}
@@ -1054,7 +1065,7 @@ export default function MapPanel({
                   )
                 )
                 const isSelected = selectedId === token.id
-                const inRange = !isSelected && rangeCenter !== null && tokenTouchesRange(rangeCenter, activeRange.radius, token)
+                const inRange = !isSelected && rangeSource !== null && tokenTouchesRange(rangeSource, activeRange.radius, token)
 
                 return (
                   <g

@@ -55,10 +55,12 @@ export const MAP_RANGES = [
   { label: '远距离', radius: 12, color: '#16A34A' },
 ] as const
 
-// Test the occupied square, so touching even one corner or edge is in range.
-export function tokenTouchesRange(center: MapPoint, radius: number, token: Pick<MapToken, 'x' | 'y' | 'size'>): boolean {
-  const size = mapTokenSize(token)
-  const nearestX = clamp(center[0], token.x, token.x + size)
-  const nearestY = clamp(center[1], token.y, token.y + size)
-  return (center[0] - nearestX) ** 2 + (center[1] - nearestY) ** 2 <= radius ** 2 + 1e-9
+// Extend the occupied cell-center hull by the requested grid distance. Testing
+// against the target's full footprint counts partial/corner hits in its favor.
+export function tokenTouchesRange(source: Pick<MapToken, 'x' | 'y' | 'size'>, radius: number, target: Pick<MapToken, 'x' | 'y' | 'size'>): boolean {
+  const sourceSize = mapTokenSize(source)
+  const targetSize = mapTokenSize(target)
+  const dx = Math.max(0, target.x - (source.x + sourceSize - 0.5), source.x + 0.5 - (target.x + targetSize))
+  const dy = Math.max(0, target.y - (source.y + sourceSize - 0.5), source.y + 0.5 - (target.y + targetSize))
+  return dx ** 2 + dy ** 2 <= radius ** 2 + 1e-9
 }
