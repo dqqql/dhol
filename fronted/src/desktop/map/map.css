@@ -282,7 +282,9 @@
   z-index: 2;
   top: calc(100% + 6px);
   right: 0;
-  min-width: 156px;
+  width: min(320px, calc(100vw - 48px));
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
   max-height: min(420px, 60dvh);
   overflow-y: auto;
   padding: 4px;
@@ -488,17 +490,6 @@
   transition: background 0.1s, color 0.1s;
 }
 
-.room-map-btn-ghost {
-  background: transparent;
-  color: var(--ink-secondary, #4A4A45);
-  border-color: var(--border-subtle, #D0D0C8);
-}
-
-.room-map-btn-ghost:hover {
-  background: var(--surface-active, #E0E0DA);
-  color: var(--ink, #0A0A0A);
-}
-
 /* 状态信息 */
 .room-map-status-bar {
   display: flex;
@@ -604,3 +595,7 @@
   .room-map-tools { overflow-x: auto; }
   .room-map-add-menu { position: fixed; top: auto; right: 16px; }
 }
+
+.room-map-add-column { display: grid; gap: 4px; min-width: 0; }
+.room-map-menu-heading { padding: 4px 8px; font-size: 12px; font-weight: 800; color: var(--ink-secondary); }
+.room-map-editor-size { display: flex; align-items: center; gap: 6px; }

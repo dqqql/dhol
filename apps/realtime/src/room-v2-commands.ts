@@ -1,4 +1,4 @@
-import { characterNameKey, resourcesFromSheet, rollDicePool, summaryFromSheet, type CharacterSheetJson, type DiceRollRecord, type MutationAck, type MutationCommand, type MutationError, type RoomEvent } from '@dhgc/shared/desktop'
+import { fitMapToken, characterNameKey, resourcesFromSheet, rollDicePool, summaryFromSheet, type CharacterSheetJson, type DiceRollRecord, type MutationAck, type MutationCommand, type MutationError, type RoomEvent } from '@dhgc/shared/desktop'
 import { RoomV2Storage } from './room-v2-storage'
 import { summarizeRollServerMetrics, type RollCommandMetric } from './room-v2-metrics'
 import type { MapChange, MapOperation, MutationEnvelope } from '@dhgc/shared/desktop'
@@ -154,7 +154,7 @@ export class RoomV2Commands {
       case 'map.token.update': {
         const existing = map.mapToken(command.id)
         if (!existing) return unchanged
-        const token = { ...existing, ...command.patch }
+        const token = fitMapToken({ ...existing, ...command.patch })
         return change({ type: 'map.token.changed', token }, () => save('token', token))
       }
       case 'map.token.delete':

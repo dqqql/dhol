@@ -109,6 +109,15 @@ describe('Room V2 workerd integration', () => {
         send(a, 'token-move', { type: 'map.token.update', id: token.id, patch: { x: 12, y: 8 } }),
         send(b, 'token-name', { type: 'map.token.update', id: token.id, patch: { name: '领队', labelColor: '#833614' } }),
       ])
+      const resized = nextMessage(b, 'map.token.changed', 'token-size')
+      const resizeCommand = { type: 'map.token.update', id: token.id, patch: { size: 3 } }
+      const resizeAck = await send(a, 'token-size', resizeCommand)
+      expect(await resized).toMatchObject({ token: { id: token.id, size: 3 } })
+      expect(await send(a, 'token-size', resizeCommand)).toEqual(resizeAck)
+      const atEdge = nextMessage(b, 'map.token.changed', 'token-edge')
+      await send(a, 'token-edge', { type: 'map.token.update', id: token.id, patch: { x: 39, y: 39 } })
+      expect(await atEdge).toMatchObject({ token: { size: 3, x: 37, y: 37 } })
+      await send(a, 'token-back', { type: 'map.token.update', id: token.id, patch: { x: 12, y: 8 } })
       const stroke: MapStroke = { id: 'first-stroke', color: '#263950', width: 0.16, points: [[2, 3], [4, 5], [2, 7]] }
       const added = nextMessage(b, 'map.stroke.added', 'stroke-add')
       const first = await send(a, 'stroke-add', { type: 'map.stroke.add', stroke })
@@ -116,7 +125,7 @@ describe('Room V2 workerd integration', () => {
       expect(await send(a, 'stroke-add', { type: 'map.stroke.add', stroke })).toEqual(first)
       const recovered = nextMessage(a, 'room.snapshot')
       a.send(JSON.stringify({ ...sync, pendingRequestIds: ['stroke-add'] }))
-      expect(await recovered).toMatchObject({ receipts: [first], room: { map: { tokens: [{ ...token, name: '领队', x: 12, y: 8, labelColor: '#833614' }], strokes: [stroke] } } })
+      expect(await recovered).toMatchObject({ receipts: [first], room: { map: { tokens: [{ ...token, name: '领队', x: 12, y: 8, labelColor: '#833614', size: 3 }], strokes: [stroke] } } })
 
       const authorization = `Bearer ${await signRoomV2Session(env.SESSION_SECRET, { roomId: room.roomId, inviteCode: room.inviteCode, playerId: room.players[0].id, nickname: room.players[0].nickname })}`
       const exported = await stub.fetch(new Request('https://room-v2.internal/internal/v2/export', { headers: { Authorization: authorization } }))

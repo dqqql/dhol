@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { MAP_IMAGES, MAP_SIZE, type MapPoint, type MapStroke, type MapToken, type RoomMap } from '@dhgc/shared/desktop'
+import { MAP_IMAGES, MAP_CLASS_IMAGES, MAP_MONSTER_IMAGES, MAP_SIZE, mapTokenSize, fitMapToken, type MapTokenSize, type MapPoint, type MapStroke, type MapToken, type RoomMap } from '@dhgc/shared/desktop'
 import type { RoomSync } from '../state/room-sync'
 import type { PendingOperation } from '../sync/room-outbox'
 import { clamp, mapPoint, simplifyStroke } from './map-geometry'
@@ -25,6 +25,11 @@ const imageLabels: Record<typeof MAP_IMAGES[number], string> = {
   sorcerer: '术士',
   warrior: '战士',
   wizard: '法师',
+  dragon: '巨龙',
+  golem: '魔像',
+  ghost: '幽灵',
+  'dark-mage': '黑暗法师',
+  demon: '恶魔',
 }
 
 const TOOLS = [
@@ -68,7 +73,7 @@ function projectMap(map: RoomMap, pending: PendingOperation[]) {
       case 'map.token.update': {
         const existing = tokens.get(command.id)
         if (existing) {
-          tokens.set(command.id, { ...existing, ...command.patch })
+          tokens.set(command.id, fitMapToken({ ...existing, ...command.patch }))
           pendingTokens.add(command.id)
         }
         break
@@ -149,12 +154,10 @@ function TokenEditor({
   token,
   save,
   remove,
-  onDeselect,
 }: {
   token: MapToken
-  save(patch: { name?: string; labelColor?: string }): boolean
+  save(patch: { name?: string; labelColor?: string; size?: MapTokenSize }): boolean
   remove(): void
-  onDeselect(): void
 }) {
   const [name, setName] = useState(token.name)
   const [color, setColor] = useState(token.labelColor)
@@ -192,6 +195,17 @@ function TokenEditor({
           onChange={event => setName(event.target.value)}
         />
       </label>
+      <div className="room-map-editor-size">
+        <span className="room-map-field-label">体型</span>
+        <div className="room-map-width-group" role="group" aria-label="Token 体型">
+          {([1, 2, 3] as const).map((size, index) => (
+            <button key={size} type="button" className={`room-map-width-btn ${mapTokenSize(token) === size ? 'is-active' : ''}`}
+              aria-pressed={mapTokenSize(token) === size} title={`${size}×${size} 格`} onClick={() => save({ size })}>
+              {['小', '中', '大'][index]}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="room-map-editor-colors">
         <span className="room-map-field-label">名牌底色</span>
         <div className="room-map-color-swatches" role="radiogroup" aria-label="快捷名牌底色">
@@ -222,9 +236,6 @@ function TokenEditor({
         </button>
         <button type="button" className="button--danger room-map-btn-sm" onClick={remove}>
           删除 Token
-        </button>
-        <button type="button" className="room-map-btn-sm room-map-btn-ghost" onClick={onDeselect} title="取消选择">
-          取消选择
         </button>
       </div>
     </form>
@@ -473,8 +484,8 @@ export default function MapPanel({
 
   function dragPosition(active: Extract<Gesture, { type: 'token' }>, point: MapPoint): MapPoint {
     return [
-      clamp(active.origin[0] + point[0] - active.from[0], 0, MAP_SIZE - 1),
-      clamp(active.origin[1] + point[1] - active.from[1], 0, MAP_SIZE - 1),
+      clamp(active.origin[0] + point[0] - active.from[0], 0, MAP_SIZE - mapTokenSize(projected.tokens.get(active.id) ?? {})),
+      clamp(active.origin[1] + point[1] - active.from[1], 0, MAP_SIZE - mapTokenSize(projected.tokens.get(active.id) ?? {})),
     ]
   }
 
@@ -534,7 +545,7 @@ export default function MapPanel({
 
   const groups = new Map<string, MapToken[]>()
   for (const token of projected.tokens.values()) {
-    const key = `${token.x},${token.y}`
+    const key = `${token.x},${token.y},${mapTokenSize(token)}`
     const group = groups.get(key)
     if (group) group.push(token)
     else groups.set(key, [token])
@@ -680,16 +691,21 @@ export default function MapPanel({
             </button>
             {addMenuOpen && (
               <div id="room-map-add-menu" className="room-map-add-menu" role="group" aria-label="新增 Token 类型">
-                {MAP_IMAGES.map(id => (
-                  <button key={id} type="button" className="room-map-btn" onClick={() => {
-                    setImage(id)
-                    setTool('place')
-                    setAddMenuOpen(false)
-                    addButton.current?.focus()
-                  }}>
-                    <TokenIcon image={id} size={22} />
-                    <span>{imageLabels[id]}</span>
-                  </button>
+                {([['职业', MAP_CLASS_IMAGES], ['怪物', MAP_MONSTER_IMAGES]] as const).map(([category, images]) => (
+                  <div key={category} className="room-map-add-column" role="group" aria-label={category}>
+                    <span className="room-map-menu-heading">{category}</span>
+                    {images.map(id => (
+                      <button key={id} type="button" className="room-map-btn" onClick={() => {
+                        setImage(id)
+                        setTool('place')
+                        setAddMenuOpen(false)
+                        addButton.current?.focus()
+                      }}>
+                        <TokenIcon image={id} size={26} />
+                        <span>{imageLabels[id]}</span>
+                      </button>
+                    ))}
+                  </div>
                 ))}
               </div>
             )}
@@ -799,10 +815,10 @@ export default function MapPanel({
           {dragged && (
             <g className="room-map-drag-indicator" pointerEvents="none">
               <rect
-                x={clamp(Math.round(dragged.position[0]), 0, MAP_SIZE - 1)}
-                y={clamp(Math.round(dragged.position[1]), 0, MAP_SIZE - 1)}
-                width="1"
-                height="1"
+                x={clamp(Math.round(dragged.position[0]), 0, MAP_SIZE - mapTokenSize(projected.tokens.get(dragged.id) ?? {}))}
+                y={clamp(Math.round(dragged.position[1]), 0, MAP_SIZE - mapTokenSize(projected.tokens.get(dragged.id) ?? {}))}
+                width={mapTokenSize(projected.tokens.get(dragged.id) ?? {})}
+                height={mapTokenSize(projected.tokens.get(dragged.id) ?? {})}
                 fill="rgba(0, 75, 214, 0.12)"
                 stroke="#004BD6"
                 strokeWidth="0.06"
@@ -827,7 +843,7 @@ export default function MapPanel({
                 rx="0.05"
               />
               <g opacity="0.8">
-                <TokenIcon image={image} x={0.12} y={0.05} size={0.76} />
+                <TokenIcon image={image} x={0.06} y={0.06} size={0.88} />
               </g>
               <rect x="0.18" y="0.77" width="0.64" height="0.22" rx="0.04" fill="#004BD6" />
               <text x="0.5" y="0.93" fill="#ffffff" textAnchor="middle" fontSize="0.15" fontWeight="800">
@@ -846,7 +862,11 @@ export default function MapPanel({
                   : [0, 0]
                 const [x, y] =
                   dragged?.id === token.id ? dragged.position : [token.x + offset[0], token.y + offset[1]]
-                const size = clustered ? 0.57 : 0.76
+                const footprint = mapTokenSize(token)
+                const size = clustered ? footprint * 0.65 : footprint - 0.12
+                const centerX = footprint / 2
+                const centerY = footprint / 2
+                const labelY = footprint - 0.24
                 const initials = [...token.name]
                 const label = initials.length > 7 ? `${initials.slice(0, 6).join('')}…` : token.name
                 const labelLength = Math.min(
@@ -864,6 +884,7 @@ export default function MapPanel({
                     className={`room-map-token ${isSelected ? 'is-selected' : ''}`}
                     data-token-id={token.id}
                     data-cell={`${token.x},${token.y}`}
+                    data-token-size={footprint}
                     data-token-status={projected.pendingTokens.has(token.id) ? 'pending' : 'confirmed'}
                     data-offset-x={offset[0]}
                     data-offset-y={offset[1]}
@@ -877,16 +898,16 @@ export default function MapPanel({
                     {isSelected && (
                       <g className="room-map-selection-halo">
                         <circle
-                          cx=".5"
-                          cy=".43"
+                          cx={centerX}
+                          cy={centerY}
                           r={size / 2 + 0.08}
                           fill="rgba(0, 75, 214, 0.18)"
                           stroke="#004BD6"
                           strokeWidth="0.06"
                         />
                         <circle
-                          cx=".5"
-                          cy=".43"
+                          cx={centerX}
+                          cy={centerY}
                           r={size / 2 + 0.14}
                           fill="none"
                           stroke="#004BD6"
@@ -896,13 +917,13 @@ export default function MapPanel({
                       </g>
                     )}
 
-                    <TokenIcon image={token.image} x={(1 - size) / 2} y={0.43 - size / 2} size={size} />
+                    <TokenIcon image={token.image} x={centerX - size / 2} y={centerY - size / 2} size={size} />
 
                     {(!clustered || isSelected || index === group.length - 1) && (
                       <g className="room-map-token-label-group">
                         <rect
-                          x={(1 - labelLength) / 2}
-                          y=".76"
+                          x={centerX - labelLength / 2}
+                          y={labelY}
                           width={labelLength}
                           height=".31"
                           rx=".04"
@@ -911,8 +932,8 @@ export default function MapPanel({
                           strokeWidth="0.02"
                         />
                         <text
-                          x=".5"
-                          y=".98"
+                          x={centerX}
+                          y={labelY + 0.22}
                           fill={labelInk(token.labelColor)}
                           textAnchor="middle"
                           fontSize=".23"
@@ -922,7 +943,7 @@ export default function MapPanel({
                         </text>
                       </g>
                     )}
-                    <circle cx=".5" cy=".43" r={size / 2} fill="transparent" />
+                    <circle cx={centerX} cy={centerY} r={size / 2} fill="transparent" />
                   </g>
                 )
               })
@@ -938,7 +959,6 @@ export default function MapPanel({
             token={selected}
             save={patch => submit({ type: 'map.token.update', id: selected.id, patch })}
             remove={() => submit({ type: 'map.token.delete', id: selected.id })}
-            onDeselect={() => setSelectedId('')}
           />
         )}
 

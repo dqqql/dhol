@@ -4,10 +4,13 @@ export const MAP_DATA_BYTES = 512 * 1024
 export const MAP_STROKE_POINTS = 512
 export const MAP_TOKEN_LIMIT = 128
 export const MAP_STROKE_LIMIT = 256
-export const MAP_IMAGES = ['bard', 'druid', 'guardian', 'ranger', 'rogue', 'seraph', 'sorcerer', 'warrior', 'wizard'] as const
+export const MAP_CLASS_IMAGES = ['bard', 'druid', 'guardian', 'ranger', 'rogue', 'seraph', 'sorcerer', 'warrior', 'wizard'] as const
+export const MAP_MONSTER_IMAGES = ['dragon', 'golem', 'ghost', 'dark-mage', 'demon'] as const
+export const MAP_IMAGES = [...MAP_CLASS_IMAGES, ...MAP_MONSTER_IMAGES] as const
+export type MapTokenSize = 1 | 2 | 3
 
 export type MapPoint = [number, number]
-export interface MapToken { id: string; image: string; name: string; labelColor: string; x: number; y: number }
+export interface MapToken { id: string; image: string; name: string; labelColor: string; x: number; y: number; size?: MapTokenSize }
 export interface MapStroke { id: string; color: string; width: number; points: MapPoint[] }
 export interface RoomMap { tokens: MapToken[]; strokes: MapStroke[] }
 export const EMPTY_MAP: RoomMap = { tokens: [], strokes: [] }
@@ -58,9 +61,20 @@ function image(value: unknown): string {
   if (typeof value !== 'string' || !/^[\w-]{1,32}$/.test(value)) invalid()
   return value
 }
+export function mapTokenSize(token: Pick<MapToken, 'size'>): MapTokenSize { return token.size ?? 1 }
+
+export function fitMapToken(token: MapToken): MapToken {
+  const max = MAP_SIZE - mapTokenSize(token)
+  return { ...token, x: Math.min(token.x, max), y: Math.min(token.y, max) }
+}
+
+function tokenSize(value: unknown): MapTokenSize {
+  if (value !== 1 && value !== 2 && value !== 3) invalid()
+  return value
+}
 function token(value: unknown): MapToken {
   const item = record(value)
-  return { id: identifier(item.id), image: image(item.image), name: name(item.name), labelColor: color(item.labelColor), x: cell(item.x), y: cell(item.y) }
+  return fitMapToken({ id: identifier(item.id), image: image(item.image), name: name(item.name), labelColor: color(item.labelColor), x: cell(item.x), y: cell(item.y), ...(item.size !== undefined ? { size: tokenSize(item.size) } : {}) })
 }
 function stroke(value: unknown): MapStroke {
   const item = record(value)
@@ -80,6 +94,7 @@ export function parseMapOperation(input: Record<string, unknown>): MapOperation 
     case 'map.token.update': {
       const inputPatch = record(input.patch)
       const patch: Partial<MapToken> = {}
+      if (inputPatch.size !== undefined) patch.size = tokenSize(inputPatch.size)
       if (inputPatch.x !== undefined) patch.x = cell(inputPatch.x)
       if (inputPatch.y !== undefined) patch.y = cell(inputPatch.y)
       if (inputPatch.name !== undefined) patch.name = name(inputPatch.name)
