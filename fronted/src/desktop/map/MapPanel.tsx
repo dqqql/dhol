@@ -16,10 +16,15 @@ const PEN_COLORS = ['#111111', '#004BD6', '#E6332A', '#16A34A', '#E5A000', '#7C3
 const LABEL_COLORS = ['#263950', '#004BD6', '#E6332A', '#16A34A', '#E5A000', '#7C3AED', '#111111']
 
 const imageLabels: Record<typeof MAP_IMAGES[number], string> = {
-  hero: '冒险者',
-  beast: '野兽',
-  skull: '骷髅',
-  marker: '标记',
+  bard: '吟游诗人',
+  druid: '德鲁伊',
+  guardian: '守护者',
+  ranger: '游侠',
+  rogue: '游荡者',
+  seraph: '神使',
+  sorcerer: '术士',
+  warrior: '战士',
+  wizard: '法师',
 }
 
 const TOOLS = [
@@ -211,9 +216,6 @@ function TokenEditor({
           </label>
         </div>
       </div>
-      <span className="room-map-coord-badge">
-        格位: ({token.x + 1}, {token.y + 1})
-      </span>
       <div className="room-map-editor-actions">
         <button type="submit" className="button--primary room-map-btn-sm" disabled={!hasChanges}>
           保存
@@ -272,7 +274,7 @@ export default function MapPanel({
     return () => document.removeEventListener('pointerdown', closeOutside)
   }, [addMenuOpen])
   const [tool, setTool] = useState<Tool>('select')
-  const [image, setImage] = useState<typeof MAP_IMAGES[number]>('hero')
+  const [image, setImage] = useState<typeof MAP_IMAGES[number]>('bard')
   const [color, setColor] = useState('#111111')
   const [width, setWidth] = useState(WIDTHS[1])
   const [selectedId, setSelectedId] = useState('')
@@ -868,7 +870,7 @@ export default function MapPanel({
                     transform={`translate(${x} ${y})`}
                   >
                     <title>
-                      {token.name} · ({token.x + 1}, {token.y + 1})
+                      {token.name}
                     </title>
 
                     {/* 选中高亮光环 */}

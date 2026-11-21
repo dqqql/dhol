@@ -224,7 +224,7 @@ async (page) => {
 
       const bounds = await board(b).boundingBox()
       await btn(b, '➕ 新增 Token').click()
-      await btn(b, '冒险者').click()
+      await btn(b, '吟游诗人').click()
       await b.mouse.click(...at(bounds, 7.5, 14.43))
       await c.locator('[data-token-status="confirmed"]').waitFor()
       for (let index = 0; index < 24; index++) {

@@ -4,7 +4,7 @@ export const MAP_DATA_BYTES = 512 * 1024
 export const MAP_STROKE_POINTS = 512
 export const MAP_TOKEN_LIMIT = 128
 export const MAP_STROKE_LIMIT = 256
-export const MAP_IMAGES = ['hero', 'beast', 'skull', 'marker'] as const
+export const MAP_IMAGES = ['bard', 'druid', 'guardian', 'ranger', 'rogue', 'seraph', 'sorcerer', 'warrior', 'wizard'] as const
 
 export type MapPoint = [number, number]
 export interface MapToken { id: string; image: string; name: string; labelColor: string; x: number; y: number }

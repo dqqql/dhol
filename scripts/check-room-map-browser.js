@@ -77,13 +77,13 @@ async (page) => {
     await btn(a, '重置地图视野').click()
 
     await btn(a, '➕ 新增 Token').click()
-    await btn(a, '冒险者').click()
+    await btn(a, '吟游诗人').click()
     await a.mouse.click(...await at(a, 10.5, 14.43))
     await wait(b, '[data-token-id][data-cell="10,14"]')
     const id = await a.locator('[data-token-id]').first().getAttribute('data-token-id')
     const tokenSelector = `[data-token-id="${id}"]`
     await btn(b, '➕ 新增 Token').click()
-    await btn(b, '野兽').click()
+    await btn(b, '德鲁伊').click()
     await b.mouse.click(...await at(b, 15.5, 18.43))
     await wait(a, '[data-token-id][data-cell="15,18"]')
     await begin(a, 10.5, 14.43)
