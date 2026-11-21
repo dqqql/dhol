@@ -4,9 +4,8 @@ import type { RoomSync } from '../state/room-sync'
 import type { PendingOperation } from '../sync/room-outbox'
 import { clamp, mapPoint, simplifyStroke, MAP_RANGES, tokenTouchesRange } from './map-geometry'
 import TokenIcon from './token-icons'
+import RangeControl from './RangeControl'
 import './map.css'
-
-const RANGE_STEPS = [{ label: '关闭', radius: 0, color: '#64748B' }, ...MAP_RANGES] as const
 
 const DEFAULT_VIEW = { x: 5, y: 10, zoom: 1 }
 const VIEW_WIDTH = 15
@@ -36,7 +35,6 @@ const imageLabels: Record<typeof MAP_IMAGES[number], string> = {
 
 const TOOLS = [
   ['select', '选择', '🖱️'],
-  ['pan', '平移', '✋'],
   ['pen', '画笔', '✏️'],
   ['eraser', '橡皮擦', '🧹'],
 ] as const
@@ -167,34 +165,6 @@ function TokenEditor({
 }) {
   const [name, setName] = useState(token.name)
   const [color, setColor] = useState(token.labelColor)
-  const trackRef = useRef<HTMLDivElement>(null)
-
-  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return
-    const el = trackRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    const updateIndex = (clientX: number) => {
-      const padding = 8
-      const trackWidth = Math.max(1, rect.width - padding * 2)
-      const offset = clientX - rect.left - padding
-      const ratio = Math.max(0, Math.min(1, offset / trackWidth))
-      const nearest = Math.round(ratio * (RANGE_STEPS.length - 1))
-      onRangeChange(nearest)
-    }
-    updateIndex(event.clientX)
-
-    const onPointerMove = (moveEv: PointerEvent) => {
-      updateIndex(moveEv.clientX)
-    }
-    const onPointerUp = () => {
-      window.removeEventListener('pointermove', onPointerMove)
-      window.removeEventListener('pointerup', onPointerUp)
-    }
-    window.addEventListener('pointermove', onPointerMove)
-    window.addEventListener('pointerup', onPointerUp)
-  }
-
   const handleColorPreset = (c: string) => {
     setColor(c)
     save({ labelColor: c })
@@ -206,13 +176,10 @@ function TokenEditor({
       ...(name.trim() && name.trim() !== token.name ? { name: name.trim() } : {}),
       ...(color && color !== token.labelColor ? { labelColor: color } : {}),
     }
-    if (Object.keys(patch).length && save(patch)) {
-      // saved successfully
-    }
+    if (Object.keys(patch).length) save(patch)
   }
 
-  const hasChanges = (name.trim() && name.trim() !== token.name) || (color && color !== token.labelColor)
-  const currentRange = RANGE_STEPS[rangeIndex]
+  const hasChanges = Boolean((name.trim() && name.trim() !== token.name) || color !== token.labelColor)
 
   return (
     <form className="room-map-token-editor" onSubmit={handleSubmit}>
@@ -242,7 +209,7 @@ function TokenEditor({
       </div>
       <div className="room-map-editor-colors">
         <span className="room-map-field-label">名牌底色</span>
-        <div className="room-map-color-swatches" role="radiogroup" aria-label="快捷名牌底色">
+        <div className="room-map-color-swatches" role="group" aria-label="快捷名牌底色">
           {LABEL_COLORS.map(c => (
             <button
               key={c}
@@ -265,65 +232,7 @@ function TokenEditor({
         </div>
       </div>
       <div className="room-map-editor-actions">
-        <div className="room-map-range-control">
-          <div className="room-map-range-header">
-            <output style={{
-              left: `calc(8px + (100% - 16px) * ${rangeIndex / (RANGE_STEPS.length - 1)})`,
-              transform: `translateX(${rangeIndex === 0 ? '0' : rangeIndex === RANGE_STEPS.length - 1 ? '-100%' : '-50%'})`,
-            }}>{currentRange.radius ? `${currentRange.label} ${currentRange.radius}格` : '关闭'}</output>
-          </div>
-          <div
-            ref={trackRef}
-            className="room-map-range-slider-wrap"
-            role="group"
-            aria-label="距离刻度"
-            onPointerDown={handlePointerDown}
-          >
-            <div className="room-map-range-track-bg" />
-            <div
-              className="room-map-range-track-fill"
-              style={{
-                width: `calc(8px + (100% - 16px) * ${rangeIndex / (RANGE_STEPS.length - 1)})`,
-                backgroundColor: currentRange.color,
-              }}
-            />
-            <div className="room-map-range-nodes">
-              {RANGE_STEPS.map((range, index) => {
-                const isActive = index === rangeIndex
-                const isPassed = index <= rangeIndex
-                return (
-                  <button
-                    key={range.radius}
-                    type="button"
-                    className={`room-map-range-node ${isActive ? 'is-active' : ''} ${isPassed ? 'is-passed' : ''}`}
-                    style={{
-                      left: `calc(8px + (100% - 16px) * ${index / (RANGE_STEPS.length - 1)})`,
-                      '--node-color': range.color,
-                    } as React.CSSProperties}
-                    title={range.radius ? `${range.label} ${range.radius}格` : '关闭'}
-                    aria-label={range.radius ? `${range.label} ${range.radius}格` : '关闭范围显示'}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onRangeChange(index)
-                    }}
-                  />
-                )
-              })}
-            </div>
-            <input
-              type="range"
-              className="room-map-range-native-input"
-              aria-label="距离"
-              min="0"
-              max={RANGE_STEPS.length - 1}
-              step="1"
-              value={rangeIndex}
-              aria-valuetext={currentRange.radius ? `${currentRange.label} ${currentRange.radius}格` : '关闭'}
-              style={{ accentColor: currentRange.color }}
-              onChange={event => onRangeChange(Number(event.target.value))}
-            />
-          </div>
-        </div>
+        <RangeControl value={rangeIndex} onChange={onRangeChange} />
         <button type="submit" className="button--primary room-map-btn-sm" disabled={!hasChanges}>
           保存
         </button>
@@ -485,23 +394,6 @@ export default function MapPanel({
     }
   }, [sync])
 
-  function zoomBy(factor: number) {
-    setView(current => {
-      const zoom = clamp(current.zoom * factor, MIN_ZOOM, MAX_ZOOM)
-      const newX = current.x + 0.5 * VIEW_WIDTH * (1 / current.zoom - 1 / zoom)
-      const newY = current.y + 0.5 * VIEW_HEIGHT * (1 / current.zoom - 1 / zoom)
-      return moveView({ zoom, x: newX, y: newY })
-    })
-  }
-
-  function centerView() {
-    setView(current => moveView({
-      zoom: current.zoom,
-      x: (MAP_SIZE - VIEW_WIDTH / current.zoom) / 2,
-      y: (MAP_SIZE - VIEW_HEIGHT / current.zoom) / 2,
-    }))
-  }
-
   useEffect(() => {
     const isInput = (el: EventTarget | null) =>
       el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement || el instanceof HTMLButtonElement
@@ -512,18 +404,6 @@ export default function MapPanel({
       if (e.code === 'Space' && !e.repeat) {
         e.preventDefault()
         setIsSpaceHeld(true)
-        return
-      }
-
-      if (e.key === '+' || e.key === '=') {
-        e.preventDefault()
-        zoomBy(1.2)
-      } else if (e.key === '-' || e.key === '_') {
-        e.preventDefault()
-        zoomBy(1 / 1.2)
-      } else if (e.key === '0') {
-        e.preventDefault()
-        setView(DEFAULT_VIEW)
       }
     }
 
@@ -533,13 +413,16 @@ export default function MapPanel({
       }
     }
 
+    const releaseSpace = () => setIsSpaceHeld(false)
+    window.addEventListener('blur', releaseSpace)
     window.addEventListener('keydown', handleKeyDown)
     window.addEventListener('keyup', handleKeyUp)
     return () => {
+      window.removeEventListener('blur', releaseSpace)
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [selectedId, tool, onClose, submit])
+  }, [])
 
   useEffect(() => {
     const element = board.current
@@ -575,7 +458,7 @@ export default function MapPanel({
     const isPan =
       event.button === 2 ||
       event.button === 1 ||
-      (event.button === 0 && (tool === 'pan' || isSpaceHeld))
+      (event.button === 0 && isSpaceHeld)
 
     if (!isPan && event.button !== 0) return
     event.preventDefault()
@@ -783,12 +666,13 @@ export default function MapPanel({
           {/* 画笔调色盘与粗细 */}
           <div className="room-map-brush">
             <span className="room-map-label-sm">线色</span>
-            <div className="room-map-color-swatches" role="radiogroup" aria-label="快捷线色">
+            <div className="room-map-color-swatches" role="group" aria-label="快捷线色">
               {PEN_COLORS.map(c => (
                 <button
                   key={c}
                   type="button"
                   className={`room-map-color-swatch ${color.toLowerCase() === c.toLowerCase() ? 'is-active' : ''}`}
+                  aria-pressed={color.toLowerCase() === c.toLowerCase()}
                   style={{ backgroundColor: c }}
                   title={c}
                   aria-label={`选择颜色 ${c}`}
@@ -814,7 +698,7 @@ export default function MapPanel({
             <div className="room-map-divider-sm" />
 
             <span className="room-map-label-sm">粗细</span>
-            <div className="room-map-width-group" role="radiogroup" aria-label="画笔粗细">
+            <div className="room-map-width-group" role="group" aria-label="画笔粗细">
               {WIDTHS.map((val, idx) => (
                 <button
                   key={val}
@@ -831,110 +715,50 @@ export default function MapPanel({
                   <span>{['细', '中', '粗'][idx]}</span>
                 </button>
               ))}
-              <select
-                aria-label="画笔粗细"
-                className="sr-only"
-                value={width}
-                onChange={event => {
-                  setWidth(Number(event.target.value))
-                  setTool('pen')
-                }}
-                tabIndex={-1}
-              >
-                {WIDTHS.map((val, index) => (
-                  <option key={val} value={val}>
-                    {['细', '中', '粗'][index]}
-                  </option>
-                ))}
-              </select>
             </div>
-          </div>
-
-          <div className="room-map-divider" />
-
-          {/* 新增 Token 选项 */}
-          <div className="room-map-add" ref={addMenu} onKeyDown={event => {
-            if (event.key === 'Escape' && addMenuOpen) {
-              event.preventDefault()
-              event.stopPropagation()
-              setAddMenuOpen(false)
-              addButton.current?.focus()
-            }
-          }}>
-            <button
-              ref={addButton}
-              type="button"
-              className={`room-map-btn ${tool === 'place' ? 'is-active' : ''}`}
-              aria-expanded={addMenuOpen}
-              aria-controls="room-map-add-menu"
-              onClick={() => setAddMenuOpen(open => !open)}
-              title="选择图案后在地图上放置新 Token"
-            >
-              <span>➕ 新增 Token</span>
-            </button>
-            {addMenuOpen && (
-              <div id="room-map-add-menu" className="room-map-add-menu" role="group" aria-label="新增 Token 类型">
-                {([['职业', MAP_CLASS_IMAGES], ['怪物', MAP_MONSTER_IMAGES]] as const).map(([category, images]) => (
-                  <div key={category} className="room-map-add-column" role="group" aria-label={category}>
-                    <span className="room-map-menu-heading">{category}</span>
-                    {images.map(id => (
-                      <button key={id} type="button" className="room-map-btn" onClick={() => {
-                        setImage(id)
-                        setTool('place')
-                        setAddMenuOpen(false)
-                        addButton.current?.focus()
-                      }}>
-                        <TokenIcon image={id} size={26} />
-                        <span>{imageLabels[id]}</span>
-                      </button>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
 
-        {/* 缩放控制 */}
-        <div className="room-map-tools-right">
-          <div className="room-map-zoom-group">
-            <button
-              type="button"
-              className="room-map-zoom-btn"
-              onClick={() => zoomBy(1 / 1.2)}
-              title="缩小 (-)"
-              aria-label="缩小"
-            >
-              −
-            </button>
-            <button
-              type="button"
-              className="room-map-zoom-btn room-map-reset"
-              onClick={() => setView(DEFAULT_VIEW)}
-              title="重置地图视野 (0)"
-              aria-label="重置地图视野"
-            >
-              {Math.round(view.zoom * 100)}%
-            </button>
-            <button
-              type="button"
-              className="room-map-zoom-btn"
-              onClick={() => zoomBy(1.2)}
-              title="放大 (+)"
-              aria-label="放大"
-            >
-              +
-            </button>
-            <button
-              type="button"
-              className="room-map-zoom-btn"
-              onClick={centerView}
-              title="回到地图中心，保持当前缩放"
-              aria-label="回中"
-            >
-              回中
-            </button>
-          </div>
+        {/* 新增 Token 选项 */}
+        <div className="room-map-add" ref={addMenu} onKeyDown={event => {
+          if (event.key === 'Escape' && addMenuOpen) {
+            event.preventDefault()
+            event.stopPropagation()
+            setAddMenuOpen(false)
+            addButton.current?.focus()
+          }
+        }}>
+          <button
+            ref={addButton}
+            type="button"
+            className={`room-map-btn ${tool === 'place' ? 'is-active' : ''}`}
+            aria-expanded={addMenuOpen}
+            aria-controls="room-map-add-menu"
+            onClick={() => setAddMenuOpen(open => !open)}
+            title="选择图案后在地图上放置新 Token"
+          >
+            <span>➕ 新增 Token</span>
+          </button>
+          {addMenuOpen && (
+            <div id="room-map-add-menu" className="room-map-add-menu" role="group" aria-label="新增 Token 类型">
+              {([['职业', MAP_CLASS_IMAGES], ['怪物', MAP_MONSTER_IMAGES]] as const).map(([category, images]) => (
+                <div key={category} className="room-map-add-column" role="group" aria-label={category}>
+                  <span className="room-map-menu-heading">{category}</span>
+                  {images.map(id => (
+                    <button key={id} type="button" className="room-map-btn" onClick={() => {
+                      setImage(id)
+                      setTool('place')
+                      setAddMenuOpen(false)
+                      addButton.current?.focus()
+                    }}>
+                      <TokenIcon image={id} size={26} />
+                      <span>{imageLabels[id]}</span>
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1136,8 +960,8 @@ export default function MapPanel({
         </svg>
       </div>
 
-      <div className="room-map-footer">
-        {selected && (
+      {selected && (
+        <div className="room-map-footer">
           <TokenEditor
             key={selected.id}
             token={selected}
@@ -1146,8 +970,8 @@ export default function MapPanel({
             save={patch => submit({ type: 'map.token.update', id: selected.id, patch })}
             remove={() => submit({ type: 'map.token.delete', id: selected.id })}
           />
-        )}
-      </div>
+        </div>
+      )}
     </dialog>
   )
 }

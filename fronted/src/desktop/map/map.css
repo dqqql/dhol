@@ -47,12 +47,14 @@
 }
 
 .room-map-header-left {
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
 .room-map-header h2 {
+  white-space: nowrap;
   margin: 0;
   font-size: 18px;
   font-weight: 900;
@@ -102,7 +104,6 @@
 }
 
 .room-map-tools-left,
-.room-map-tools-right,
 .room-map-tool-group,
 .room-map-brush,
 .room-map-add {
@@ -260,6 +261,7 @@
 /* 新增 Token 二级菜单 */
 .room-map-add {
   position: relative;
+  margin-left: auto;
 }
 
 .room-map-add-menu {
@@ -282,43 +284,6 @@
 
 .room-map-add-menu .room-map-btn {
   width: 100%;
-}
-
-/* 缩放控制组 */
-.room-map-zoom-group {
-  display: flex;
-  align-items: center;
-  border: 1px solid var(--border, #111111);
-}
-
-.room-map-zoom-btn {
-  border: none;
-  border-right: 1px solid var(--border-subtle, #D0D0C8);
-  background: var(--surface, #FFFFFF);
-  padding: 5px 10px;
-  min-height: 32px;
-  font-size: 13px;
-  font-weight: 800;
-  color: var(--ink, #0A0A0A);
-  cursor: pointer;
-  border-radius: 0;
-  transition: background 0.1s, color 0.1s;
-}
-
-.room-map-zoom-btn:last-child {
-  border-right: none;
-}
-
-.room-map-zoom-btn:hover {
-  background: var(--surface-subtle, #ECECE7);
-  color: var(--ink, #0A0A0A);
-}
-
-.room-map-reset {
-  font-family: var(--font-mono, monospace);
-  min-width: 58px;
-  text-align: center;
-  font-weight: 900 !important;
 }
 
 /* 地图画板区域 */
@@ -347,7 +312,6 @@
 
 /* 光标状态 */
 .room-map-board[data-tool="select"] { cursor: default; }
-.room-map-board[data-tool="pan"],
 .room-map-board.is-space-held { cursor: grab; }
 .room-map-board.is-panning { cursor: grabbing !important; }
 .room-map-board[data-tool="pen"] { cursor: crosshair; }
@@ -462,6 +426,7 @@
 
 .room-map-editor-actions {
   margin-left: auto;
+  max-width: 100%;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -530,44 +495,6 @@
   font-weight: 800;
 }
 
-/* 辅助与无障碍 */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-/* 响应式调整 */
-@media (max-width: 768px) {
-  .room-map-header,
-  .room-map-tools,
-  .room-map-footer {
-    padding-inline: 10px;
-  }
-
-  .room-map-header {
-    gap: 8px;
-  }
-
-  .room-map-header-hint {
-    font-size: 12px;
-  }
-
-  .room-map-tools {
-    gap: 8px;
-  }
-
-  .room-map-divider {
-    display: none;
-  }
-}
-
 /* 窄屏仍保留一行工具栏，菜单在工具栏下方展开。 */
 @media (max-width: 1100px) {
   .room-map-tools { gap: 4px; padding-inline: 6px; }
@@ -576,13 +503,6 @@
   .room-map-label-sm, .room-map-divider, .room-map-divider-sm { display: none; }
   .room-map-color-swatch { width: 18px; height: 22px; }
   .room-map-width-btn { padding-inline: 4px; }
-  .room-map-zoom-btn { padding-inline: 6px; }
-  .room-map-reset { min-width: 46px; }
-}
-
-@media (max-width: 768px) {
-  .room-map-tools { overflow-x: auto; }
-  .room-map-add-menu { position: fixed; top: auto; right: 16px; }
 }
 
 .room-map-add-column { display: grid; gap: 4px; min-width: 0; }
@@ -593,7 +513,12 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  width: 230px;
+  box-sizing: border-box;
+  width: 300px;
+  min-width: 180px;
+  max-width: 100%;
+  flex: 0 1 300px;
+  padding-inline: 40px;
   font-size: 12px;
   font-weight: 800;
   user-select: none;
@@ -608,7 +533,8 @@
 .room-map-range-header output {
   position: absolute;
   white-space: nowrap;
-  transition: left 0.16s ease, transform 0.16s ease;
+  transform: translateX(-50%);
+  transition: left 0.16s ease;
   color: var(--ink-secondary, #4A4A45);
   font-variant-numeric: tabular-nums;
 }
@@ -665,17 +591,10 @@
   cursor: pointer;
   padding: 0;
   margin: 0;
-  outline: none;
-  pointer-events: auto;
+  pointer-events: none;
   box-sizing: border-box;
   transition: transform 0.16s ease, width 0.16s ease, height 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
   z-index: 2;
-}
-
-.room-map-range-node:hover {
-  transform: translate(-50%, -50%) scale(1.35);
-  background: var(--node-color);
-  box-shadow: 0 0 6px var(--node-color);
 }
 
 .room-map-range-node.is-active {
@@ -687,10 +606,6 @@
   z-index: 3;
 }
 
-.room-map-range-node.is-active:hover {
-  transform: translate(-50%, -50%) scale(1.1);
-}
-
 .room-map-range-native-input {
   position: absolute;
   inset: 0;
@@ -699,15 +614,18 @@
   opacity: 0;
   margin: 0;
   cursor: pointer;
-  pointer-events: none;
-  z-index: 1;
+  pointer-events: auto;
+  z-index: 4;
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
-@media (max-width: 768px) {
-  .room-map-range-control {
-    width: 100%;
-  }
-}
+.room-map-range-native-input::-webkit-slider-runnable-track { height: 6px; }
+.room-map-range-native-input::-webkit-slider-thumb { appearance: none; width: 16px; height: 16px; margin-top: -5px; }
+.room-map-range-native-input::-moz-range-track { height: 6px; }
+.room-map-range-native-input::-moz-range-thumb { width: 16px; height: 16px; border: 0; }
 
 /* 范围圈展开与收缩动画 */
 @keyframes roomMapRangeExpand {
@@ -749,11 +667,14 @@
   }
 }
 
-.room-map-header-left { flex-wrap: wrap; }
-.room-map-header-left h2 { white-space: nowrap; }
 .room-map-header > .room-map-status-bar { justify-self: center; }
 
 @media (max-width: 768px) {
+  .room-map-header, .room-map-tools, .room-map-footer { padding-inline: 10px; }
+  .room-map-header { gap: 8px; }
+  .room-map-header-hint { font-size: 12px; }
+  .room-map-tools { overflow-x: auto; }
+  .room-map-add-menu { position: fixed; top: auto; right: 16px; }
   .room-map-header { grid-template-columns: minmax(0, 1fr) auto; }
   .room-map-header > .room-map-status-bar { grid-column: 1 / -1; grid-row: 2; }
   .room-map-close { grid-column: 2; grid-row: 1; }

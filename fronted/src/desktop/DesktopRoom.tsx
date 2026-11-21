@@ -118,9 +118,9 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
     try { localStorage.removeItem(roomLogStorageKey) } catch { /* ignore */ }
   }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    const epoch = ++lifecycle.current
+    const epoch = lifecycle.current + 1
+    lifecycle.current = epoch
     sync.start()
     return () => {
       quickRollSequence.current += 1

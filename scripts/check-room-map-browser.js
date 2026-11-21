@@ -37,7 +37,8 @@ async (page) => {
   const assert = (value, label) => { if (!value) throw new Error(label) }
   const at = async (p, x, y) => {
     const bounds = await box(p).boundingBox()
-    return [bounds.x + (x - 5) / 15 * bounds.width, bounds.y + (y - 10) / 10 * bounds.height]
+    const [vx, vy, vw, vh] = (await box(p).getAttribute('viewBox')).split(' ').map(Number)
+    return [bounds.x + (x - vx) / vw * bounds.width, bounds.y + (y - vy) / vh * bounds.height]
   }
   const begin = async (p, x, y) => { await p.mouse.move(...await at(p, x, y)); await p.mouse.down() }
   const move = async (p, x, y) => p.mouse.move(...await at(p, x, y), { steps: 8 })
@@ -65,16 +66,16 @@ async (page) => {
     await a.mouse.move(...await at(a, 14, 16), { steps: 8 })
     await a.mouse.up({ button: 'right' })
     assert(await box(a).getAttribute('viewBox') !== zoomed, 'right drag pan')
-    const beforeCenter = (await box(a).getAttribute('viewBox')).split(' ').map(Number)
-    await btn(a, '回中').click()
-    const centered = (await box(a).getAttribute('viewBox')).split(' ').map(Number)
-    assert(centered[2] === beforeCenter[2] && centered[3] === beforeCenter[3], 'center preserves zoom')
-    assert(Math.abs(centered[0] + centered[2] / 2 - 20) < 1e-9 && Math.abs(centered[1] + centered[3] / 2 - 20) < 1e-9, 'map center')
     const savedView = await box(a).getAttribute('viewBox')
     await btn(a, '关闭').click()
     await btn(a, '地图').click()
     assert(await box(a).getAttribute('viewBox') === savedView, 'saved view on reopen')
-    await btn(a, '重置地图视野').click()
+    for (const p of [a, b]) {
+      const bounds = await box(p).boundingBox()
+      await p.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+      for (let step = 0; step < 14; step++) await p.mouse.wheel(0, 120)
+      await p.waitForFunction(() => Number(document.querySelector('.room-map-board').getAttribute('viewBox').split(' ')[2]) >= 40)
+    }
 
     await btn(a, '➕ 新增 Token').click()
     await btn(a, '吟游诗人').click()
@@ -102,7 +103,7 @@ async (page) => {
 
     await Promise.all([btn(a, '画笔').click(), btn(b, '画笔').click()])
     await a.getByLabel('画笔颜色').fill('#a23c26')
-    await a.getByLabel('画笔粗细').selectOption('0.32')
+    await a.getByRole('group', { name: '画笔粗细', exact: true }).getByRole('button', { name: '粗', exact: true }).click()
     await begin(a, 10, 16)
     await move(a, 13, 16)
     await move(a, 13, 17)
@@ -170,7 +171,7 @@ async (page) => {
     await gone(b, tokenSelector)
 
     await a.screenshot({ path: '.wrangler/room-map.png' })
-    return { passed: ['map entry', '30×20 view', 'wheel and right drag', 'snapping and overlap', 'name and label color', 'local draft', 'preserved corner and brush style', 'concurrent strokes', 'cross-player erasing', 'offline release and same request ID', 'lost event and ACK', 'server rejection and local erasing', 'reopen', 'token deletion'] }
+    return { passed: ['map entry', '15×10 view', 'wheel and right drag', 'snapping and overlap', 'name and label color', 'local draft', 'preserved corner and brush style', 'concurrent strokes', 'cross-player erasing', 'offline release and same request ID', 'lost event and ACK', 'server rejection and local erasing', 'reopen', 'token deletion'] }
   } finally {
     await Promise.all([first.close(), second.close()])
   }
