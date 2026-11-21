@@ -1,4 +1,5 @@
 import { displayedResourceMax, summaryFromSheet, type CharacterResources, type CharacterSheetJson, type CharacterSummary, type CountdownClock, type DiceRollRecord, type MutationAck, type RoomV2Model } from '@dhgc/shared/desktop'
+import { MAP_DATA_BYTES, MAP_STROKE_LIMIT, MAP_TOKEN_LIMIT, utf8Bytes, type MapStroke, type MapToken, type RoomMap } from '@dhgc/shared/desktop'
 
 export interface StoredMeta {
   roomId: string
@@ -36,6 +37,7 @@ export class RoomV2Storage {
       CREATE TABLE IF NOT EXISTS panel_v2_resources (name TEXT PRIMARY KEY, resources_json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS panel_v2_dice (seq INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, record_json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS panel_v2_clocks (id TEXT PRIMARY KEY, position INTEGER NOT NULL, clock_json TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS panel_v2_map (kind TEXT NOT NULL, id TEXT NOT NULL, item_json TEXT NOT NULL, bytes INTEGER NOT NULL, PRIMARY KEY (kind, id));
       CREATE TABLE IF NOT EXISTS panel_v2_receipts (actor TEXT NOT NULL, request_id TEXT NOT NULL, payload_hash TEXT NOT NULL, seq INTEGER NOT NULL, result_json TEXT NOT NULL, created_at_ms INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (actor, request_id));
       CREATE TABLE IF NOT EXISTS panel_v2_receipt_gc (id INTEGER PRIMARY KEY CHECK (id = 1), legacy_epoch_ms INTEGER NOT NULL, last_pruned_at_ms INTEGER NOT NULL DEFAULT 0);
     `)
@@ -78,9 +80,10 @@ export class RoomV2Storage {
     return true
   }
 
-  restore(meta: StoredMeta, state: { fear: number; xCard: RoomV2Model['xCard']; dice: DiceRollRecord[]; clocks?: CountdownClock[]; characters: Array<{ sheet: CharacterSheetJson; resources: CharacterResources; position: number }> }): boolean {
-    if (!this.create(meta)) return false
-    this.transaction(() => {
+  restore(meta: StoredMeta, state: { fear: number; xCard: RoomV2Model['xCard']; dice: DiceRollRecord[]; clocks?: CountdownClock[]; map?: RoomMap; characters: Array<{ sheet: CharacterSheetJson; resources: CharacterResources; position: number }> }): boolean {
+    if (this.deleted) this.initialize()
+    return this.transaction(() => {
+      if (!this.create(meta)) return false
       state.characters.forEach((item, index) => {
         const generation = index + 1
         const summary = summaryFromSheet(item.sheet, item.resources, generation, item.position)
@@ -88,10 +91,12 @@ export class RoomV2Storage {
       })
       state.dice.slice(-50).forEach((roll, index) => this.saveDice(index + 1, roll))
       state.clocks?.forEach((clock, index) => this.saveClock(clock, index))
+      state.map?.tokens.forEach(item => this.writeMapItem('token', item))
+      state.map?.strokes.forEach(item => this.writeMapItem('stroke', item))
       const seq = Math.max(1, state.characters.length, state.dice.length)
       this.storage.sql.exec('UPDATE panel_v2_meta SET seq = ?, fear = ?, xcard_json = ? WHERE id = 1', seq, state.fear, JSON.stringify(state.xCard))
+      return true
     })
-    return true
   }
 
   updateMeta(meta: StoredMeta): void {
@@ -201,7 +206,47 @@ export class RoomV2Storage {
 
   deleteClock(id: string): void { this.storage.sql.exec('DELETE FROM panel_v2_clocks WHERE id = ?', id) }
 
-  snapshot(actor: string, pendingRequestIds: string[], onlineIds: ReadonlySet<string> = new Set()): { room: RoomV2Model; receipts: MutationAck[] } | null {
+  mapToken(id: string): MapToken | null { return this.mapItem<MapToken>('token', id) }
+  mapHasStroke(id: string): boolean {
+    return this.storage.sql.exec('SELECT 1 FROM panel_v2_map WHERE kind = ? AND id = ?', 'stroke', id).toArray().length > 0
+  }
+
+  private mapItem<T>(kind: 'token' | 'stroke', id: string): T | null {
+    const row = this.storage.sql.exec<{ item_json: string }>('SELECT item_json FROM panel_v2_map WHERE kind = ? AND id = ?', kind, id).toArray()[0]
+    return row ? JSON.parse(row.item_json) as T : null
+  }
+
+  private writeMapItem(kind: 'token' | 'stroke', item: MapToken | MapStroke, json = JSON.stringify(item), bytes = utf8Bytes(json)): void {
+    this.storage.sql.exec(`INSERT INTO panel_v2_map (kind, id, item_json, bytes) VALUES (?, ?, ?, ?)
+      ON CONFLICT (kind, id) DO UPDATE SET item_json = excluded.item_json, bytes = excluded.bytes`, kind, item.id, json, bytes)
+  }
+
+  saveMapItem(kind: 'token' | 'stroke', item: MapToken | MapStroke): boolean {
+    const json = JSON.stringify(item)
+    const bytes = utf8Bytes(json)
+    const totals = this.storage.sql.exec<{ bytes: number; count: number }>(`
+      SELECT COALESCE(SUM(bytes), 0) AS bytes, COUNT(CASE WHEN kind = ? THEN 1 END) AS count
+      FROM panel_v2_map WHERE kind != ? OR id != ?
+    `, kind, kind, item.id).one()
+    if (totals.bytes + bytes > MAP_DATA_BYTES || totals.count >= (kind === 'token' ? MAP_TOKEN_LIMIT : MAP_STROKE_LIMIT)) return false
+    this.writeMapItem(kind, item, json, bytes)
+    return true
+  }
+
+  deleteMapItem(kind: 'token' | 'stroke', id: string): void {
+    this.storage.sql.exec('DELETE FROM panel_v2_map WHERE kind = ? AND id = ?', kind, id)
+  }
+
+  private roomMap(): RoomMap {
+    const map: RoomMap = { tokens: [], strokes: [] }
+    for (const row of this.storage.sql.exec<{ kind: string; item_json: string }>('SELECT kind, item_json FROM panel_v2_map ORDER BY rowid')) {
+      if (row.kind === 'token') map.tokens.push(JSON.parse(row.item_json) as MapToken)
+      else map.strokes.push(JSON.parse(row.item_json) as MapStroke)
+    }
+    return map
+  }
+
+  snapshot(actor: string, pendingRequestIds: string[], onlineIds: ReadonlySet<string> = new Set(), includeMap = true): { room: RoomV2Model; receipts: MutationAck[] } | null {
     return this.transaction(() => {
       const row = this.metaRow()
       if (!row) return null
@@ -217,6 +262,7 @@ export class RoomV2Storage {
           expiresAt: meta.expiresAt, seq: row.seq,
           members: meta.players.map(player => ({ ...player, online: onlineIds.has(player.id) })),
           characters, fear: { value: row.fear, max: 12 }, clocks: this.clocks(), dice,
+          ...(includeMap ? { map: this.roomMap() } : {}),
           xCard: row.xcard_json ? JSON.parse(row.xcard_json) as RoomV2Model['xCard'] : { active: false, updatedAt: null },
         },
         receipts: this.receipts(actor, pendingRequestIds),

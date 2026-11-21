@@ -1,6 +1,7 @@
 import type { DiceRollRecord, DiceRollRequest } from './dice-types'
 import { normalizeDiceRollRequest } from './dice'
 import { characterNameKey } from './character-panel'
+import { parseMapOperation, type MapChange, type MapOperation } from './room-map'
 import type { CharacterResources, CharacterSummary, CountdownClock, RoomMember, RoomV2Model, TrackResource } from './room-v2-model'
 
 export const ROOM_V2_PROTOCOL_VERSION = 2 as const
@@ -24,8 +25,8 @@ export type RoomCommand = MutationEnvelope & (
   | { type: 'clock.reset'; id: string }
   | { type: 'clock.delete'; id: string }
 )
-export type MutationCommand = ResourceCommand | RoomCommand
-export interface SyncRequest { type: 'room.sync'; protocolVersion: 2; afterSeq: number; pendingRequestIds: string[] }
+export type MutationCommand = ResourceCommand | RoomCommand | (MutationEnvelope & MapOperation)
+export interface SyncRequest { type: 'room.sync'; protocolVersion: 2; afterSeq: number; pendingRequestIds: string[]; mapEvents?: true }
 export interface MutationAck { type: 'operation.ack'; requestId: string; seq: number }
 export interface MutationError {
   type: 'operation.error'; requestId: string
@@ -43,6 +44,7 @@ export type RoomEvent = EventBase & (
   | { type: 'xcard.changed'; xCard: { active: boolean; updatedAt: string | null } }
   | { type: 'clock.changed'; clock: CountdownClock }
   | { type: 'clock.deleted'; id: string }
+  | MapChange
 )
 export interface RoomSnapshot { type: 'room.snapshot'; protocolVersion: 2; room: RoomV2Model; receipts: MutationAck[] }
 export interface RoomPresence { type: 'room.presence'; protocolVersion: 2; members: RoomMember[] }
@@ -52,7 +54,7 @@ export function parseSyncRequest(value: unknown): SyncRequest {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('INVALID_COMMAND')
   const request = value as Record<string, unknown>
   if (request.type !== 'room.sync' || request.protocolVersion !== 2 || !Number.isSafeInteger(request.afterSeq) || (request.afterSeq as number) < 0 ||
-    !Array.isArray(request.pendingRequestIds) || request.pendingRequestIds.length > 256 ||
+    (request.mapEvents !== undefined && request.mapEvents !== true) || !Array.isArray(request.pendingRequestIds) || request.pendingRequestIds.length > 256 ||
     request.pendingRequestIds.some(id => typeof id !== 'string' || !/^[\w-]{1,128}$/.test(id))) throw new Error('INVALID_COMMAND')
   return request as unknown as SyncRequest
 }
@@ -61,6 +63,9 @@ export function parseMutationCommand(value: unknown): MutationCommand {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('INVALID_COMMAND')
   const command = { ...value as Record<string, unknown> }
   if (command.protocolVersion !== 2 || typeof command.requestId !== 'string' || !/^[\w-]{1,128}$/.test(command.requestId)) throw new Error('INVALID_COMMAND')
+  if (typeof command.type === 'string' && command.type.startsWith('map.')) {
+    return { ...parseMapOperation(command), protocolVersion: 2, requestId: command.requestId }
+  }
   if (command.type === 'character.adjustHope' || command.type === 'character.setMark' || command.type === 'character.addIndicator' || command.type === 'character.adjustIndicator' || command.type === 'character.delete') {
     if (typeof command.name !== 'string' || !Number.isSafeInteger(command.generation) || (command.generation as number) < 1) throw new Error('INVALID_COMMAND')
     try { command.name = characterNameKey(command.name) } catch { throw new Error('INVALID_COMMAND') }

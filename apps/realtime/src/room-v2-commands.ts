@@ -1,6 +1,7 @@
 import { characterNameKey, resourcesFromSheet, rollDicePool, summaryFromSheet, type CharacterSheetJson, type DiceRollRecord, type MutationAck, type MutationCommand, type MutationError, type RoomEvent } from '@dhgc/shared/desktop'
 import { RoomV2Storage } from './room-v2-storage'
 import { summarizeRollServerMetrics, type RollCommandMetric } from './room-v2-metrics'
+import type { MapChange, MapOperation, MutationEnvelope } from '@dhgc/shared/desktop'
 
 export type { RollCommandMetric } from './room-v2-metrics'
 
@@ -10,12 +11,21 @@ export class CommandFailure extends Error {
 
 export interface CommitResult { ack: MutationAck; event: RoomEvent | null; duplicate: boolean; action?: 'created' | 'updated' }
 export type CommandStorage = Pick<RoomV2Storage, 'receipt' | 'metaRow' | 'characterHeader' | 'resources' | 'nextPosition' | 'transaction' | 'advance' | 'saveReceipt' | 'saveResources' | 'saveCharacter' | 'deleteCharacter' | 'saveDice' | 'clearDice' | 'clocks' | 'clock' | 'saveClock' | 'deleteClock'>
+type MapStorage = Pick<RoomV2Storage, 'mapToken' | 'mapHasStroke' | 'saveMapItem' | 'deleteMapItem'>
+type MapCommand = MutationEnvelope & MapOperation
+function isMapCommand(command: MutationCommand): command is MapCommand { return command.type.startsWith('map.') }
+
 export interface RoomV2CommandOptions {
   now?: () => number
   hash?: (value: unknown) => Promise<string>
   onRollMetric?: (metric: RollCommandMetric) => void
+  onMapMetric?: (metric: RollCommandMetric & { operation: MapOperation['type']; requestBytes: number }) => void
 }
-export interface CommandTimingContext { receivedAtMs: number }
+export interface CommandTimingContext {
+  receivedAtMs: number
+  requestBytes?: number
+  onMetric?: (metric: RollCommandMetric) => void
+}
 interface CommitTimingHooks { transactionStarted(): void; transactionCommitted(): void; broadcastCompleted(): void }
 
 function canonical(value: unknown): unknown {
@@ -41,7 +51,7 @@ export class RoomV2Commands {
   private tail: Promise<unknown> = Promise.resolve()
   private readonly now: () => number
   private readonly hash: (value: unknown) => Promise<string>
-  constructor(private readonly db: CommandStorage, private readonly publish: (event: RoomEvent) => void, private readonly options: RoomV2CommandOptions = {}) {
+  constructor(private readonly db: CommandStorage & Partial<MapStorage>, private readonly publish: (event: RoomEvent) => void, private readonly options: RoomV2CommandOptions = {}) {
     this.now = options.now ?? (() => performance.now())
     this.hash = options.hash ?? payloadHash
   }
@@ -67,12 +77,16 @@ export class RoomV2Commands {
         transactionCommitted: () => { transactionCommittedAtMs = this.now() },
         broadcastCompleted: () => { broadcastAtMs = this.now() },
       })
-      if (command.type === 'dice.roll' && !result.duplicate && result.event?.type === 'dice.rolled') {
+      const isMap = isMapCommand(command)
+      if (!result.duplicate && result.event && (command.type === 'dice.roll' || isMap)) {
         const eventBytes = new TextEncoder().encode(JSON.stringify(result.event)).byteLength
-        this.options.onRollMetric?.(summarizeRollServerMetrics({
+        const metric = summarizeRollServerMetrics({
           requestId: command.requestId, receivedAtMs, enqueuedAtMs, dequeuedAtMs, hashedAtMs,
           transactionStartedAtMs, transactionCommittedAtMs, broadcastAtMs,
-        }, eventBytes))
+        }, eventBytes)
+        timing?.onMetric?.(metric)
+        if (isMap) this.options.onMapMetric?.({ ...metric, operation: command.type, requestBytes: timing?.requestBytes ?? 0 })
+        else this.options.onRollMetric?.(metric)
       }
       return result
     })
@@ -111,10 +125,12 @@ export class RoomV2Commands {
       this.db.transaction(() => {
         change.write()
         if (change.event) this.db.advance(seq, change.event.type === 'room.fearChanged' ? change.event.fear.value : undefined, change.event.type === 'xcard.changed' ? change.event.xCard : undefined)
-        this.db.saveReceipt(actor, requestId, hash, ack.seq, result)
+        const receipt = change.event?.type.startsWith('map.') ? { ...result, event: null } : result
+        this.db.saveReceipt(actor, requestId, hash, ack.seq, receipt)
       })
       timing?.transactionCommitted()
-    } catch {
+    } catch (error) {
+      if (error instanceof CommandFailure) throw error
       throw new CommandFailure('PERSISTENCE_FAILED', '保存失败，请重试')
     }
     if (change.event) this.publish(change.event)
@@ -122,9 +138,39 @@ export class RoomV2Commands {
     return result
   }
 
+  private applyMap(command: MapCommand, seq: number): { event: RoomEvent | null; write: () => void } {
+    const db = this.db
+    if (!db.mapToken || !db.mapHasStroke || !db.saveMapItem || !db.deleteMapItem) throw new Error('地图存储不可用')
+    const map = db as CommandStorage & MapStorage
+    const change = (event: MapChange, write: () => void) => ({ event: { ...event, seq, requestId: command.requestId }, write })
+    const unchanged = { event: null, write: () => undefined }
+    const save = (kind: 'token' | 'stroke', item: Parameters<MapStorage['saveMapItem']>[1]) => {
+      if (!map.saveMapItem(kind, item)) throw new CommandFailure('INVALID_COMMAND', '地图已达容量上限，请先擦除笔迹或删除 Token')
+    }
+    switch (command.type) {
+      case 'map.token.create':
+        if (map.mapToken(command.token.id)) throw new CommandFailure('INVALID_COMMAND', 'Token ID 已存在')
+        return change({ type: 'map.token.changed', token: command.token }, () => save('token', command.token))
+      case 'map.token.update': {
+        const existing = map.mapToken(command.id)
+        if (!existing) return unchanged
+        const token = { ...existing, ...command.patch }
+        return change({ type: 'map.token.changed', token }, () => save('token', token))
+      }
+      case 'map.token.delete':
+        return map.mapToken(command.id) ? change({ type: 'map.token.deleted', id: command.id }, () => map.deleteMapItem('token', command.id)) : unchanged
+      case 'map.stroke.add':
+        if (map.mapHasStroke(command.stroke.id)) throw new CommandFailure('INVALID_COMMAND', '笔迹 ID 已存在')
+        return change({ type: 'map.stroke.added', stroke: command.stroke }, () => save('stroke', command.stroke))
+      case 'map.stroke.delete':
+        return map.mapHasStroke(command.id) ? change({ type: 'map.stroke.deleted', id: command.id }, () => map.deleteMapItem('stroke', command.id)) : unchanged
+    }
+  }
+
   private applyCommand(actor: string, nickname: string, command: MutationCommand): (seq: number) => { event: RoomEvent | null; write: () => void } {
     return seq => {
       const requestId = command.requestId
+      if (isMapCommand(command)) return this.applyMap(command, seq)
       if (command.type === 'character.adjustHope' || command.type === 'character.setMark' || command.type === 'character.addIndicator' || command.type === 'character.adjustIndicator' || command.type === 'character.delete') {
         const row = this.db.characterHeader(command.name)
         if (!row || row.generation !== command.generation) throw new CommandFailure('CHARACTER_REPLACED', '角色已重新投递，旧修改未应用')

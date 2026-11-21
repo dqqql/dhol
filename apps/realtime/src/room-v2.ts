@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers'
-import { parseMutationCommand, parseSyncRequest, type CharacterSheetJson, type MutationError, type RoomEvent, type RoomSnapshot } from '@dhgc/shared/desktop'
+import { MAP_MESSAGE_BYTES, parseMutationCommand, parseSyncRequest, utf8Bytes, type CharacterSheetJson, type MutationError, type RoomEvent, type RoomSnapshot } from '@dhgc/shared/desktop'
 import { CommandFailure, RoomV2Commands } from './room-v2-commands'
 import { verifyRoomV2Session, type RoomV2Session } from './room-v2-session'
 import { roomOwnerKeyHash } from './room-owner-key'
@@ -10,6 +10,7 @@ export interface RoomV2Env {
   SESSION_SECRET: string
   ALLOWED_ORIGIN?: string
   CHARACTER_INGEST_ORIGINS?: string
+  ROOM_BENCHMARK_TIMING?: string
 }
 
 function json(body: unknown, status = 200): Response { return Response.json(body, { status }) }
@@ -23,6 +24,7 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
     this.db = new RoomV2Storage(ctx.storage)
     this.commands = new RoomV2Commands(this.db, event => this.broadcast(event), {
       onRollMetric: metric => console.log(JSON.stringify({ type: 'room_v2_roll_metric', ...metric })),
+      onMapMetric: metric => console.log(JSON.stringify({ type: 'room_v2_map_metric', ...metric })),
     })
     ctx.blockConcurrencyWhile(async () => { this.db.initialize() })
   }
@@ -40,8 +42,8 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
       : [...online.values()]
   }
 
-  private snapshot(actor: string, pendingRequestIds: string[]): ReturnType<RoomV2Storage['snapshot']> {
-    const data = this.db.snapshot(actor, pendingRequestIds)
+  private snapshot(actor: string, pendingRequestIds: string[], includeMap = true): ReturnType<RoomV2Storage['snapshot']> {
+    const data = this.db.snapshot(actor, pendingRequestIds, undefined, includeMap)
     if (data) data.room.members = this.members()
     return data
   }
@@ -149,8 +151,16 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
 
   private broadcast(event: RoomEvent): void {
     const message = JSON.stringify(event)
+    const mapEvent = event.type.startsWith('map.')
+    let legacyMessage: string | undefined
     for (const socket of this.ctx.getWebSockets()) {
-      try { socket.send(message) } catch { /* closed socket */ }
+      try {
+        if (mapEvent && !(socket.deserializeAttachment() as (RoomV2Session & { mapEvents?: true }) | null)?.mapEvents) {
+          // Older tabs can advance their sequence with a snapshot instead of an unknown event.
+          legacyMessage ??= JSON.stringify({ type: 'room.snapshot', protocolVersion: 2, ...this.snapshot('', [], false) })
+          socket.send(legacyMessage)
+        } else socket.send(message)
+      } catch { /* closed socket */ }
     }
   }
 
@@ -168,23 +178,36 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
 
   async webSocketMessage(socket: WebSocket, data: string | ArrayBuffer): Promise<void> {
     const receivedAtMs = performance.now()
-    const session = socket.deserializeAttachment() as RoomV2Session | null
+    const session = socket.deserializeAttachment() as (RoomV2Session & { mapEvents?: true }) | null
     if (!session || session.exp <= Date.now() / 1000) { socket.close(1008, 'Session expired'); return }
     const access = this.db.sessionAccess(session.playerId)
     if (!access || session.roomId !== access.roomId || session.inviteCode !== access.inviteCode) { socket.close(1008, 'Session expired'); return }
+    if ((typeof data === 'string' ? data.length : data.byteLength) > 64 * 1024) {
+      this.send(socket, { type: 'operation.error', requestId: '', code: 'INVALID_COMMAND', message: '消息超过大小限制' })
+      return
+    }
     let input: unknown
     try { input = JSON.parse(typeof data === 'string' ? data : new TextDecoder().decode(data)) }
     catch { this.send(socket, { type: 'operation.error', requestId: '', code: 'INVALID_COMMAND', message: '无效 JSON' }); return }
     if (typeof input === 'object' && input !== null && 'type' in input && input.type === 'room.sync') {
-      try { this.sendSnapshot(socket, session, parseSyncRequest(input).pendingRequestIds) }
+      try {
+        const sync = parseSyncRequest(input)
+        if (sync.mapEvents && !session.mapEvents) socket.serializeAttachment({ ...session, mapEvents: true })
+        this.sendSnapshot(socket, session, sync.pendingRequestIds)
+      }
       catch { this.send(socket, { type: 'operation.error', requestId: '', code: 'INVALID_COMMAND', message: '同步请求无效' }) }
       return
     }
     const requestId = typeof input === 'object' && input !== null && 'requestId' in input && typeof input.requestId === 'string' && /^[\w-]{1,128}$/.test(input.requestId) ? input.requestId : ''
     try {
+      const isMap = typeof input === 'object' && input !== null && 'type' in input && typeof input.type === 'string' && input.type.startsWith('map.')
+      const requestBytes = isMap ? (typeof data === 'string' ? utf8Bytes(data) : data.byteLength) : undefined
+      if (requestBytes !== undefined && requestBytes > MAP_MESSAGE_BYTES) throw new CommandFailure('INVALID_COMMAND', '地图消息超过大小限制')
       const command = parseMutationCommand(input)
-      const result = await this.commands.mutate(session.playerId, session.nickname, command, { receivedAtMs })
-      this.send(socket, result.ack)
+      let queueMs: number | undefined
+      const onMetric = this.env.ROOM_BENCHMARK_TIMING === 'true' ? (metric: { queueMs: number }) => { queueMs = metric.queueMs } : undefined
+      const result = await this.commands.mutate(session.playerId, session.nickname, command, { receivedAtMs, requestBytes, onMetric })
+      this.send(socket, queueMs === undefined ? result.ack : { ...result.ack, queueMs })
     } catch (error) {
       const code: MutationError['code'] = error instanceof CommandFailure ? error.code : 'INVALID_COMMAND'
       this.send(socket, { type: 'operation.error', requestId, code, message: error instanceof Error ? error.message : '命令无效' })

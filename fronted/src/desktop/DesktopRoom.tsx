@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import MapPanel from './map/MapPanel'
 import type { CharacterResources, CharacterSheetJson, CharacterSummary, DiceRollRecord, DiceRollRequest, TrackResource } from '@dhgc/shared/desktop'
 import { RoomSync } from './state/room-sync'
 import type { DesktopSession } from './desktop-api'
@@ -55,6 +56,7 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
   const combatTimersRef = useRef<number[]>([])
   const cardRectsRef = useRef(new Map<string, DOMRect>())
   const [combatDialogOpen, setCombatDialogOpen] = useState(false)
+  const [mapOpen, setMapOpen] = useState(false)
   const [enemyLibrary, setEnemyLibrary] = useState<EnemyTemplate[]>(() => loadEnemyLibrary(localStorage))
   const [enemyHand, setEnemyHand] = useState<EnemyHandCard[]>(() => loadEnemyHand(localStorage, session.roomId))
   const [selectedEnemyId, setSelectedEnemyId] = useState<string | null>(null)
@@ -706,14 +708,19 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
                 ready={ready}
                 onChange={handleFearChange}
                 combatSlot={
-                  <button
-                    ref={combatTriggerRef}
-                    type="button"
-                    className={`btn-combat-entry ${absorbingPulse ? 'is-absorbing' : ''}`}
-                    onClick={() => setCombatDialogOpen(true)}
-                  >
-                    <span className="btn-combat-entry__title">战斗</span>
-                  </button>
+                  <>
+                    <button
+                      ref={combatTriggerRef}
+                      type="button"
+                      className={`btn-combat-entry ${absorbingPulse ? 'is-absorbing' : ''}`}
+                      onClick={() => setCombatDialogOpen(true)}
+                    >
+                      <span className="btn-combat-entry__title">战斗</span>
+                    </button>
+                    <button type="button" className="btn-combat-entry btn-map-entry" disabled={!room.map} onClick={() => setMapOpen(true)}>
+                      <span className="btn-combat-entry__title">地图</span>
+                    </button>
+                  </>
                 }
               />
               <CountdownTracker
@@ -809,6 +816,8 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
         />
       </>
     )}
+
+    {mapOpen && room?.map && <MapPanel map={room.map} sync={sync} pending={sync.pending()} connected={ready} onClose={() => setMapOpen(false)} />}
 
     {combatDialogOpen && (
       <EnemyLibraryDialog

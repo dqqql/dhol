@@ -1,0 +1,630 @@
+/* 战斗与地图入口按钮（继承战斗栏位样式） */
+.fear-combat-slot {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-combat-entry.btn-map-entry {
+  background: var(--combat-head, #1a2736);
+  color: var(--combat-ink, #ffffff);
+}
+
+/* ========================================================
+   ROOM MAP DIALOG - SWISS INTERNATIONAL / TABLETOP STYLE
+   ======================================================== */
+.room-map-dialog {
+  box-sizing: border-box;
+  width: min(1200px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  inset: 0;
+  padding: 0;
+  color: var(--ink, #0A0A0A);
+  background: var(--surface, #FFFFFF);
+  border: 2px solid var(--border, #111111);
+  border-radius: 0;
+  box-shadow: 18px 18px 0px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: var(--font);
+}
+
+.room-map-dialog::backdrop {
+  background: rgba(10, 10, 10, 0.75);
+}
+
+/* 顶部栏 */
+.room-map-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: var(--surface-subtle, #ECECE7);
+  border-bottom: 2px solid var(--border, #111111);
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.room-map-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.room-map-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--ink, #0A0A0A);
+}
+
+.room-map-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 800;
+  background: var(--surface-active, #E0E0DA);
+  border: 1px solid var(--border, #111111);
+  color: var(--ink-secondary, #4A4A45);
+}
+
+.room-map-header-hint {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-secondary, #4A4A45);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.room-map-hint-dot {
+  color: var(--ink-muted, #888882);
+}
+
+.room-map-close {
+  min-height: 32px;
+  padding: 4px 14px;
+  font-size: 13px;
+  font-weight: 800;
+  border: 1px solid var(--border, #111111);
+  background: var(--surface, #FFFFFF);
+  color: var(--ink, #0A0A0A);
+  border-radius: 0;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.room-map-close:hover {
+  background: var(--ink, #0A0A0A);
+  color: var(--surface, #FFFFFF);
+}
+
+/* 工具栏 */
+.room-map-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: var(--surface, #FFFFFF);
+  border-bottom: 2px solid var(--border, #111111);
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.room-map-tools-left,
+.room-map-tools-right,
+.room-map-tool-group,
+.room-map-brush,
+.room-map-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.room-map-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border-subtle, #D0D0C8);
+  margin: 0 4px;
+}
+
+.room-map-divider-sm {
+  width: 1px;
+  height: 18px;
+  background: var(--border-subtle, #D0D0C8);
+  margin: 0 2px;
+}
+
+.room-map-label-sm {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ink-secondary, #4A4A45);
+}
+
+/* 按钮通用 */
+.room-map-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid var(--border, #111111);
+  background: var(--surface, #FFFFFF);
+  color: var(--ink, #0A0A0A);
+  border-radius: 0;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+  user-select: none;
+}
+
+.room-map-btn:hover:not(:disabled) {
+  background: var(--surface-subtle, #ECECE7);
+}
+
+.room-map-btn.is-active,
+.room-map-btn[aria-pressed="true"] {
+  background: var(--ink, #0A0A0A) !important;
+  color: var(--surface, #FFFFFF) !important;
+  border-color: var(--ink, #0A0A0A) !important;
+}
+
+.room-map-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.room-map-tool-icon {
+  font-size: 14px;
+}
+
+/* 调色盘与颜色选择器 */
+.room-map-color-swatches {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.room-map-color-swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  border-radius: 2px;
+  transition: transform 0.1s;
+}
+
+.room-map-color-swatch:hover {
+  transform: scale(1.15);
+}
+
+.room-map-color-swatch.is-active {
+  outline: 2px solid var(--border, #111111);
+  outline-offset: 1px;
+  transform: scale(1.1);
+}
+
+.room-map-color-picker-label {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.room-map-color-picker-label input[type="color"] {
+  width: 24px;
+  height: 24px;
+  padding: 1px;
+  border: 1px solid var(--border, #111111);
+  background: transparent;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+/* 线粗细选择器 */
+.room-map-width-group {
+  display: flex;
+  border: 1px solid var(--border, #111111);
+}
+
+.room-map-width-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  border: none;
+  border-right: 1px solid var(--border-subtle, #D0D0C8);
+  background: var(--surface, #FFFFFF);
+  color: var(--ink, #0A0A0A);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.room-map-width-btn:last-child {
+  border-right: none;
+}
+
+.room-map-width-btn:hover:not(.is-active) {
+  background: var(--surface-subtle, #ECECE7);
+}
+
+.room-map-width-btn.is-active {
+  background: var(--ink, #0A0A0A);
+  color: var(--surface, #FFFFFF);
+}
+
+.room-map-width-line {
+  display: inline-block;
+  width: 14px;
+  background: currentColor;
+  border-radius: 1px;
+}
+
+/* Token 图案选择 */
+.room-map-icon-select-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--border, #111111);
+  background: var(--surface, #FFFFFF);
+}
+
+.room-map-icon-select-wrap select {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink, #0A0A0A);
+  cursor: pointer;
+  outline: none;
+}
+
+/* 缩放控制组 */
+.room-map-zoom-group {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border, #111111);
+}
+
+.room-map-zoom-btn {
+  border: none;
+  border-right: 1px solid var(--border-subtle, #D0D0C8);
+  background: var(--surface, #FFFFFF);
+  padding: 5px 10px;
+  min-height: 32px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink, #0A0A0A);
+  cursor: pointer;
+  border-radius: 0;
+  transition: background 0.1s, color 0.1s;
+}
+
+.room-map-zoom-btn:last-child {
+  border-right: none;
+}
+
+.room-map-zoom-btn:hover {
+  background: var(--surface-subtle, #ECECE7);
+}
+
+.room-map-reset {
+  font-family: var(--font-mono, monospace);
+  min-width: 58px;
+  text-align: center;
+  font-weight: 900 !important;
+}
+
+/* 地图画板区域 */
+.room-map-board-container {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 18px;
+  background: #EAEAE4;
+  overflow: hidden;
+}
+
+.room-map-board {
+  display: block;
+  width: min(100%, max(360px, (100dvh - 230px) * 1.5));
+  height: auto;
+  aspect-ratio: 3 / 2;
+  touch-action: none;
+  user-select: none;
+  background: #F9F9F6;
+  border: 2px solid var(--border, #111111);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* 光标状态 */
+.room-map-board[data-tool="select"] { cursor: default; }
+.room-map-board[data-tool="pan"],
+.room-map-board.is-space-held { cursor: grab; }
+.room-map-board.is-panning { cursor: grabbing !important; }
+.room-map-board[data-tool="pen"] { cursor: crosshair; }
+.room-map-board[data-tool="place"] { cursor: cell; }
+.room-map-board[data-tool="eraser"] { cursor: pointer; }
+
+.room-map-board[data-tool="select"] .room-map-token { cursor: grab; }
+.room-map-board[data-tool="select"] .room-map-token:active { cursor: grabbing; }
+.room-map-board[data-tool="select"] .room-map-token:hover circle:first-of-type { filter: brightness(1.12); }
+
+.room-map-board:not([data-tool="select"]) .room-map-tokens { pointer-events: none; }
+
+/* 笔迹样式 */
+.room-map-stroke {
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.room-map-board[data-tool="eraser"] .room-map-stroke-hit,
+.room-map-board[data-tool="eraser"] .room-map-failed-marker {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.room-map-board[data-tool="eraser"] .room-map-stroke:hover polyline,
+.room-map-board[data-tool="eraser"] .room-map-stroke:hover circle,
+.room-map-stroke.is-eraser-hover polyline,
+.room-map-stroke.is-eraser-hover circle {
+  stroke: var(--red, #E6332A) !important;
+  opacity: 0.9;
+}
+
+.room-map-stroke polyline {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.room-map-stroke--pending,
+.room-map-token[data-token-status="pending"] {
+  opacity: 0.7;
+}
+
+.room-map-stroke--erasing {
+  opacity: 0.2;
+}
+
+.room-map-board[data-tool="eraser"] .room-map-stroke--erasing .room-map-stroke-hit {
+  pointer-events: none;
+}
+
+/* 底部状态与 Token 编辑栏 */
+.room-map-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  background: var(--surface-subtle, #ECECE7);
+  border-top: 2px solid var(--border, #111111);
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.room-map-token-editor {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.room-map-editor-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  background: var(--surface, #FFFFFF);
+  border: 1px solid var(--border, #111111);
+}
+
+.room-map-editor-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.room-map-field-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ink-secondary, #4A4A45);
+}
+
+.room-map-editor-field input {
+  min-height: 30px;
+  width: 140px;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid var(--border, #111111);
+  background: var(--surface, #FFFFFF);
+  color: var(--ink, #0A0A0A);
+  border-radius: 0;
+}
+
+.room-map-editor-colors {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.room-map-coord-badge {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 4px 8px;
+  background: var(--surface, #FFFFFF);
+  border: 1px solid var(--border, #111111);
+  color: var(--ink-secondary, #4A4A45);
+}
+
+.room-map-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.room-map-btn-sm {
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  border: 1px solid var(--border, #111111);
+  border-radius: 0;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.room-map-btn-ghost {
+  background: transparent;
+  color: var(--ink-secondary, #4A4A45);
+  border-color: var(--border-subtle, #D0D0C8);
+}
+
+.room-map-btn-ghost:hover {
+  background: var(--surface-active, #E0E0DA);
+  color: var(--ink, #0A0A0A);
+}
+
+/* 未选 Token 时的导航与快捷键提示 */
+.room-map-selection {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.room-map-dropdown-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.room-map-dropdown-label select {
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid var(--border, #111111);
+  background: var(--surface, #FFFFFF);
+  color: var(--ink, #0A0A0A);
+  border-radius: 0;
+  max-width: min(280px, 45vw);
+}
+
+.room-map-shortcuts-pill {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-secondary, #4A4A45);
+  background: var(--surface, #FFFFFF);
+  border: 1px solid var(--border-subtle, #D0D0C8);
+}
+
+/* 状态信息 */
+.room-map-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.room-map-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-secondary, #4A4A45);
+  flex-wrap: wrap;
+}
+
+.room-map-sync-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.room-map-sync-dot.is-synced {
+  background: #16A34A;
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.2);
+}
+
+.room-map-sync-dot.is-pending {
+  background: var(--yellow, #E5A000);
+  box-shadow: 0 0 0 2px rgba(229, 160, 0, 0.2);
+}
+
+.room-map-sync-dot.is-offline {
+  background: var(--red, #E6332A);
+  box-shadow: 0 0 0 2px rgba(230, 51, 42, 0.2);
+}
+
+.room-map-failure-text {
+  color: var(--red, #E6332A);
+  font-weight: 800;
+}
+
+.room-map-notice-text {
+  color: var(--red, #E6332A);
+  font-weight: 800;
+}
+
+/* 辅助与无障碍 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .room-map-header,
+  .room-map-tools,
+  .room-map-footer {
+    padding-inline: 10px;
+  }
+
+  .room-map-header {
+    gap: 8px;
+  }
+
+  .room-map-header-hint {
+    font-size: 12px;
+  }
+
+  .room-map-shortcuts-pill {
+    display: none;
+  }
+
+  .room-map-tools {
+    gap: 8px;
+  }
+
+  .room-map-divider {
+    display: none;
+  }
+}

@@ -1,4 +1,4 @@
-import type { CharacterSummary, MutationCommand, RoomEvent, RoomServerMessage, RoomSnapshot, RoomV2Model } from '@dhgc/shared/desktop'
+import type { CharacterSummary, MapStroke, MutationCommand, RoomEvent, RoomServerMessage, RoomSnapshot, RoomV2Model } from '@dhgc/shared/desktop'
 import { createRoomStore, type RoomStore } from './room-store'
 import { createUiStore } from './ui-store'
 import { RoomOutbox, type OutboxStorage, type PendingOperation } from '../sync/room-outbox'
@@ -67,6 +67,7 @@ export class RoomSync {
   private highestSeenSeq = 0
   private detailCache = new Map<string, unknown>()
   private confirmationTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private failedStrokes = new Map<string, { stroke: MapStroke; reason: string }>()
   private readonly setTimer: NonNullable<RoomClientOptions['setTimer']>
   private readonly clearTimer: NonNullable<RoomClientOptions['clearTimer']>
   private destroyed = false
@@ -122,21 +123,37 @@ export class RoomSync {
   getState(): RoomSyncState { return this.viewState }
   getConfirmed(): RoomV2Model | null { return this.confirmed.getState().room }
   pending(): PendingOperation[] { return this.outbox.list() }
+  mapFailures(): ReadonlyMap<string, { stroke: MapStroke; reason: string }> { return this.failedStrokes }
+  clearMapFailure(id: string): void { if (this.failedStrokes.delete(id)) this.emit() }
 
   submit(command: DraftCommand<MutationCommand>): string {
-    if (this.connection !== 'ready') throw new Error('连接尚未就绪')
+    const offlineMap = command.type.startsWith('map.') && this.connection !== 'expired' && this.getConfirmed()?.map !== undefined
+    if (this.connection !== 'ready' && !offlineMap) throw new Error('连接尚未就绪')
     const requestId = crypto.randomUUID()
     const operation = { ...command, requestId, protocolVersion: 2 } as MutationCommand
     try { this.outbox.add(operation) }
-    catch (error) { this.save = 'failed'; this.reason = error instanceof Error ? error.message : '浏览器存储失败'; this.emit(); throw error }
+    catch (error) {
+      this.save = 'failed'
+      this.reason = error instanceof Error ? error.message : '浏览器存储失败'
+      if (command.type === 'map.stroke.add') this.failedStrokes.set(command.stroke.id, { stroke: command.stroke, reason: this.reason })
+      this.emit()
+      throw error
+    }
     this.save = 'saving'
     this.emit()
-    if (!this.client.send(operation)) { this.reason = '操作已保存在本机，等待重连'; this.emit() }
-    this.confirmationTimers.set(requestId, this.setTimer(() => {
-      this.confirmationTimers.delete(requestId)
-      if (this.outbox.list().some(entry => entry.command.requestId === requestId)) this.client.sync()
-    }, 8000))
+    if (!this.sendPending(operation)) { this.reason = '操作已保存在本机，等待重连'; this.emit() }
     return requestId
+  }
+
+  private sendPending(command: MutationCommand): boolean {
+    if (!this.client.send(command)) return false
+    if (!this.confirmationTimers.has(command.requestId)) {
+      this.confirmationTimers.set(command.requestId, this.setTimer(() => {
+        this.confirmationTimers.delete(command.requestId)
+        if (this.outbox.list().some(entry => entry.command.requestId === command.requestId)) this.client.sync()
+      }, 8000))
+    }
+    return true
   }
 
   private finish(requestId: string, notify = true): void {
@@ -158,11 +175,12 @@ export class RoomSync {
       if (!next || next.generation !== previous.generation) this.detailCache.delete(`${previous.name}:${previous.generation}`)
     }
     for (const receipt of message.receipts) {
-      if (appliedSeq >= receipt.seq) this.finish(receipt.requestId)
+      if (!this.outbox.list().some(entry => entry.command.requestId === receipt.requestId)) continue
+      if (appliedSeq >= receipt.seq) this.finish(receipt.requestId, false)
       else this.outbox.acknowledge(receipt.requestId, receipt.seq)
     }
     for (const entry of this.outbox.list()) {
-      if (entry.ackSeq !== null && appliedSeq >= entry.ackSeq) this.finish(entry.command.requestId)
+      if (entry.ackSeq !== null && appliedSeq >= entry.ackSeq) this.finish(entry.command.requestId, false)
     }
     if (this.outbox.discardExpired() > 0) {
       this.staleOutbox = true
@@ -182,7 +200,7 @@ export class RoomSync {
     }
     if (this.highestSeenSeq > appliedSeq) { this.client.sync(); return }
     this.client.ready()
-    for (const entry of this.outbox.list()) if (entry.ackSeq === null) this.client.send(entry.command)
+    for (const entry of this.outbox.list()) if (entry.ackSeq === null) this.sendPending(entry.command)
     this.emit()
   }
 
@@ -216,8 +234,12 @@ export class RoomSync {
           return
         }
       }
-      if (message.code === 'CHARACTER_REPLACED' || message.code === 'INVALID_COMMAND' || message.code === 'REQUEST_ID_REUSED' || message.code === 'ROOM_EXPIRED') {
-        this.outbox.remove(message.requestId)
+      const failed = this.outbox.list().find(entry => entry.command.requestId === message.requestId)?.command
+      if (message.code === 'CHARACTER_REPLACED' || message.code === 'INVALID_COMMAND' || message.code === 'REQUEST_ID_REUSED' || message.code === 'ROOM_EXPIRED' || failed?.type === 'map.stroke.add') {
+        if (failed?.type === 'map.stroke.add' && !this.outbox.list().some(({ command }) => command.type === 'map.stroke.delete' && command.id === failed.stroke.id)) {
+          this.failedStrokes.set(failed.stroke.id, { stroke: failed.stroke, reason: message.message })
+        }
+        if (failed) this.finish(message.requestId, false)
         this.save = this.outbox.list().length ? 'saving' : 'failed'
         this.reason = message.message
         if (message.code === 'CHARACTER_REPLACED') { this.ui.setNotice('角色已重新投递，旧卡未确认修改未应用'); this.client.sync() }

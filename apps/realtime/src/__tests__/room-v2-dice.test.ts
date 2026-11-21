@@ -55,7 +55,7 @@ describe('Room V2 dice hot path', () => {
   it('authorizes a WebSocket roll without reading or parsing the complete room metadata', async () => {
     const sent: unknown[] = []
     const session = { aud: 'dhol-room-v2', roomId: 'room', inviteCode: 'ABC123', playerId: 'player-a', nickname: '甲', exp: Math.floor(Date.now() / 1000) + 60 }
-    const room = Object.create(RoomV2DurableObject.prototype) as unknown as {
+    const room = Object.assign(Object.create(RoomV2DurableObject.prototype), { env: {} }) as unknown as {
       db: Record<string, unknown>
       commands: Record<string, unknown>
       webSocketMessage(socket: WebSocket, data: string | ArrayBuffer): Promise<void>

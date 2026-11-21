@@ -1,4 +1,5 @@
 import type { DiceRollRecord } from './dice-types'
+import type { RoomMap } from './room-map'
 
 export type RuleSetId = 'daggerheart' | 'rhodes-island'
 export type TrackResource = 'hp' | 'stress' | 'armor' | 'gold'
@@ -56,4 +57,5 @@ export interface RoomV2Model {
   clocks: CountdownClock[]
   dice: DiceRollRecord[]
   xCard: { active: boolean; updatedAt: string | null }
+  map?: RoomMap
 }

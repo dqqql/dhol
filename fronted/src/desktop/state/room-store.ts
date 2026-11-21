@@ -1,10 +1,11 @@
 import { createStore } from 'zustand/vanilla'
-import type { RoomEvent, RoomV2Model } from '@dhgc/shared/desktop'
+import { EMPTY_MAP, type RoomEvent, type RoomV2Model } from '@dhgc/shared/desktop'
 
 export interface ConfirmedRoomState { room: RoomV2Model | null }
 
 export function applyRoomEvent(room: RoomV2Model, event: RoomEvent): RoomV2Model {
   const base = { ...room, seq: event.seq }
+  const map = room.map ?? EMPTY_MAP
   switch (event.type) {
     case 'character.replaced': {
       const existing = room.characters.find(character => character.name === event.name)
@@ -21,6 +22,11 @@ export function applyRoomEvent(room: RoomV2Model, event: RoomEvent): RoomV2Model
     case 'xcard.changed': return { ...base, xCard: event.xCard }
     case 'clock.changed': return { ...base, clocks: room.clocks.some(clock => clock.id === event.clock.id) ? room.clocks.map(clock => clock.id === event.clock.id ? event.clock : clock) : [...room.clocks, event.clock] }
     case 'clock.deleted': return { ...base, clocks: room.clocks.filter(clock => clock.id !== event.id) }
+    case 'map.token.changed': return { ...base, map: { ...map, tokens: map.tokens.some(item => item.id === event.token.id) ? map.tokens.map(item => item.id === event.token.id ? event.token : item) : [...map.tokens, event.token] } }
+    case 'map.token.deleted': return { ...base, map: { ...map, tokens: map.tokens.filter(item => item.id !== event.id) } }
+    case 'map.stroke.added': return { ...base, map: { ...map, strokes: [...map.strokes, event.stroke] } }
+    case 'map.stroke.deleted': return { ...base, map: { ...map, strokes: map.strokes.filter(item => item.id !== event.id) } }
+    default: return base
   }
 }
 

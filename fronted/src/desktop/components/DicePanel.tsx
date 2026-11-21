@@ -329,7 +329,7 @@ const DicePanel = forwardRef<HTMLElement, {
                 }
               }
               return (
-                <div key={item.id} className="history-item">
+                <div key={item.id} className="history-item" data-roll-id={item.id}>
                   <div className="hist-top">
                     <span className="hist-name">{item.actor_name}</span>
                     <span className="hist-time">

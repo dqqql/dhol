@@ -1,6 +1,6 @@
 import { env, runInDurableObject } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
-import { summaryFromSheet, type RoomEvent } from '@dhgc/shared/desktop'
+import { MAP_DATA_BYTES, MAP_STROKE_POINTS, summaryFromSheet, utf8Bytes, type MapStroke, type RoomEvent, type RoomServerMessage, type RoomSnapshot } from '@dhgc/shared/desktop'
 import { signRoomV2Session } from '../room-v2-session'
 import { roomOwnerKeyHash } from '../room-owner-key'
 import { routeRoomV2 } from '../room-v2-http'
@@ -65,7 +65,135 @@ function nextPresence(socket: WebSocket): Promise<{ members: Array<{ id: string;
   })
 }
 
+function nextMessage<T extends RoomServerMessage['type']>(socket: WebSocket, type: T, requestId?: string): Promise<Extract<RoomServerMessage, { type: T }>> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      socket.removeEventListener('message', listener)
+      reject(new Error(`Timed out waiting for ${type}`))
+    }, 3000)
+    const listener = (message: MessageEvent) => {
+      const parsed = JSON.parse(String(message.data)) as Extract<RoomServerMessage, { type: T }>
+      if (parsed.type !== type || (requestId && (!('requestId' in parsed) || parsed.requestId !== requestId))) return
+      clearTimeout(timeout)
+      socket.removeEventListener('message', listener)
+      resolve(parsed)
+    }
+    socket.addEventListener('message', listener)
+  })
+}
+
 describe('Room V2 workerd integration', () => {
+  it('commits map edits once, rolls them back with a failed receipt, and restores the exported map', async () => {
+    const { stub, room } = await createRoom('WRK014')
+    const a = await socketFor(stub, room, room.players[0])
+    const b = await socketFor(stub, room, room.players[1])
+    const legacy = await socketFor(stub, room, room.players[1])
+    try {
+      const sync = { type: 'room.sync', protocolVersion: 2, mapEvents: true, afterSeq: 0, pendingRequestIds: [] }
+      for (const socket of [a, b]) {
+        const snapshot = nextMessage(socket, 'room.snapshot')
+        socket.send(JSON.stringify(sync))
+        expect((await snapshot).room.map).toEqual({ tokens: [], strokes: [] })
+      }
+      const send = (socket: WebSocket, requestId: string, operation: object) => {
+        const ack = nextMessage(socket, 'operation.ack', requestId)
+        socket.send(JSON.stringify({ protocolVersion: 2, requestId, ...operation }))
+        return ack
+      }
+      const token = { id: 'same-cell', image: 'hero', name: '队长', labelColor: '#263950', x: 4, y: 6 }
+      const legacySnapshot = nextMessage(legacy, 'room.snapshot')
+      const created = await send(a, 'token-add', { type: 'map.token.create', token })
+      expect((await legacySnapshot).room).toMatchObject({ seq: created.seq })
+      expect((await legacySnapshot).room.map).toBeUndefined()
+      await Promise.all([
+        send(a, 'token-move', { type: 'map.token.update', id: token.id, patch: { x: 12, y: 8 } }),
+        send(b, 'token-name', { type: 'map.token.update', id: token.id, patch: { name: '领队', labelColor: '#833614' } }),
+      ])
+      const stroke: MapStroke = { id: 'first-stroke', color: '#263950', width: 0.16, points: [[2, 3], [4, 5], [2, 7]] }
+      const added = nextMessage(b, 'map.stroke.added', 'stroke-add')
+      const first = await send(a, 'stroke-add', { type: 'map.stroke.add', stroke })
+      expect(await added).toMatchObject({ stroke })
+      expect(await send(a, 'stroke-add', { type: 'map.stroke.add', stroke })).toEqual(first)
+      const recovered = nextMessage(a, 'room.snapshot')
+      a.send(JSON.stringify({ ...sync, pendingRequestIds: ['stroke-add'] }))
+      expect(await recovered).toMatchObject({ receipts: [first], room: { map: { tokens: [{ ...token, name: '领队', x: 12, y: 8, labelColor: '#833614' }], strokes: [stroke] } } })
+
+      const authorization = `Bearer ${await signRoomV2Session(env.SESSION_SECRET, { roomId: room.roomId, inviteCode: room.inviteCode, playerId: room.players[0].id, nickname: room.players[0].nickname })}`
+      const exported = await stub.fetch(new Request('https://room-v2.internal/internal/v2/export', { headers: { Authorization: authorization } }))
+      const backup = await exported.json() as { room: RoomSnapshot['room'] }
+      const restore = (backup: unknown) => routeRoomV2(new Request('https://worker.test/api/v2/rooms/restore', {
+        method: 'POST', body: JSON.stringify({ nickname: '恢复', backup }),
+      }), env)
+      const restored = await restore(backup)
+      expect(restored?.status).toBe(200)
+      expect(await restored?.json()).toMatchObject({ room: { map: backup.room.map } })
+      const { map: _map, ...oldRoom } = backup.room
+      expect(await (await restore({ ...backup, room: oldRoom }))?.json()).toMatchObject({ room: { map: { tokens: [], strokes: [] } } })
+
+      await runInDurableObject(stub, async (_, state) => {
+        state.storage.sql.exec("CREATE TRIGGER fail_map_receipt BEFORE INSERT ON panel_v2_receipts WHEN NEW.request_id = 'map-rollback' BEGIN SELECT RAISE(ABORT, 'simulated failure'); END")
+      })
+      const failure = nextMessage(a, 'operation.error', 'map-rollback')
+      a.send(JSON.stringify({ type: 'map.stroke.add', protocolVersion: 2, requestId: 'map-rollback', stroke: { ...stroke, id: 'not-committed' } }))
+      expect(await failure).toMatchObject({ code: 'PERSISTENCE_FAILED' })
+      await runInDurableObject(stub, async (_, state) => {
+        const db = new RoomV2Storage(state.storage)
+        expect(db.mapHasStroke('not-committed')).toBe(false)
+        expect(db.metaRow()?.seq).toBe(backup.room.seq)
+        expect(db.receipt(room.players[0].id, 'map-rollback')).toBeNull()
+      })
+      const invalid = nextMessage(a, 'operation.error', 'too-many-points')
+      a.send(JSON.stringify({ type: 'map.stroke.add', protocolVersion: 2, requestId: 'too-many-points', stroke: { ...stroke, points: Array(MAP_STROKE_POINTS + 1).fill([1, 1]) } }))
+      expect(await invalid).toMatchObject({ code: 'INVALID_COMMAND' })
+      const removed = await send(b, 'stroke-delete', { type: 'map.stroke.delete', id: stroke.id })
+      expect(await send(a, 'stroke-delete-again', { type: 'map.stroke.delete', id: stroke.id })).toMatchObject({ seq: removed.seq })
+      await send(b, 'token-delete', { type: 'map.token.delete', id: token.id })
+      await send(a, 'late-move', { type: 'map.token.update', id: token.id, patch: { x: 2, y: 4 } })
+      const final = nextMessage(b, 'room.snapshot')
+      b.send(JSON.stringify(sync))
+      expect((await final).room.map).toEqual({ tokens: [], strokes: [] })
+    } finally {
+      a.close()
+      b.close()
+      legacy.close()
+    }
+  })
+
+  it('enforces the combined map byte limit at commit and allows edits again after erasure', async () => {
+    const { stub, room } = await createRoom('WRK015')
+    const template: MapStroke = {
+      id: 'capacity', color: '#233954', width: 0.16,
+      points: Array.from({ length: MAP_STROKE_POINTS }, (_, index) => [+(index * 0.071).toFixed(2), +(12 + index % 59 * 0.247).toFixed(2)]),
+    }
+    await runInDurableObject(stub, async (_, state) => {
+      const db = new RoomV2Storage(state.storage)
+      let bytes = 0
+      for (let index = 0; ; index++) {
+        const stroke = { ...template, id: `filled-${index}` }
+        const size = utf8Bytes(JSON.stringify(stroke))
+        if (bytes + size > MAP_DATA_BYTES) break
+        expect(db.transaction(() => db.saveMapItem('stroke', stroke))).toBe(true)
+        bytes += size
+      }
+      expect(bytes).toBeGreaterThan(MAP_DATA_BYTES * 0.98)
+    })
+    const socket = await socketFor(stub, room, room.players[0])
+    try {
+      const add = { protocolVersion: 2, type: 'map.stroke.add', requestId: 'capacity', stroke: template }
+      const rejected = nextMessage(socket, 'operation.error', add.requestId)
+      socket.send(JSON.stringify(add))
+      expect(await rejected).toMatchObject({ code: 'INVALID_COMMAND', message: expect.stringContaining('容量上限') })
+      const removed = nextMessage(socket, 'operation.ack', 'free-space')
+      socket.send(JSON.stringify({ protocolVersion: 2, type: 'map.stroke.delete', requestId: 'free-space', id: 'filled-0' }))
+      expect((await removed).seq).toBe(1)
+      const added = nextMessage(socket, 'operation.ack', add.requestId)
+      socket.send(JSON.stringify(add))
+      expect((await added).seq).toBe(2)
+    } finally {
+      socket.close()
+    }
+  })
+
   it('migrates existing receipt tables without losing their retry records', async () => {
     const { stub } = await createRoom('WRK013')
     await runInDurableObject(stub, async (_, state) => {

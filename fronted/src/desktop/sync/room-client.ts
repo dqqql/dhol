@@ -70,7 +70,7 @@ export class RoomClient {
     if (!this.socket || this.socket.readyState !== 1 || this.destroyed) return
     // A background reconciliation uses the existing healthy socket; it is not a reconnect.
     if (this.status !== 'ready') this.update('synchronizing')
-    const request: SyncRequest = { type: 'room.sync', protocolVersion: 2, afterSeq: this.options.afterSeq(), pendingRequestIds: this.options.pendingIds() }
+    const request: SyncRequest = { type: 'room.sync', protocolVersion: 2, afterSeq: this.options.afterSeq(), pendingRequestIds: this.options.pendingIds().slice(0, 256), mapEvents: true }
     this.socket.send(JSON.stringify(request))
   }
   ready(): void {
@@ -80,8 +80,8 @@ export class RoomClient {
   }
   send(command: MutationCommand): boolean {
     if (this.status !== 'ready' || !this.socket || this.socket.readyState !== 1) return false
-    this.socket.send(JSON.stringify(command))
-    return true
+    try { this.socket.send(JSON.stringify(command)); return true }
+    catch { return false }
   }
   private onVisibility = (): void => {
     if (this.options.visibilityTarget?.visibilityState === 'visible' && this.status === 'ready') this.sync()
