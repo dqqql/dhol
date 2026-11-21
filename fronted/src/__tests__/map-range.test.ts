@@ -6,6 +6,7 @@ describe('map range intersection', () => {
     expect(MAP_RANGES.map(range => [range.label, range.radius])).toEqual([
       ['近战', 1], ['邻近', 3], ['近距离', 6], ['远距离', 12],
     ])
+    expect(new Set(MAP_RANGES.map(r => r.color)).size).toBe(4)
   })
   it('includes a target touching at exactly one corner, even when its center is outside', () => {
     expect(tokenTouchesRange([0, 0], 5, { x: 3, y: 4 })).toBe(true)

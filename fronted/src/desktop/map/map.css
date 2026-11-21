@@ -601,18 +601,160 @@
 .room-map-editor-size { display: flex; align-items: center; gap: 6px; }
 
 .room-map-range-control {
-  display: grid;
-  gap: 2px;
-  width: 168px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 230px;
   font-size: 12px;
   font-weight: 800;
+  user-select: none;
 }
 
-.room-map-range-control > span { display: flex; justify-content: space-between; gap: 8px; }
-.room-map-range-control output { color: var(--ink-secondary, #4A4A45); }
-.room-map-range-control input[type="range"] {
+.room-map-range-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.2;
+}
+
+.room-map-range-header output {
+  color: var(--ink-secondary, #4A4A45);
+  font-variant-numeric: tabular-nums;
+}
+
+.room-map-range-slider-wrap {
+  position: relative;
   width: 100%;
-  min-height: 20px;
-  padding: 0;
+  height: 24px;
+  display: flex;
+  align-items: center;
   cursor: pointer;
+  touch-action: none;
+}
+
+.room-map-range-slider-wrap:focus-within {
+  outline: 2px solid var(--accent, #004BD6);
+  outline-offset: 2px;
+}
+
+.room-map-range-track-bg {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  height: 6px;
+  background: #3A3A36;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.room-map-range-track-fill {
+  position: absolute;
+  left: 8px;
+  height: 6px;
+  border-radius: 999px;
+  pointer-events: none;
+  transition: width 0.16s ease, background-color 0.16s ease;
+}
+
+.room-map-range-nodes {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.room-map-range-node {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--node-color);
+  background: #252522;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  outline: none;
+  pointer-events: auto;
+  box-sizing: border-box;
+  transition: transform 0.16s ease, width 0.16s ease, height 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
+  z-index: 2;
+}
+
+.room-map-range-node:hover {
+  transform: translate(-50%, -50%) scale(1.35);
+  background: var(--node-color);
+  box-shadow: 0 0 6px var(--node-color);
+}
+
+.room-map-range-node.is-active {
+  width: 16px;
+  height: 16px;
+  background: var(--node-color);
+  border: 2.5px solid #FFFFFF;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.2);
+  z-index: 3;
+}
+
+.room-map-range-node.is-active:hover {
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+.room-map-range-native-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+  pointer-events: none;
+  z-index: 1;
+}
+
+@media (max-width: 768px) {
+  .room-map-range-control {
+    width: 100%;
+  }
+}
+
+/* 范围圈展开与收缩动画 */
+@keyframes roomMapRangeExpand {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes roomMapRangeShrink {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0);
+    opacity: 0;
+  }
+}
+
+.room-map-range-expand {
+  transform-origin: 0 0;
+  animation: roomMapRangeExpand 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.room-map-range-shrink {
+  transform-origin: 0 0;
+  animation: roomMapRangeShrink 0.26s cubic-bezier(0.7, 0, 0.84, 0) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-map-range-expand,
+  .room-map-range-shrink {
+    animation: none;
+  }
 }

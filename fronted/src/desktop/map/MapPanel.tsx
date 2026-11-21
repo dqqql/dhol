@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useId, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { MAP_IMAGES, MAP_CLASS_IMAGES, MAP_MONSTER_IMAGES, MAP_SIZE, mapTokenSize, fitMapToken, type MapTokenSize, type MapPoint, type MapStroke, type MapToken, type RoomMap } from '@dhgc/shared/desktop'
 import type { RoomSync } from '../state/room-sync'
 import type { PendingOperation } from '../sync/room-outbox'
@@ -165,6 +165,33 @@ function TokenEditor({
 }) {
   const [name, setName] = useState(token.name)
   const [color, setColor] = useState(token.labelColor)
+  const trackRef = useRef<HTMLDivElement>(null)
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return
+    const el = trackRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const updateIndex = (clientX: number) => {
+      const padding = 8
+      const trackWidth = Math.max(1, rect.width - padding * 2)
+      const offset = clientX - rect.left - padding
+      const ratio = Math.max(0, Math.min(1, offset / trackWidth))
+      const nearest = Math.round(ratio * (MAP_RANGES.length - 1))
+      onRangeChange(nearest)
+    }
+    updateIndex(event.clientX)
+
+    const onPointerMove = (moveEv: PointerEvent) => {
+      updateIndex(moveEv.clientX)
+    }
+    const onPointerUp = () => {
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
+    }
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
+  }
 
   const handleColorPreset = (c: string) => {
     setColor(c)
@@ -183,6 +210,7 @@ function TokenEditor({
   }
 
   const hasChanges = (name.trim() && name.trim() !== token.name) || (color && color !== token.labelColor)
+  const currentRange = MAP_RANGES[rangeIndex]
 
   return (
     <form className="room-map-token-editor" onSubmit={handleSubmit}>
@@ -235,13 +263,63 @@ function TokenEditor({
         </div>
       </div>
       <div className="room-map-editor-actions">
-        <label className="room-map-range-control">
-          <span>距离 <output>{MAP_RANGES[rangeIndex].label} · {MAP_RANGES[rangeIndex].radius} 格</output></span>
-          <input type="range" aria-label="距离" min="0" max="3" step="1" value={rangeIndex}
-            aria-valuetext={`${MAP_RANGES[rangeIndex].label}，${MAP_RANGES[rangeIndex].radius} 格`}
-            style={{ accentColor: MAP_RANGES[rangeIndex].color }}
-            onChange={event => onRangeChange(Number(event.target.value))} />
-        </label>
+        <div className="room-map-range-control">
+          <div className="room-map-range-header">
+            <span>距离</span>
+            <output>{currentRange.label} · {currentRange.radius} 格</output>
+          </div>
+          <div
+            ref={trackRef}
+            className="room-map-range-slider-wrap"
+            role="group"
+            aria-label="距离刻度"
+            onPointerDown={handlePointerDown}
+          >
+            <div className="room-map-range-track-bg" />
+            <div
+              className="room-map-range-track-fill"
+              style={{
+                width: `calc(8px + (100% - 16px) * ${rangeIndex / 3})`,
+                backgroundColor: currentRange.color,
+              }}
+            />
+            <div className="room-map-range-nodes">
+              {MAP_RANGES.map((range, index) => {
+                const isActive = index === rangeIndex
+                const isPassed = index <= rangeIndex
+                return (
+                  <button
+                    key={range.radius}
+                    type="button"
+                    className={`room-map-range-node ${isActive ? 'is-active' : ''} ${isPassed ? 'is-passed' : ''}`}
+                    style={{
+                      left: `calc(8px + (100% - 16px) * ${index / 3})`,
+                      '--node-color': range.color,
+                    } as React.CSSProperties}
+                    title={`${range.label}（${range.radius} 格）`}
+                    aria-label={`${range.label} ${range.radius} 格`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onRangeChange(index)
+                    }}
+                  />
+                )
+              })}
+            </div>
+            <input
+              type="range"
+              className="room-map-range-native-input"
+              aria-label="距离"
+              min="0"
+              max="3"
+              step="1"
+              value={rangeIndex}
+              aria-valuetext={`${currentRange.label}，${currentRange.radius} 格`}
+              style={{ accentColor: currentRange.color }}
+              onChange={event => onRangeChange(Number(event.target.value))}
+            />
+          </div>
+        </div>
         <button type="submit" className="button--primary room-map-btn-sm" disabled={!hasChanges}>
           保存
         </button>
@@ -250,6 +328,63 @@ function TokenEditor({
         </button>
       </div>
     </form>
+  )
+}
+
+function RangeRings({
+  center,
+  activeRange,
+}: {
+  center: MapPoint
+  activeRange: (typeof MAP_RANGES)[number]
+}) {
+  const [exitingRange, setExitingRange] = useState<(typeof MAP_RANGES)[number] | null>(null)
+  const [currentRange, setCurrentRange] = useState(activeRange)
+  const [animationKey, setAnimationKey] = useState(0)
+
+  if (currentRange !== activeRange) {
+    setExitingRange(currentRange)
+    setCurrentRange(activeRange)
+    setAnimationKey(k => k + 1)
+  }
+
+  useEffect(() => {
+    if (!exitingRange) return
+    const timer = setTimeout(() => {
+      setExitingRange(null)
+    }, 280)
+    return () => clearTimeout(timer)
+  }, [exitingRange])
+
+  return (
+    <g className="room-map-range-rings" transform={`translate(${center[0]} ${center[1]})`} pointerEvents="none">
+      {exitingRange && (
+        <g key={`exiting-${animationKey}`} className="room-map-range-shrink">
+          <circle
+            cx={0}
+            cy={0}
+            r={exitingRange.radius}
+            fill={exitingRange.color}
+            fillOpacity={0.07}
+            stroke={exitingRange.color}
+            strokeWidth={0.06}
+            strokeOpacity={0.75}
+          />
+        </g>
+      )}
+      <g key={`active-${animationKey}`} className={exitingRange ? 'room-map-range-expand' : undefined}>
+        <circle
+          cx={0}
+          cy={0}
+          r={currentRange.radius}
+          fill={currentRange.color}
+          fillOpacity={0.07}
+          stroke={currentRange.color}
+          strokeWidth={0.06}
+          strokeOpacity={0.85}
+        />
+      </g>
+    </g>
   )
 }
 
@@ -266,7 +401,6 @@ export default function MapPanel({
   connected: boolean
   onClose(): void
 }) {
-  const rangeGradientId = useId()
   const dialog = useRef<HTMLDialogElement>(null)
   const board = useRef<SVGSVGElement>(null)
   const gesture = useRef<Gesture | null>(null)
@@ -832,23 +966,8 @@ export default function MapPanel({
           <line x1="19.4" y1="20" x2="20.6" y2="20" stroke="#888882" strokeWidth=".06" strokeLinecap="round" />
           <line x1="20" y1="19.4" x2="20" y2="20.6" stroke="#888882" strokeWidth=".06" strokeLinecap="round" />
 
-          {rangeCenter && (
-            <g className="room-map-range-rings" pointerEvents="none">
-              <defs>
-                <radialGradient id={rangeGradientId}>
-                  <stop offset="0%" stopColor={MAP_RANGES[0].color} />
-                  {MAP_RANGES.slice(0, rangeIndex + 1).map(range => (
-                    <stop key={range.radius} offset={`${range.radius / activeRange.radius * 100}%`} stopColor={range.color} />
-                  ))}
-                </radialGradient>
-              </defs>
-              <circle cx={rangeCenter[0]} cy={rangeCenter[1]} r={activeRange.radius}
-                fill={`url(#${rangeGradientId})`} fillOpacity="0.09" />
-              {MAP_RANGES.slice(0, rangeIndex + 1).map((range, index) => (
-                <circle key={range.radius} cx={rangeCenter[0]} cy={rangeCenter[1]} r={range.radius}
-                  fill="none" stroke={range.color} strokeWidth={index === rangeIndex ? 0.06 : 0.035} strokeOpacity="0.75" />
-              ))}
-            </g>
+          {rangeCenter && selected && (
+            <RangeRings key={selected.id} center={rangeCenter} activeRange={activeRange} />
           )}
 
           {/* 笔迹层 */}
