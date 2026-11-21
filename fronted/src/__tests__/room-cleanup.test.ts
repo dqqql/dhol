@@ -27,6 +27,8 @@ describe('room-local browser state', () => {
     storage.setItem('dhol:desktop:v2:outbox:room-a:player-a', '[]')
     storage.setItem('dhol:desktop:v2:outbox:room-a:player-b', '[]')
     storage.setItem('dhol-countdowns-room-b', '[]')
+    storage.setItem('dhol-map-view-room-a', '{}')
+    storage.setItem('dhol-map-view-room-b', '{}')
 
     clearRoomBrowserState(storage, 'room-a')
 
@@ -35,5 +37,7 @@ describe('room-local browser state', () => {
     expect(storage.getItem('dhol:desktop:v2:outbox:room-a:player-a')).toBeNull()
     expect(storage.getItem('dhol:desktop:v2:outbox:room-a:player-b')).toBeNull()
     expect(storage.getItem('dhol-countdowns-room-b')).toBe('[]')
+    expect(storage.getItem('dhol-map-view-room-a')).toBeNull()
+    expect(storage.getItem('dhol-map-view-room-b')).toBe('{}')
   })
 })

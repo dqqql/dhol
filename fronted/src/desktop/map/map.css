@@ -108,12 +108,12 @@
 .room-map-tools {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 16px;
+  justify-content: flex-start;
+  padding: 8px 12px;
   background: var(--surface, #FFFFFF);
   border-bottom: 2px solid var(--border, #111111);
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: 8px;
+  flex-wrap: nowrap;
 }
 
 .room-map-tools-left,
@@ -123,8 +123,9 @@
 .room-map-add {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 6px;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
 }
 
 .room-map-divider {
@@ -153,7 +154,7 @@
   align-items: center;
   gap: 6px;
   min-height: 32px;
-  padding: 4px 12px;
+  padding: 4px 8px;
   font-size: 13px;
   font-weight: 700;
   border: 1px solid var(--border, #111111);
@@ -167,6 +168,7 @@
 
 .room-map-btn:hover:not(:disabled) {
   background: var(--surface-subtle, #ECECE7);
+  color: var(--ink, #0A0A0A);
 }
 
 .room-map-btn.is-active,
@@ -255,6 +257,7 @@
 
 .room-map-width-btn:hover:not(.is-active) {
   background: var(--surface-subtle, #ECECE7);
+  color: var(--ink, #0A0A0A);
 }
 
 .room-map-width-btn.is-active {
@@ -269,25 +272,27 @@
   border-radius: 1px;
 }
 
-/* Token 图案选择 */
-.room-map-icon-select-wrap {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 8px;
-  border: 1px solid var(--border, #111111);
-  background: var(--surface, #FFFFFF);
+/* 新增 Token 二级菜单 */
+.room-map-add {
+  position: relative;
 }
 
-.room-map-icon-select-wrap select {
-  border: none;
-  background: transparent;
-  padding: 0;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink, #0A0A0A);
-  cursor: pointer;
-  outline: none;
+.room-map-add-menu {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 140px;
+  padding: 4px;
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--border, #111111);
+  background: var(--surface, #FFFFFF);
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.2);
+}
+
+.room-map-add-menu .room-map-btn {
+  width: 100%;
 }
 
 /* 缩放控制组 */
@@ -317,6 +322,7 @@
 
 .room-map-zoom-btn:hover {
   background: var(--surface-subtle, #ECECE7);
+  color: var(--ink, #0A0A0A);
 }
 
 .room-map-reset {
@@ -501,41 +507,6 @@
   color: var(--ink, #0A0A0A);
 }
 
-/* 未选 Token 时的导航与快捷键提示 */
-.room-map-selection {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.room-map-dropdown-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.room-map-dropdown-label select {
-  min-height: 30px;
-  padding: 4px 10px;
-  font-size: 13px;
-  font-weight: 700;
-  border: 1px solid var(--border, #111111);
-  background: var(--surface, #FFFFFF);
-  color: var(--ink, #0A0A0A);
-  border-radius: 0;
-  max-width: min(280px, 45vw);
-}
-
-.room-map-shortcuts-pill {
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink-secondary, #4A4A45);
-  background: var(--surface, #FFFFFF);
-  border: 1px solid var(--border-subtle, #D0D0C8);
-}
-
 /* 状态信息 */
 .room-map-status-bar {
   display: flex;
@@ -616,10 +587,6 @@
     font-size: 12px;
   }
 
-  .room-map-shortcuts-pill {
-    display: none;
-  }
-
   .room-map-tools {
     gap: 8px;
   }
@@ -627,4 +594,21 @@
   .room-map-divider {
     display: none;
   }
+}
+
+/* 窄屏仍保留一行工具栏，菜单在工具栏下方展开。 */
+@media (max-width: 1100px) {
+  .room-map-tools { gap: 4px; padding-inline: 6px; }
+  .room-map-tools-left, .room-map-tool-group, .room-map-brush { gap: 4px; }
+  .room-map-tool-group .room-map-btn { font-size: 0; gap: 0; padding-inline: 6px; }
+  .room-map-label-sm, .room-map-divider, .room-map-divider-sm { display: none; }
+  .room-map-color-swatch { width: 18px; height: 22px; }
+  .room-map-width-btn { padding-inline: 4px; }
+  .room-map-zoom-btn { padding-inline: 6px; }
+  .room-map-reset { min-width: 46px; }
+}
+
+@media (max-width: 768px) {
+  .room-map-tools { overflow-x: auto; }
+  .room-map-add-menu { position: fixed; top: auto; right: 16px; }
 }

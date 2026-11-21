@@ -23,10 +23,10 @@ const imageLabels: Record<typeof MAP_IMAGES[number], string> = {
 }
 
 const TOOLS = [
-  ['select', '选择', 'V', '🖱️'],
-  ['pan', '平移', 'H', '✋'],
-  ['pen', '画笔', 'P', '✏️'],
-  ['eraser', '橡皮擦', 'E', '🧹'],
+  ['select', '选择', '🖱️'],
+  ['pan', '平移', '✋'],
+  ['pen', '画笔', '✏️'],
+  ['eraser', '橡皮擦', '🧹'],
 ] as const
 
 type View = typeof DEFAULT_VIEW
@@ -221,7 +221,7 @@ function TokenEditor({
         <button type="button" className="button--danger room-map-btn-sm" onClick={remove}>
           删除 Token
         </button>
-        <button type="button" className="room-map-btn-sm room-map-btn-ghost" onClick={onDeselect} title="取消选择 (Esc)">
+        <button type="button" className="room-map-btn-sm room-map-btn-ghost" onClick={onDeselect} title="取消选择">
           取消选择
         </button>
       </div>
@@ -245,7 +245,32 @@ export default function MapPanel({
   const dialog = useRef<HTMLDialogElement>(null)
   const board = useRef<SVGSVGElement>(null)
   const gesture = useRef<Gesture | null>(null)
-  const [view, setView] = useState(DEFAULT_VIEW)
+  const viewKey = `dhol-map-view-${sync.options.roomId}`
+  const [view, setView] = useState<View>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(viewKey) ?? 'null')
+      if (saved && [saved.x, saved.y, saved.zoom].every(value => typeof value === 'number' && Number.isFinite(value)) && saved.zoom >= MIN_ZOOM && saved.zoom <= MAX_ZOOM) {
+        return moveView({ x: saved.x, y: saved.y, zoom: saved.zoom })
+      }
+    } catch { /* Storage may be unavailable or contain invalid data. */ }
+    return DEFAULT_VIEW
+  })
+  const addMenu = useRef<HTMLDivElement>(null)
+  const addButton = useRef<HTMLButtonElement>(null)
+  const [addMenuOpen, setAddMenuOpen] = useState(false)
+
+  useEffect(() => {
+    try { localStorage.setItem(viewKey, JSON.stringify(view)) } catch { /* Keep the map usable when storage is unavailable. */ }
+  }, [view, viewKey])
+
+  useEffect(() => {
+    if (!addMenuOpen) return
+    const closeOutside = (event: PointerEvent) => {
+      if (!addMenu.current?.contains(event.target as Node)) setAddMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOutside)
+    return () => document.removeEventListener('pointerdown', closeOutside)
+  }, [addMenuOpen])
   const [tool, setTool] = useState<Tool>('select')
   const [image, setImage] = useState<typeof MAP_IMAGES[number]>('hero')
   const [color, setColor] = useState('#111111')
@@ -292,13 +317,17 @@ export default function MapPanel({
     })
   }
 
-  function fitView() {
-    setView(moveView({ zoom: 0.25, x: 0, y: 0 }))
+  function centerView() {
+    setView(current => moveView({
+      zoom: current.zoom,
+      x: (MAP_SIZE - VIEW_WIDTH / current.zoom) / 2,
+      y: (MAP_SIZE - VIEW_HEIGHT / current.zoom) / 2,
+    }))
   }
 
   useEffect(() => {
     const isInput = (el: EventTarget | null) =>
-      el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement
+      el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement || el instanceof HTMLButtonElement
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isInput(e.target)) return
@@ -309,32 +338,7 @@ export default function MapPanel({
         return
       }
 
-      if (e.key === 'v' || e.key === 'V' || e.key === '1') {
-        setTool('select')
-      } else if (e.key === 'h' || e.key === 'H') {
-        setTool('pan')
-      } else if (e.key === 'p' || e.key === 'P' || e.key === '2') {
-        setTool('pen')
-      } else if (e.key === 'e' || e.key === 'E' || e.key === '3') {
-        setTool('eraser')
-      } else if (e.key === 't' || e.key === 'T' || e.key === '4') {
-        setTool(t => (t === 'place' ? 'select' : 'place'))
-      } else if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedId) {
-          e.preventDefault()
-          submit({ type: 'map.token.delete', id: selectedId })
-          setSelectedId('')
-        }
-      } else if (e.key === 'Escape') {
-        e.preventDefault()
-        if (selectedId) {
-          setSelectedId('')
-        } else if (tool !== 'select') {
-          setTool('select')
-        } else {
-          onClose()
-        }
-      } else if (e.key === '+' || e.key === '=') {
+      if (e.key === '+' || e.key === '=') {
         e.preventDefault()
         zoomBy(1.2)
       } else if (e.key === '-' || e.key === '_') {
@@ -562,14 +566,15 @@ export default function MapPanel({
       <div className="room-map-tools" role="group" aria-label="地图工具">
         <div className="room-map-tools-left">
           <div className="room-map-tool-group">
-            {TOOLS.map(([id, label, shortcut, icon]) => (
+            {TOOLS.map(([id, label, icon]) => (
               <button
                 type="button"
                 key={id}
                 className={`room-map-btn ${tool === id ? 'is-active' : ''}`}
+                aria-label={label}
                 aria-pressed={tool === id}
                 onClick={() => setTool(id)}
-                title={`${label} (${shortcut})`}
+                title={label}
               >
                 <span className="room-map-tool-icon">{icon}</span>
                 <span>{label}</span>
@@ -652,30 +657,40 @@ export default function MapPanel({
           <div className="room-map-divider" />
 
           {/* 新增 Token 选项 */}
-          <div className="room-map-add">
-            <div className="room-map-icon-select-wrap">
-              <TokenIcon image={image} size={22} />
-              <select
-                aria-label="Token 图案"
-                value={image}
-                onChange={event => setImage(event.target.value as typeof image)}
-              >
-                {MAP_IMAGES.map(id => (
-                  <option value={id} key={id}>
-                    {imageLabels[id]}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="room-map-add" ref={addMenu} onKeyDown={event => {
+            if (event.key === 'Escape' && addMenuOpen) {
+              event.preventDefault()
+              event.stopPropagation()
+              setAddMenuOpen(false)
+              addButton.current?.focus()
+            }
+          }}>
             <button
+              ref={addButton}
               type="button"
               className={`room-map-btn ${tool === 'place' ? 'is-active' : ''}`}
-              aria-pressed={tool === 'place'}
-              onClick={() => setTool(tool === 'place' ? 'select' : 'place')}
-              title="在地图上点击放置新 Token (T)"
+              aria-expanded={addMenuOpen}
+              aria-controls="room-map-add-menu"
+              onClick={() => setAddMenuOpen(open => !open)}
+              title="选择图案后在地图上放置新 Token"
             >
               <span>➕ 新增 Token</span>
             </button>
+            {addMenuOpen && (
+              <div id="room-map-add-menu" className="room-map-add-menu" role="group" aria-label="新增 Token 类型">
+                {MAP_IMAGES.map(id => (
+                  <button key={id} type="button" className="room-map-btn" onClick={() => {
+                    setImage(id)
+                    setTool('place')
+                    setAddMenuOpen(false)
+                    addButton.current?.focus()
+                  }}>
+                    <TokenIcon image={id} size={22} />
+                    <span>{imageLabels[id]}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -712,11 +727,11 @@ export default function MapPanel({
             <button
               type="button"
               className="room-map-zoom-btn"
-              onClick={fitView}
-              title="适应全图"
-              aria-label="适应全图"
+              onClick={centerView}
+              title="回到地图中心，保持当前缩放"
+              aria-label="回中"
             >
-              适应
+              回中
             </button>
           </div>
         </div>
@@ -915,7 +930,7 @@ export default function MapPanel({
       </div>
 
       <div className="room-map-footer">
-        {selected ? (
+        {selected && (
           <TokenEditor
             key={selected.id}
             token={selected}
@@ -923,32 +938,6 @@ export default function MapPanel({
             remove={() => submit({ type: 'map.token.delete', id: selected.id })}
             onDeselect={() => setSelectedId('')}
           />
-        ) : (
-          <div className="room-map-selection">
-            <label className="room-map-dropdown-label">
-              <span className="room-map-field-label">定位 Token</span>
-              <select
-                aria-label="选择地图 Token"
-                value=""
-                onChange={event => {
-                  if (event.target.value) {
-                    setSelectedId(event.target.value)
-                    setTool('select')
-                  }
-                }}
-              >
-                <option value="">点击地图上的 Token 或从列表中选择…</option>
-                {[...projected.tokens.values()].map(token => (
-                  <option value={token.id} key={token.id}>
-                    {token.name} · ({token.x + 1}, {token.y + 1})
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="room-map-shortcuts-pill">
-              <span>快捷键：[V] 选择 · [H] 平移 · [P] 画笔 · [E] 橡皮 · [T] 放置 · [Del] 删除 · [Esc] 取消</span>
-            </div>
-          </div>
         )}
 
         <div className="room-map-status-bar">

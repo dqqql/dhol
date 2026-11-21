@@ -1,7 +1,7 @@
 import type { CountdownClock } from '@dhgc/shared/desktop'
 
 export function clearRoomBrowserState(storage: Storage, roomId: string): void {
-  const keys = [`dhol-countdowns-${roomId}`, `dhol-roomlog-${roomId}`]
+  const keys = [`dhol-countdowns-${roomId}`, `dhol-roomlog-${roomId}`, `dhol-map-view-${roomId}`]
   const outboxPrefix = `dhol:desktop:v2:outbox:${roomId}:`
   const notesPrefix = `dhol-notes-${roomId}-`
   for (let index = 0; index < storage.length; index++) {
