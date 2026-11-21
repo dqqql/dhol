@@ -1,4 +1,4 @@
-import { MAP_SIZE, MAP_STROKE_POINTS, type MapPoint } from '@dhgc/shared/desktop'
+import { MAP_SIZE, MAP_STROKE_POINTS, mapTokenSize, type MapPoint, type MapToken } from '@dhgc/shared/desktop'
 
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
@@ -46,4 +46,19 @@ export function simplifyStroke(points: MapPoint[], width: number): MapPoint[] {
     result = simplify(points, tolerance)
   }
   return result
+}
+
+export const MAP_RANGES = [
+  { label: '近战', radius: 1, color: '#DC2626' },
+  { label: '邻近', radius: 3, color: '#EA580C' },
+  { label: '近距离', radius: 6, color: '#CA8A04' },
+  { label: '远距离', radius: 12, color: '#16A34A' },
+] as const
+
+// Test the occupied square, so touching even one corner or edge is in range.
+export function tokenTouchesRange(center: MapPoint, radius: number, token: Pick<MapToken, 'x' | 'y' | 'size'>): boolean {
+  const size = mapTokenSize(token)
+  const nearestX = clamp(center[0], token.x, token.x + size)
+  const nearestY = clamp(center[1], token.y, token.y + size)
+  return (center[0] - nearestX) ** 2 + (center[1] - nearestY) ** 2 <= radius ** 2 + 1e-9
 }

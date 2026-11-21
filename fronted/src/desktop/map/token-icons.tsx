@@ -26,10 +26,12 @@ export default function TokenIcon({ image, x = 0, y = 0, size = 32 }: { image: s
     <svg x={x} y={y} width={size} height={size} viewBox="0 0 100 100" aria-hidden="true">
       <defs><clipPath id={clipId}><circle cx="50" cy="50" r="50" /></clipPath></defs>
       <g clipPath={`url(#${clipId})`}>
-        <svg width="100" height="100" viewBox={region.view} preserveAspectRatio="xMidYMid slice">
+        {/* Crop past the painted gold rim; draw one consistent outline below. */}
+        <svg x="-6" y="-6" width="112" height="112" viewBox={region.view} preserveAspectRatio="xMidYMid slice">
           <image href={region.source} width={region.width} height={region.height} />
         </svg>
       </g>
+      <circle cx="50" cy="50" r="49" fill="none" stroke="#263950" strokeWidth="2" />
     </svg>
   )
 }

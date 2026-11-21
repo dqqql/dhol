@@ -1,8 +1,8 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { MAP_IMAGES, MAP_CLASS_IMAGES, MAP_MONSTER_IMAGES, MAP_SIZE, mapTokenSize, fitMapToken, type MapTokenSize, type MapPoint, type MapStroke, type MapToken, type RoomMap } from '@dhgc/shared/desktop'
 import type { RoomSync } from '../state/room-sync'
 import type { PendingOperation } from '../sync/room-outbox'
-import { clamp, mapPoint, simplifyStroke } from './map-geometry'
+import { clamp, mapPoint, simplifyStroke, MAP_RANGES, tokenTouchesRange } from './map-geometry'
 import TokenIcon from './token-icons'
 import './map.css'
 
@@ -154,10 +154,14 @@ function TokenEditor({
   token,
   save,
   remove,
+  rangeIndex,
+  onRangeChange,
 }: {
   token: MapToken
   save(patch: { name?: string; labelColor?: string; size?: MapTokenSize }): boolean
   remove(): void
+  rangeIndex: number
+  onRangeChange(index: number): void
 }) {
   const [name, setName] = useState(token.name)
   const [color, setColor] = useState(token.labelColor)
@@ -231,6 +235,13 @@ function TokenEditor({
         </div>
       </div>
       <div className="room-map-editor-actions">
+        <label className="room-map-range-control">
+          <span>距离 <output>{MAP_RANGES[rangeIndex].label} · {MAP_RANGES[rangeIndex].radius} 格</output></span>
+          <input type="range" aria-label="距离" min="0" max="3" step="1" value={rangeIndex}
+            aria-valuetext={`${MAP_RANGES[rangeIndex].label}，${MAP_RANGES[rangeIndex].radius} 格`}
+            style={{ accentColor: MAP_RANGES[rangeIndex].color }}
+            onChange={event => onRangeChange(Number(event.target.value))} />
+        </label>
         <button type="submit" className="button--primary room-map-btn-sm" disabled={!hasChanges}>
           保存
         </button>
@@ -255,6 +266,7 @@ export default function MapPanel({
   connected: boolean
   onClose(): void
 }) {
+  const rangeGradientId = useId()
   const dialog = useRef<HTMLDialogElement>(null)
   const board = useRef<SVGSVGElement>(null)
   const gesture = useRef<Gesture | null>(null)
@@ -289,8 +301,9 @@ export default function MapPanel({
   const [color, setColor] = useState('#111111')
   const [width, setWidth] = useState(WIDTHS[1])
   const [selectedId, setSelectedId] = useState('')
+  const [rangeIndex, setRangeIndex] = useState(0)
   const [draft, setDraft] = useState<MapStroke | null>(null)
-  const [dragged, setDragged] = useState<{ id: string; position: MapPoint } | null>(null)
+  const [dragged, setDragged] = useState<{ id: string; position: MapPoint; anchor: MapPoint } | null>(null)
   const [notice, setNotice] = useState('')
   const [isSpaceHeld, setIsSpaceHeld] = useState(false)
   const [isPanning, setIsPanning] = useState(false)
@@ -301,6 +314,11 @@ export default function MapPanel({
   const failures = [...sync.mapFailures().values()].filter(item => !projected.erased.has(item.stroke.id))
   const pendingCount = pending.filter(item => item.command.type.startsWith('map.')).length
   const selected = projected.tokens.get(selectedId)
+  const activeRange = MAP_RANGES[rangeIndex]
+  const rangeCenter: MapPoint | null = selected ? [
+    (dragged?.id === selected.id ? dragged.anchor[0] : selected.x) + mapTokenSize(selected) / 2,
+    (dragged?.id === selected.id ? dragged.anchor[1] : selected.y) + mapTokenSize(selected) / 2,
+  ] : null
   const syncFailure = sync.getState().save === 'failed' ? sync.getState().reason : null
 
   useEffect(() => {
@@ -518,7 +536,7 @@ export default function MapPanel({
       setDraft({ ...active.stroke, points: [...active.stroke.points] })
     } else {
       const [x, y] = dragPosition(active, point)
-      setDragged({ id: active.id, position: [x + active.offset[0], y + active.offset[1]] })
+      setDragged({ id: active.id, position: [x + active.offset[0], y + active.offset[1]], anchor: [x, y] })
     }
   }
 
@@ -814,6 +832,25 @@ export default function MapPanel({
           <line x1="19.4" y1="20" x2="20.6" y2="20" stroke="#888882" strokeWidth=".06" strokeLinecap="round" />
           <line x1="20" y1="19.4" x2="20" y2="20.6" stroke="#888882" strokeWidth=".06" strokeLinecap="round" />
 
+          {rangeCenter && (
+            <g className="room-map-range-rings" pointerEvents="none">
+              <defs>
+                <radialGradient id={rangeGradientId}>
+                  <stop offset="0%" stopColor={MAP_RANGES[0].color} />
+                  {MAP_RANGES.slice(0, rangeIndex + 1).map(range => (
+                    <stop key={range.radius} offset={`${range.radius / activeRange.radius * 100}%`} stopColor={range.color} />
+                  ))}
+                </radialGradient>
+              </defs>
+              <circle cx={rangeCenter[0]} cy={rangeCenter[1]} r={activeRange.radius}
+                fill={`url(#${rangeGradientId})`} fillOpacity="0.09" />
+              {MAP_RANGES.slice(0, rangeIndex + 1).map((range, index) => (
+                <circle key={range.radius} cx={rangeCenter[0]} cy={rangeCenter[1]} r={range.radius}
+                  fill="none" stroke={range.color} strokeWidth={index === rangeIndex ? 0.06 : 0.035} strokeOpacity="0.75" />
+              ))}
+            </g>
+          )}
+
           {/* 笔迹层 */}
           {[...projected.strokes.values()].map(item => (
             <Stroke
@@ -898,6 +935,7 @@ export default function MapPanel({
                   )
                 )
                 const isSelected = selectedId === token.id
+                const inRange = !isSelected && rangeCenter !== null && tokenTouchesRange(rangeCenter, activeRange.radius, token)
 
                 return (
                   <g
@@ -906,6 +944,7 @@ export default function MapPanel({
                     data-token-id={token.id}
                     data-cell={`${token.x},${token.y}`}
                     data-token-size={footprint}
+                    data-in-range={inRange || undefined}
                     data-token-status={projected.pendingTokens.has(token.id) ? 'pending' : 'confirmed'}
                     data-offset-x={offset[0]}
                     data-offset-y={offset[1]}
@@ -926,19 +965,14 @@ export default function MapPanel({
                           stroke="#004BD6"
                           strokeWidth="0.06"
                         />
-                        <circle
-                          cx={centerX}
-                          cy={centerY}
-                          r={size / 2 + 0.14}
-                          fill="none"
-                          stroke="#004BD6"
-                          strokeWidth="0.02"
-                          strokeDasharray="0.08 0.08"
-                        />
                       </g>
                     )}
 
                     <TokenIcon image={token.image} x={centerX - size / 2} y={centerY - size / 2} size={size} />
+                    {inRange && (
+                      <circle className="room-map-range-highlight" cx={centerX} cy={centerY} r={size / 2 + 0.035}
+                        fill="none" stroke={activeRange.color} strokeWidth="0.065" pointerEvents="none" />
+                    )}
 
                     {(!clustered || isSelected || index === group.length - 1) && (
                       <g className="room-map-token-label-group">
@@ -978,6 +1012,8 @@ export default function MapPanel({
           <TokenEditor
             key={selected.id}
             token={selected}
+            rangeIndex={rangeIndex}
+            onRangeChange={setRangeIndex}
             save={patch => submit({ type: 'map.token.update', id: selected.id, patch })}
             remove={() => submit({ type: 'map.token.delete', id: selected.id })}
           />
