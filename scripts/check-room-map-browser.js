@@ -166,7 +166,7 @@ async (page) => {
     await btn(a, '选择').click()
     const deleteHit = await a.locator(tokenSelector).locator('circle').last().boundingBox()
     await a.mouse.click(deleteHit.x + deleteHit.width * 0.12, deleteHit.y + deleteHit.height / 2)
-    await btn(a, '删除 Token').click()
+    await btn(a, '删除').click()
     await gone(b, tokenSelector)
 
     await a.screenshot({ path: '.wrangler/room-map.png' })

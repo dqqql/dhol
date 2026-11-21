@@ -235,7 +235,7 @@ function TokenEditor({
           保存
         </button>
         <button type="button" className="button--danger room-map-btn-sm" onClick={remove}>
-          删除 Token
+          删除
         </button>
       </div>
     </form>
@@ -301,6 +301,7 @@ export default function MapPanel({
   const failures = [...sync.mapFailures().values()].filter(item => !projected.erased.has(item.stroke.id))
   const pendingCount = pending.filter(item => item.command.type.startsWith('map.')).length
   const selected = projected.tokens.get(selectedId)
+  const syncFailure = sync.getState().save === 'failed' ? sync.getState().reason : null
 
   useEffect(() => {
     const element = dialog.current
@@ -566,11 +567,31 @@ export default function MapPanel({
           <h2 id="room-map-heading">房间地图</h2>
           <span className="room-map-badge">40 × 40 格</span>
         </div>
-        <p className="room-map-header-hint">
-          <span>中键 / 右键 / 空格+左键拖拽平移</span>
-          <span className="room-map-hint-dot">·</span>
-          <span>滚轮缩放</span>
-        </p>
+        <p className="room-map-header-hint">右键移动 左键选中 滚轮缩放</p>
+        <div className="room-map-status-bar">
+          <p className="room-map-status" role="status">
+            <span
+              className={`room-map-sync-dot ${
+                !connected || syncFailure ? 'is-offline' : pendingCount ? 'is-pending' : 'is-synced'
+              }`}
+            />
+            <span className="room-map-sync-text">
+              {syncFailure ? '地图未保存' : connected
+                ? pendingCount
+                  ? `${pendingCount} 项待确认`
+                  : '地图已同步'
+                : pendingCount
+                ? `连接中断，${pendingCount} 项待同步`
+                : '连接中断'}
+            </span>
+            {failures.length > 0 && (
+              <strong className="room-map-failure-text">
+                {failures.length} 条笔迹失败（可用橡皮擦清除）
+              </strong>
+            )}
+            {(notice || syncFailure) && <strong className="room-map-notice-text"> {notice || syncFailure}</strong>}
+          </p>
+        </div>
         <button type="button" className="room-map-close" onClick={onClose}>
           关闭
         </button>
@@ -961,35 +982,6 @@ export default function MapPanel({
             remove={() => submit({ type: 'map.token.delete', id: selected.id })}
           />
         )}
-
-        <div className="room-map-status-bar">
-          <p className="room-map-status" role="status">
-            <span
-              className={`room-map-sync-dot ${
-                !connected ? 'is-offline' : pendingCount ? 'is-pending' : 'is-synced'
-              }`}
-            />
-            {tool === 'place' && <span>点击任意格子放置 Token。</span>}
-            {tool === 'eraser' && <span>点击笔迹擦除整条线。</span>}
-            {tool === 'pan' && <span>按住鼠标左键拖拽平移视野。</span>}
-            {tool === 'select' && !selected && <span>点击或拖动 Token；按住右键/中键平移。</span>}
-            <span className="room-map-sync-text">
-              {connected
-                ? pendingCount
-                  ? `${pendingCount} 项待确认`
-                  : '地图已同步'
-                : pendingCount
-                ? `连接中断，${pendingCount} 项待同步`
-                : '连接中断'}
-            </span>
-            {failures.length > 0 && (
-              <strong className="room-map-failure-text">
-                {failures.length} 条笔迹失败（可用橡皮擦清除）
-              </strong>
-            )}
-            {notice && <strong className="room-map-notice-text"> {notice}</strong>}
-          </p>
-        </div>
       </div>
     </dialog>
   )

@@ -18,6 +18,22 @@ function harness(roomId = 'room-fixture') {
 }
 
 describe('Room V2 sync', () => {
+  it('keeps the resized token after the formal event, acknowledgement and reconnect snapshot', () => {
+    const { sync, room } = harness()
+    const token = { id: 'size-regression', image: 'dragon', name: '巨龙', labelColor: '#263950', x: 39, y: 39 }
+    sync.receive({ type: 'room.snapshot', protocolVersion: 2, room: { ...room, map: { tokens: [token], strokes: [] } }, receipts: [] })
+    const requestId = sync.submit({ type: 'map.token.update', id: token.id, patch: { size: 3 } })
+    expect(sync.pending()[0].command).toMatchObject({ patch: { size: 3 } })
+    const resized = { ...token, size: 3 as const, x: 37, y: 37 }
+    sync.receive({ type: 'map.token.changed', requestId, seq: 1, token: resized })
+    sync.receive({ type: 'operation.ack', requestId, seq: 1 })
+    expect(sync.pending()).toHaveLength(0)
+    expect(sync.getConfirmed()?.map?.tokens[0]).toEqual(resized)
+    sync.receive({ type: 'room.snapshot', protocolVersion: 2, room: { ...room, seq: 1, map: { tokens: [resized], strokes: [] } }, receipts: [] })
+    expect(sync.getConfirmed()?.map?.tokens[0]).toEqual(resized)
+    sync.destroy()
+  })
+
   it('does not resend a locally queued operation past the receipt retention window', () => {
     const data = new Map<string, string>()
     data.set('dhol:desktop:v2:outbox:room-fixture:player-a', JSON.stringify([{

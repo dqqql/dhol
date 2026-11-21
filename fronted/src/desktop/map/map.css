@@ -82,10 +82,6 @@
   gap: 8px;
 }
 
-.room-map-hint-dot {
-  color: var(--ink-muted, #888882);
-}
-
 .room-map-close {
   min-height: 32px;
   padding: 4px 14px;
@@ -428,6 +424,8 @@
 }
 
 .room-map-token-editor {
+  width: 100%;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -474,6 +472,8 @@
 }
 
 .room-map-editor-actions {
+  margin-left: auto;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 8px;
