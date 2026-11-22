@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseDamageFormula, parseEvasionValue } from '../desktop/combat/damage-formula'
+import { applyCriticalDamage, parseDamageFormula, parseEvasionValue } from '../desktop/combat/damage-formula'
 import { createHandCardFromTemplate, nextNumberedName } from '../desktop/combat/enemy-storage'
 import type { EnemyTemplate } from '../desktop/combat/enemy-types'
 
@@ -34,6 +34,33 @@ describe('combat damage formula parser', () => {
   it('rejects unsupported die faces and negative dice terms', () => {
     expect(parseDamageFormula('1d7+2').kind).toBe('error')
     expect(parseDamageFormula('1d8-1d4').kind).toBe('error')
+  })
+})
+
+describe('enemy critical damage', () => {
+  it('adds the maximum of the entire original formula while keeping its dice', () => {
+    expect(applyCriticalDamage(parseDamageFormula('1d6+2+1d8'), true)).toEqual({
+      kind: 'dice',
+      dice: [{ sides: 6, count: 1 }, { sides: 8, count: 1 }],
+      modifier: 18,
+      normalized: '1d6 + 1d8 + 2 +16',
+    })
+  })
+
+  it('counts every die and retains negative modifiers in the maximum', () => {
+    expect(applyCriticalDamage(parseDamageFormula('2d6-2'), true)).toMatchObject({
+      dice: [{ sides: 6, count: 2 }],
+      modifier: 8,
+    })
+    expect(applyCriticalDamage(parseDamageFormula('d12'), true)).toMatchObject({ modifier: 12 })
+  })
+
+  it('doubles fixed damage and leaves normal attacks unchanged', () => {
+    expect(applyCriticalDamage(parseDamageFormula('6'), true)).toEqual({
+      kind: 'flat', value: 12, normalized: '12',
+    })
+    const normal = parseDamageFormula('1d6+2+1d8')
+    expect(applyCriticalDamage(normal, false)).toBe(normal)
   })
 })
 

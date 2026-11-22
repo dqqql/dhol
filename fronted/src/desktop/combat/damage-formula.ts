@@ -94,6 +94,22 @@ export function parseDamageFormula(raw: string): ParsedDamageFormula {
   }
 }
 
+/** Add the maximum original damage (including its modifier) on a critical hit. */
+export function applyCriticalDamage(parsed: ParsedDamageFormula, critical: boolean): ParsedDamageFormula {
+  if (!critical || parsed.kind === 'error') return parsed
+  if (parsed.kind === 'flat') {
+    const value = parsed.value * 2
+    return { kind: 'flat', value, normalized: String(value) }
+  }
+
+  const bonus = parsed.dice.reduce((total, entry) => total + entry.count * entry.sides, parsed.modifier)
+  return {
+    ...parsed,
+    modifier: parsed.modifier + bonus,
+    normalized: `${parsed.normalized} ${formatSignedModifier(bonus)}`,
+  }
+}
+
 export function parseEvasionValue(evasion: string | null): number | null {
   if (!evasion) return null
   const match = /-?\d+/.exec(evasion.trim())

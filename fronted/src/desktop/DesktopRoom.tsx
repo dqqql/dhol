@@ -16,7 +16,7 @@ import BackupDialog from './components/BackupDialog'
 import EnemyLibraryDialog from './combat/EnemyLibraryDialog'
 import EnemyHandDock from './combat/EnemyHandDock'
 import AimingArrowOverlay, { type Point2D } from './combat/AimingArrowOverlay'
-import { formatSignedModifier, parseDamageFormula, parseEvasionValue } from './combat/damage-formula'
+import { applyCriticalDamage, formatSignedModifier, parseDamageFormula, parseEvasionValue } from './combat/damage-formula'
 import {
   createHandCardFromTemplate,
   loadEnemyHand,
@@ -522,9 +522,9 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
   async function handleConfirmEnemyAttack() {
     if (!selectedEnemy || !selectedTargetCharacter || !ready || attacking) return
 
-    const parsedDamage = parseDamageFormula(selectedEnemy.damageFormula)
-    if (parsedDamage.kind === 'error') {
-      sync.ui.setNotice(`【${selectedEnemy.name}】伤害公式无效：${parsedDamage.message}`)
+    const baseDamage = parseDamageFormula(selectedEnemy.damageFormula)
+    if (baseDamage.kind === 'error') {
+      sync.ui.setNotice(`【${selectedEnemy.name}】伤害公式无效：${baseDamage.message}`)
       return
     }
 
@@ -550,6 +550,8 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
       const naturalD20 = hitResult?.kept_primary ?? hitResult?.primary_rolls[0]
       const evasion = parseEvasionValue(selectedTargetCharacter.evasion)
       const isCrit = naturalD20 === 20
+      const parsedDamage = applyCriticalDamage(baseDamage, isCrit)
+      if (parsedDamage.kind === 'error') throw new Error(parsedDamage.message)
       const isHit = evasion === null ? true : hitTotal >= evasion
 
       const advSuffix = attackAdvantage === 'advantage' ? '(优势)' : attackAdvantage === 'disadvantage' ? '(劣势)' : ''
