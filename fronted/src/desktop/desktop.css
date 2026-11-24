@@ -144,6 +144,7 @@ input, select, textarea {
 }
 
 .room-toolbar {
+  position: relative;
   border-bottom: 2px solid var(--border);
   background: var(--surface);
   display: flex;
