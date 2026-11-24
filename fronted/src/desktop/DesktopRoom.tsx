@@ -10,7 +10,7 @@ import CharacterDetailDialog, { type DetailState } from './components/character-
 import FearTracker from './components/FearTracker'
 import CountdownTracker from './components/CountdownTracker'
 import XCard from './components/XCard'
-import DicePanel, { type DicePanelTab, type RoomLogItem } from './components/DicePanel'
+import DicePanel, { type DicePanelTab } from './components/DicePanel'
 import RoomToolbar from './components/RoomToolbar'
 import BackupDialog from './components/BackupDialog'
 import EnemyLibraryDialog from './combat/EnemyLibraryDialog'
@@ -93,30 +93,11 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
     }
   }, [])
 
-  // 房间流水记录持久化
-  const roomLogStorageKey = `dhol-roomlog-${session.roomId}`
-  const [roomLog, setRoomLog] = useState<RoomLogItem[]>(() => {
-    try {
-      const saved = localStorage.getItem(roomLogStorageKey)
-      return saved ? JSON.parse(saved) as RoomLogItem[] : []
-    } catch {
-      return []
-    }
-  })
-
+  // Combat details use the same durable, sequenced room stream as other actions.
   const addRoomLog = useCallback((text: string, tag?: string) => {
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-    setRoomLog(prev => {
-      const next = [{ text, time, tag }, ...prev].slice(0, 50)
-      try { localStorage.setItem(roomLogStorageKey, JSON.stringify(next)) } catch { /* ignore */ }
-      return next
-    })
-  }, [roomLogStorageKey])
-
-  const handleClearRoomLog = () => {
-    setRoomLog([])
-    try { localStorage.removeItem(roomLogStorageKey) } catch { /* ignore */ }
-  }
+    try { sync.submit({ type: 'room.appendLog', text, ...(tag ? { tag } : {}) }) }
+    catch { /* connection/save status explains the failure */ }
+  }, [sync])
 
   useEffect(() => {
     const epoch = lifecycle.current + 1
@@ -133,6 +114,8 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
   const ui = useSyncExternalStore(sync.ui.subscribe, sync.ui.getState)
   const room = state.room
   const ready = state.connection === 'ready'
+  const roomLog = (room?.roomLog ?? []).slice().reverse().map(entry => ({ ...entry, text: `${entry.actorName}：${entry.text}`, time: new Date(entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) }))
+  const handleClearRoomLog = () => submit({ type: 'room.clearLog' })
   // The Pages frontend can deploy before the realtime Worker. Older snapshots
   // have no clocks field, so keep the room usable until the Worker is updated.
   const clocksSupported = Array.isArray(room?.clocks)
@@ -201,28 +184,22 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
 
   function mark(character: CharacterSummary, resource: TrackResource, index: number, marked: boolean) {
     submit({ type: 'character.setMark', name: character.name, generation: character.generation, resource, index, marked })
-    const label = resource === 'hp' ? '生命' : resource === 'stress' ? '压力' : resource === 'gold' ? '金币' : '护甲'
-    addRoomLog(`${character.name} ${marked ? '标记' : '清除'}${label}${resource === 'gold' && index === 20 ? '箱' : `第 ${index + 1} 格`}`)
   }
 
   function remove(character: CharacterSummary) {
     submit({ type: 'character.delete', name: character.name, generation: character.generation })
-    addRoomLog(`已移除角色【${character.name}】`)
   }
 
   const handleFearChange = (delta: 1 | -1) => {
     submit({ type: 'room.adjustFear', delta })
-    addRoomLog(`恐惧点 ${room?.fear.value ?? 0} → ${(room?.fear.value ?? 0) + delta} (${delta > 0 ? '+1' : '-1'})`)
   }
 
   const handleHopeChange = (character: CharacterSummary, delta: 1 | -1) => {
     submit({ type: 'character.adjustHope', name: character.name, generation: character.generation, delta })
-    addRoomLog(`${character.name} 希望点 ${character.resources.hope} → ${character.resources.hope + delta}`)
   }
 
   const handleXCardChange = (active: boolean) => {
     submit({ type: 'xcard.set', active })
-    addRoomLog(active ? 'X卡已激活（战局暂停）' : 'X卡已解除')
   }
 
   async function quickRollStat(character: CharacterSummary, statName: string, statVal: string) {
@@ -732,7 +709,6 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
                 onAdjust={(id, delta) => submit({ type: 'clock.adjust', id, delta })}
                 onReset={id => submit({ type: 'clock.reset', id })}
                 onDelete={id => submit({ type: 'clock.delete', id })}
-                onLog={addRoomLog}
               />
               {!clocksSupported && <p role="status">房间服务尚未更新，倒计时暂不可用。</p>}
             </div>

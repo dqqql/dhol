@@ -44,6 +44,7 @@ export interface RoomMember {
   online: boolean
 }
 export interface CountdownClock { id: string; name: string; value: number; max: number }
+export interface RoomLogEntry { id: string; text: string; createdAt: string; actorId: string; actorName: string; tag?: string }
 export interface RoomV2Model {
   protocolVersion: 2
   roomId: string
@@ -56,6 +57,7 @@ export interface RoomV2Model {
   fear: { value: number; max: number }
   clocks: CountdownClock[]
   dice: DiceRollRecord[]
+  roomLog?: RoomLogEntry[]
   xCard: { active: boolean; updatedAt: string | null }
   map?: RoomMap
 }

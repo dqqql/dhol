@@ -125,7 +125,7 @@ const DicePanel = forwardRef<HTMLElement, {
       <div className="history-card">
         <div className="history-head">
           <h4 className="history-title">房间记录</h4>
-          {onClearRoomLog && <button type="button" style={{ padding: '4px 8px', fontSize: '12px' }} onClick={onClearRoomLog}>清空</button>}
+          {onClearRoomLog && <button type="button" disabled={!ready} style={{ padding: '4px 8px', fontSize: '12px' }} onClick={onClearRoomLog}>清空</button>}
         </div>
         <div className="history-scroll">
           {roomLog.length === 0 ? (

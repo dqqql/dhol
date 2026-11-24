@@ -1,6 +1,7 @@
 import { env, runInDurableObject } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
-import { MAP_DATA_BYTES, MAP_STROKE_POINTS, summaryFromSheet, utf8Bytes, type MapStroke, type RoomEvent, type RoomServerMessage, type RoomSnapshot } from '@dhgc/shared/desktop'
+import { MAP_DATA_BYTES, MAP_STROKE_POINTS, summaryFromSheet, utf8Bytes, type CharacterSheetJson, type MapStroke, type RoomEvent, type RoomServerMessage, type RoomSnapshot } from '@dhgc/shared/desktop'
+import daggerheart from '../../../../packages/shared/src/__tests__/fixtures/daggerheart-sheet.json'
 import { signRoomV2Session } from '../room-v2-session'
 import { roomOwnerKeyHash } from '../room-owner-key'
 import { routeRoomV2 } from '../room-v2-http'
@@ -83,7 +84,72 @@ function nextMessage<T extends RoomServerMessage['type']>(socket: WebSocket, typ
 }
 
 describe('Room V2 workerd integration', () => {
-  it('commits map edits once, rolls them back with a failed receipt, and restores the exported map', async () => {
+  it('shares durable action logs between members and restores the focused JSON backup', async () => {
+    const { stub, room } = await createRoom('WRKLOG')
+    const a = await socketFor(stub, room, room.players[0])
+    const b = await socketFor(stub, room, room.players[1])
+    const send = async (socket: WebSocket, requestId: string, operation: object) => {
+      const ack = nextMessage(socket, 'operation.ack', requestId)
+      socket.send(JSON.stringify({ protocolVersion: 2, requestId, ...operation }))
+      return ack
+    }
+    const snapshot = async (socket: WebSocket) => {
+      const received = nextMessage(socket, 'room.snapshot')
+      socket.send(JSON.stringify({ type: 'room.sync', protocolVersion: 2, afterSeq: 0, pendingRequestIds: [] }))
+      return (await received).room
+    }
+    try {
+      await runInDurableObject(stub, async (_, state) => {
+        const commands = new RoomV2Commands(new RoomV2Storage(state.storage), () => undefined)
+        await commands.replace('delivery', 'deliver-log', daggerheart as CharacterSheetJson)
+      })
+      const initial = await snapshot(a)
+      const character = initial.characters[0]
+      const observed = nextMessage(b, 'character.resourcesChanged', 'log-resource')
+      await send(a, 'log-resource', { type: 'character.setMark', name: character.name, generation: character.generation, resource: 'hp', index: 0, marked: true })
+      expect((await observed).log).toMatchObject({ actorId: 'player-a', actorName: '甲', text: expect.stringContaining('标记生命') })
+      await Promise.all([
+        send(a, 'log-fear', { type: 'room.adjustFear', delta: 1 }),
+        send(b, 'log-clock', { type: 'clock.create', id: 'reinforcements', name: '援军', max: 6, value: 2 }),
+      ])
+      const custom = { type: 'room.appendLog', text: '巨龙攻击：未命中', tag: '战斗' }
+      const combatEvent = nextMessage(a, 'room.logAppended', 'log-combat')
+      await send(b, 'log-combat', custom)
+      expect((await combatEvent).entry).toMatchObject({ actorId: 'player-b', actorName: '乙', text: custom.text })
+      await send(b, 'log-combat', custom)
+      const left = await snapshot(a)
+      const right = await snapshot(b)
+      expect(left.roomLog).toEqual(right.roomLog)
+      expect(left.roomLog).toHaveLength(5)
+      await runInDurableObject(stub, async (_, state) => {
+        const db = new RoomV2Storage(state.storage)
+        expect(db.roomLog()).toEqual(left.roomLog)
+        state.storage.sql.exec("CREATE TRIGGER fail_log_receipt BEFORE INSERT ON panel_v2_receipts WHEN NEW.request_id = 'log-rollback' BEGIN SELECT RAISE(ABORT, 'simulated failure'); END")
+      })
+      const failure = nextMessage(a, 'operation.error', 'log-rollback')
+      a.send(JSON.stringify({ type: 'room.adjustFear', protocolVersion: 2, requestId: 'log-rollback', delta: 1 }))
+      expect(await failure).toMatchObject({ code: 'PERSISTENCE_FAILED' })
+      expect((await snapshot(a)).roomLog).toEqual(left.roomLog)
+      expect((await snapshot(a)).fear.value).toBe(1)
+
+      const authorization = `Bearer ${await signRoomV2Session(env.SESSION_SECRET, { roomId: room.roomId, inviteCode: room.inviteCode, playerId: 'player-a', nickname: '甲' })}`
+      const backup = await (await stub.fetch(new Request('https://room-v2.internal/internal/v2/export', { headers: { Authorization: authorization } }))).json() as { room: Record<string, unknown>; characters: unknown[] }
+      expect(Object.keys(backup.room).sort()).toEqual(['characters', 'clocks', 'fear', 'name'])
+      expect(backup.characters).toHaveLength(1)
+      const restored = await routeRoomV2(new Request('https://worker.test/api/v2/rooms/restore', { method: 'POST', body: JSON.stringify({ nickname: '恢复', backup }) }), env)
+      expect(restored?.status).toBe(200)
+      expect(await restored?.json()).toMatchObject({ room: {
+        characters: [{ name: character.name, resources: { hp: [true, ...character.resources.hp.slice(1)] } }],
+        fear: { value: 1 }, clocks: [{ id: 'reinforcements', name: '援军', max: 6, value: 2 }], dice: [], roomLog: [], xCard: { active: false },
+      } })
+      const cleared = nextMessage(a, 'room.logCleared', 'log-clear')
+      await send(b, 'log-clear', { type: 'room.clearLog' })
+      await cleared
+      expect((await snapshot(a)).roomLog).toEqual([])
+      expect((await snapshot(b)).roomLog).toEqual([])
+    } finally { a.close(); b.close() }
+  })
+  it('commits map edits once, rolls back failed receipts, and accepts legacy map backups', async () => {
     const { stub, room } = await createRoom('WRK014')
     const a = await socketFor(stub, room, room.players[0])
     const b = await socketFor(stub, room, room.players[1])
@@ -135,8 +201,11 @@ describe('Room V2 workerd integration', () => {
       }), env)
       const restored = await restore(backup)
       expect(restored?.status).toBe(200)
-      expect(await restored?.json()).toMatchObject({ room: { map: backup.room.map } })
-      const { map: _map, ...oldRoom } = backup.room
+      expect(await restored?.json()).toMatchObject({ room: { map: { tokens: [], strokes: [] } } })
+      expect(backup.room).not.toHaveProperty('map')
+      const legacyMap = { tokens: [{ ...token, name: '领队', x: 12, y: 8, labelColor: '#833614', size: 3 }], strokes: [stroke] }
+      expect(await (await restore({ ...backup, room: { ...backup.room, map: legacyMap } }))?.json()).toMatchObject({ room: { map: legacyMap } })
+      const oldRoom = backup.room
       expect(await (await restore({ ...backup, room: oldRoom }))?.json()).toMatchObject({ room: { map: { tokens: [], strokes: [] } } })
 
       await runInDurableObject(stub, async (_, state) => {
@@ -148,7 +217,7 @@ describe('Room V2 workerd integration', () => {
       await runInDurableObject(stub, async (_, state) => {
         const db = new RoomV2Storage(state.storage)
         expect(db.mapHasStroke('not-committed')).toBe(false)
-        expect(db.metaRow()?.seq).toBe(backup.room.seq)
+        expect(db.metaRow()?.seq).toBe((await recovered).room.seq)
         expect(db.receipt(room.players[0].id, 'map-rollback')).toBeNull()
       })
       const invalid = nextMessage(a, 'operation.error', 'too-many-points')

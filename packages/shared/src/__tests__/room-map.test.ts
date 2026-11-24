@@ -1,7 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import { fitMapToken, mapTokenSize, parseMapOperation, parseRoomMap, type MapToken } from '../room-map'
+import { fitMapToken, mapTokenSize, parseMapOperation, parseRoomMap, MAP_AVATAR_MAX_LENGTH, type MapToken } from '../room-map'
 
 const token: MapToken = { id: 'token-1', image: 'dragon', name: '巨龙', labelColor: '#263950', x: 39, y: 39 }
+
+describe('custom map avatars', () => {
+  it.each(['square', 'circle'])('preserves a %s avatar in commands and backups', shape => {
+    const image = `avatar-${shape}:data:image/webp;base64,UklGRg==`
+    const avatar = { ...token, image }
+    expect(parseMapOperation({ type: 'map.token.create', token: avatar })).toEqual({ type: 'map.token.create', token: avatar })
+    expect(parseRoomMap({ tokens: [avatar], strokes: [] }).tokens[0]).toEqual(avatar)
+    expect(parseMapOperation({ type: 'map.token.update', id: token.id, patch: { image } })).toEqual({ type: 'map.token.update', id: token.id, patch: { image } })
+  })
+  it.each([
+    'avatar-circle:data:image/svg+xml;base64,PHN2Zz4=',
+    'avatar-square:https://example.com/avatar.png',
+    'avatar-triangle:data:image/png;base64,YQ==',
+    `avatar-circle:data:image/webp;base64,${'A'.repeat(MAP_AVATAR_MAX_LENGTH)}`,
+  ])('rejects unsupported or oversized avatar data', image => {
+    expect(() => parseMapOperation({ type: 'map.token.create', token: { ...token, image } })).toThrow()
+  })
+})
 
 describe('map token footprints', () => {
   it('keeps legacy tokens compatible as 1×1 without changing their saved shape', () => {

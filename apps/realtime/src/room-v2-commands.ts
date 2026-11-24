@@ -1,6 +1,7 @@
 import { fitMapToken, characterNameKey, resourcesFromSheet, rollDicePool, summaryFromSheet, type CharacterSheetJson, type DiceRollRecord, type MutationAck, type MutationCommand, type MutationError, type RoomEvent } from '@dhgc/shared/desktop'
 import { RoomV2Storage } from './room-v2-storage'
 import { summarizeRollServerMetrics, type RollCommandMetric } from './room-v2-metrics'
+import { roomActionText } from './room-v2-log'
 import type { MapChange, MapOperation, MutationEnvelope } from '@dhgc/shared/desktop'
 
 export type { RollCommandMetric } from './room-v2-metrics'
@@ -10,7 +11,7 @@ export class CommandFailure extends Error {
 }
 
 export interface CommitResult { ack: MutationAck; event: RoomEvent | null; duplicate: boolean; action?: 'created' | 'updated' }
-export type CommandStorage = Pick<RoomV2Storage, 'receipt' | 'metaRow' | 'characterHeader' | 'resources' | 'nextPosition' | 'transaction' | 'advance' | 'saveReceipt' | 'saveResources' | 'saveCharacter' | 'deleteCharacter' | 'saveDice' | 'clearDice' | 'clocks' | 'clock' | 'saveClock' | 'deleteClock'>
+export type CommandStorage = Pick<RoomV2Storage, 'receipt' | 'metaRow' | 'characterHeader' | 'resources' | 'nextPosition' | 'transaction' | 'advance' | 'saveReceipt' | 'saveResources' | 'saveCharacter' | 'deleteCharacter' | 'saveDice' | 'clearDice' | 'clocks' | 'clock' | 'saveClock' | 'deleteClock' | 'saveRoomLog' | 'clearRoomLog'>
 type MapStorage = Pick<RoomV2Storage, 'mapToken' | 'mapHasStroke' | 'saveMapItem' | 'deleteMapItem'>
 type MapCommand = MutationEnvelope & MapOperation
 function isMapCommand(command: MutationCommand): command is MapCommand { return command.type.startsWith('map.') }
@@ -72,7 +73,14 @@ export class RoomV2Commands {
       let transactionStartedAtMs = hashedAtMs
       let transactionCommittedAtMs = hashedAtMs
       let broadcastAtMs = hashedAtMs
-      const result = this.commit(actor, command.requestId, hash, this.applyCommand(actor, nickname, command), {
+      const result = this.commit(actor, command.requestId, hash, seq => {
+        const change = this.applyCommand(actor, nickname, command)(seq)
+        if (change.event) {
+          const text = roomActionText(command, change.event, command.type === 'clock.delete' ? this.db.clock(command.id)?.name : undefined)
+          if (text) change.event.log = { id: crypto.randomUUID(), text, createdAt: new Date().toISOString(), actorId: actor, actorName: nickname }
+        }
+        return change
+      }, {
         transactionStarted: () => { transactionStartedAtMs = this.now() },
         transactionCommitted: () => { transactionCommittedAtMs = this.now() },
         broadcastCompleted: () => { broadcastAtMs = this.now() },
@@ -101,7 +109,8 @@ export class RoomV2Commands {
         const position = previous?.position ?? this.db.nextPosition()
         const resources = resourcesFromSheet(sheet)
         const summary = summaryFromSheet(sheet, resources, seq, position)
-        const event: RoomEvent = { type: 'character.replaced', requestId, seq, name, generation: seq, summary }
+        const event: RoomEvent = { type: 'character.replaced', requestId, seq, name, generation: seq, summary,
+          log: { id: crypto.randomUUID(), text: `${previous ? '更新' : '投递'}角色【${name}】`, createdAt: new Date().toISOString(), actorId: actor, actorName: name } }
         return { event, write: () => this.db.saveCharacter(name, seq, position, sheet, summary, resources), action: previous ? 'updated' as const : 'created' as const }
       })
     })
@@ -124,6 +133,7 @@ export class RoomV2Commands {
       timing?.transactionStarted()
       this.db.transaction(() => {
         change.write()
+        if (change.event?.log) this.db.saveRoomLog(seq, change.event.log)
         if (change.event) this.db.advance(seq, change.event.type === 'room.fearChanged' ? change.event.fear.value : undefined, change.event.type === 'xcard.changed' ? change.event.xCard : undefined)
         const receipt = change.event?.type.startsWith('map.') ? { ...result, event: null } : result
         this.db.saveReceipt(actor, requestId, hash, ack.seq, receipt)
@@ -170,6 +180,11 @@ export class RoomV2Commands {
   private applyCommand(actor: string, nickname: string, command: MutationCommand): (seq: number) => { event: RoomEvent | null; write: () => void } {
     return seq => {
       const requestId = command.requestId
+      if (command.type === 'room.appendLog') {
+        const entry = { id: crypto.randomUUID(), text: command.text, createdAt: new Date().toISOString(), actorId: actor, actorName: nickname, ...(command.tag ? { tag: command.tag } : {}) }
+        return { event: { type: 'room.logAppended', requestId, seq, entry }, write: () => this.db.saveRoomLog(seq, entry) }
+      }
+      if (command.type === 'room.clearLog') return { event: { type: 'room.logCleared', requestId, seq }, write: () => this.db.clearRoomLog() }
       if (isMapCommand(command)) return this.applyMap(command, seq)
       if (command.type === 'character.adjustHope' || command.type === 'character.setMark' || command.type === 'character.addIndicator' || command.type === 'character.adjustIndicator' || command.type === 'character.delete') {
         const row = this.db.characterHeader(command.name)

@@ -2,7 +2,7 @@ import type { DiceRollRecord, DiceRollRequest } from './dice-types'
 import { normalizeDiceRollRequest } from './dice'
 import { characterNameKey } from './character-panel'
 import { parseMapOperation, type MapChange, type MapOperation } from './room-map'
-import type { CharacterResources, CharacterSummary, CountdownClock, RoomMember, RoomV2Model, TrackResource } from './room-v2-model'
+import type { CharacterResources, CharacterSummary, CountdownClock, RoomLogEntry, RoomMember, RoomV2Model, TrackResource } from './room-v2-model'
 
 export const ROOM_V2_PROTOCOL_VERSION = 2 as const
 export const ROOM_V2_SESSION_AUDIENCE = 'dhol-room-v2' as const
@@ -18,6 +18,8 @@ export type RoomCommand = MutationEnvelope & (
   | { type: 'room.adjustFear'; delta: 1 | -1 }
   | { type: 'dice.roll'; payload: DiceRollRequest }
   | { type: 'dice.clearHistory' }
+  | { type: 'room.appendLog'; text: string; tag?: string }
+  | { type: 'room.clearLog' }
   | { type: 'xcard.set'; active: boolean }
   | { type: 'character.delete'; name: string; generation: number }
   | { type: 'clock.create'; id: string; name: string; max: number; value?: number }
@@ -33,7 +35,7 @@ export interface MutationError {
   code: 'INVALID_COMMAND' | 'CHARACTER_REPLACED' | 'REQUEST_ID_REUSED' | 'PERSISTENCE_FAILED' | 'ROOM_EXPIRED'
   message: string
 }
-type EventBase = { seq: number; requestId: string }
+type EventBase = { seq: number; requestId: string; log?: RoomLogEntry }
 export type RoomEvent = EventBase & (
   | { type: 'character.replaced'; name: string; generation: number; summary: CharacterSummary }
   | { type: 'character.resourcesChanged'; name: string; generation: number; resources: CharacterResources }
@@ -41,6 +43,8 @@ export type RoomEvent = EventBase & (
   | { type: 'room.fearChanged'; fear: { value: number; max: number } }
   | { type: 'dice.rolled'; roll: DiceRollRecord }
   | { type: 'dice.historyCleared' }
+  | { type: 'room.logAppended'; entry: RoomLogEntry }
+  | { type: 'room.logCleared' }
   | { type: 'xcard.changed'; xCard: { active: boolean; updatedAt: string | null } }
   | { type: 'clock.changed'; clock: CountdownClock }
   | { type: 'clock.deleted'; id: string }
@@ -71,6 +75,13 @@ export function parseMutationCommand(value: unknown): MutationCommand {
     try { command.name = characterNameKey(command.name) } catch { throw new Error('INVALID_COMMAND') }
   }
   switch (command.type) {
+    case 'room.appendLog':
+      if (typeof command.text === 'string' && command.text.trim().length > 0 && command.text.length <= 1000 && (command.tag === undefined || (typeof command.tag === 'string' && command.tag.length <= 32))) {
+        return { type: command.type, protocolVersion: 2, requestId: command.requestId, text: command.text.trim(), ...(command.tag === undefined ? {} : { tag: command.tag }) }
+      }
+      break
+    case 'room.clearLog':
+      return { type: command.type, protocolVersion: 2, requestId: command.requestId }
     case 'clock.create':
       if (typeof command.id === 'string' && /^[\w-]{1,128}$/.test(command.id) && typeof command.name === 'string' && command.name.trim().length > 0 && command.name.trim().length <= 60 && Number.isSafeInteger(command.max) && (command.max as number) >= 2 && (command.max as number) <= 12 && (command.value === undefined || (Number.isSafeInteger(command.value) && (command.value as number) >= 0 && (command.value as number) <= (command.max as number)))) {
         command.name = command.name.trim()

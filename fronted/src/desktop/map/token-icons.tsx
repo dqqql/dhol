@@ -1,4 +1,5 @@
 import { useId } from 'react'
+import { isMapAvatar } from '@dhgc/shared/desktop'
 import classTokens from './assets/class-tokens.png'
 import natureTokens from './assets/monster-tokens-nature.png'
 import magicTokens from './assets/monster-tokens-magic.png'
@@ -20,6 +21,16 @@ const LEGACY_CLASSES: Record<string, string> = { hero: 'guardian', beast: 'druid
 
 export default function TokenIcon({ image, x = 0, y = 0, size = 32 }: { image: string; x?: number; y?: number; size?: number }) {
   const clipId = useId()
+  if (isMapAvatar(image)) {
+    const square = image.startsWith('avatar-square:')
+    return (
+      <svg x={x} y={y} width={size} height={size} viewBox="0 0 100 100" aria-hidden="true">
+        <defs><clipPath id={clipId}>{square ? <rect width="100" height="100" /> : <circle cx="50" cy="50" r="50" />}</clipPath></defs>
+        <image href={image.slice(image.indexOf(':') + 1)} width="100" height="100" clipPath={`url(#${clipId})`} />
+        {square ? <rect x="1" y="1" width="98" height="98" fill="none" stroke="#263950" strokeWidth="2" /> : <circle cx="50" cy="50" r="49" fill="none" stroke="#263950" strokeWidth="2" />}
+      </svg>
+    )
+  }
   const id = Object.hasOwn(REGIONS, image) ? image : Object.hasOwn(LEGACY_CLASSES, image) ? LEGACY_CLASSES[image] : 'guardian'
   const region = REGIONS[id]
   return (

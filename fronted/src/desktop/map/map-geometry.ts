@@ -4,6 +4,18 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
 
+export function nearestFreeTokenCell(center: MapPoint, tokens: Iterable<MapToken>): MapPoint | null {
+  const occupied = [...tokens]
+  let nearest: MapPoint | null = null
+  let distance = Infinity
+  for (let y = 0; y < MAP_SIZE; y++) for (let x = 0; x < MAP_SIZE; x++) {
+    if (occupied.some(token => x < token.x + mapTokenSize(token) && x + 1 > token.x && y < token.y + mapTokenSize(token) && y + 1 > token.y)) continue
+    const next = (x + 0.5 - center[0]) ** 2 + (y + 0.5 - center[1]) ** 2
+    if (next < distance) { nearest = [x, y]; distance = next }
+  }
+  return nearest
+}
+
 export function mapPoint([x, y]: MapPoint): MapPoint {
   return [x, y].map(value => Math.round(clamp(value, 0, MAP_SIZE) * 100) / 100) as MapPoint
 }

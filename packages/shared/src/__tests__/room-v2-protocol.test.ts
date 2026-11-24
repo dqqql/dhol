@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { parseMutationCommand, parseSyncRequest, ROOM_V2_SESSION_AUDIENCE } from '../room-v2-protocol'
 
 describe('v2 protocol', () => {
+  it('bounds shared log messages and discards client-supplied actor identity', () => {
+    const base = { type: 'room.appendLog', protocolVersion: 2, requestId: 'log' }
+    expect(parseMutationCommand({ ...base, text: ' 攻击未命中 ', actorName: '假冒主持人' })).toEqual({ ...base, text: '攻击未命中' })
+    for (const text of ['', ' ', 'a'.repeat(1001), null]) expect(() => parseMutationCommand({ ...base, text })).toThrow('INVALID_COMMAND')
+    expect(() => parseMutationCommand({ ...base, text: '攻击', tag: 'a'.repeat(33) })).toThrow('INVALID_COMMAND')
+    expect(parseMutationCommand({ type: 'room.clearLog', protocolVersion: 2, requestId: 'clear' })).toMatchObject({ type: 'room.clearLog' })
+  })
   it('has a separate audience and exact version', () => {
     expect(ROOM_V2_SESSION_AUDIENCE).toBe('dhol-room-v2')
     expect(() => parseMutationCommand({ type: 'room.adjustFear', protocolVersion: 1, requestId: 'a', delta: 1 })).toThrow('INVALID_COMMAND')

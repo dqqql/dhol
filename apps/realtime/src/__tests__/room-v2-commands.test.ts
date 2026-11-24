@@ -19,6 +19,7 @@ function fixture() {
     saveReceipt: (actor, requestId, hash, receiptSeq, result) => { receipts.set(`${actor}:${requestId}`, { payload_hash: hash, seq: receiptSeq, result_json: JSON.stringify(result) }) },
     saveResources: () => undefined, saveCharacter: () => undefined, deleteCharacter: () => undefined,
     saveDice: (_seq, roll) => { dice.set(roll.id, roll) }, clearDice: () => { dice.clear() },
+    saveRoomLog: () => undefined, clearRoomLog: () => undefined,
     clocks: () => [...clocks.values()], clock: id => clocks.get(id) ?? null,
     saveClock: clock => { clocks.set(clock.id, clock) }, deleteClock: id => { clocks.delete(id) },
   }

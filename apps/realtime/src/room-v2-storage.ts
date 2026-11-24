@@ -1,4 +1,4 @@
-import { displayedResourceMax, summaryFromSheet, type CharacterResources, type CharacterSheetJson, type CharacterSummary, type CountdownClock, type DiceRollRecord, type MutationAck, type RoomV2Model } from '@dhgc/shared/desktop'
+import { displayedResourceMax, summaryFromSheet, type CharacterResources, type CharacterSheetJson, type CharacterSummary, type CountdownClock, type DiceRollRecord, type MutationAck, type RoomLogEntry, type RoomV2Model } from '@dhgc/shared/desktop'
 import { MAP_DATA_BYTES, MAP_STROKE_LIMIT, MAP_TOKEN_LIMIT, utf8Bytes, type MapStroke, type MapToken, type RoomMap } from '@dhgc/shared/desktop'
 
 export interface StoredMeta {
@@ -36,6 +36,7 @@ export class RoomV2Storage {
       CREATE TABLE IF NOT EXISTS panel_v2_characters (name TEXT PRIMARY KEY, generation INTEGER NOT NULL, position INTEGER NOT NULL, source_json TEXT NOT NULL, summary_json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS panel_v2_resources (name TEXT PRIMARY KEY, resources_json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS panel_v2_dice (seq INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, record_json TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS panel_v2_room_log (seq INTEGER PRIMARY KEY, entry_json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS panel_v2_clocks (id TEXT PRIMARY KEY, position INTEGER NOT NULL, clock_json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS panel_v2_map (kind TEXT NOT NULL, id TEXT NOT NULL, item_json TEXT NOT NULL, bytes INTEGER NOT NULL, PRIMARY KEY (kind, id));
       CREATE TABLE IF NOT EXISTS panel_v2_receipts (actor TEXT NOT NULL, request_id TEXT NOT NULL, payload_hash TEXT NOT NULL, seq INTEGER NOT NULL, result_json TEXT NOT NULL, created_at_ms INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (actor, request_id));
@@ -190,6 +191,17 @@ export class RoomV2Storage {
     this.storage.sql.exec('DELETE FROM panel_v2_dice')
   }
 
+  roomLog(): RoomLogEntry[] {
+    return this.storage.sql.exec<{ entry_json: string }>('SELECT entry_json FROM panel_v2_room_log ORDER BY seq DESC LIMIT 50').toArray().reverse().map(row => JSON.parse(row.entry_json) as RoomLogEntry)
+  }
+
+  saveRoomLog(seq: number, entry: RoomLogEntry): void {
+    this.storage.sql.exec('INSERT INTO panel_v2_room_log (seq, entry_json) VALUES (?, ?)', seq, JSON.stringify(entry))
+    this.storage.sql.exec('DELETE FROM panel_v2_room_log WHERE seq NOT IN (SELECT seq FROM panel_v2_room_log ORDER BY seq DESC LIMIT 50)')
+  }
+
+  clearRoomLog(): void { this.storage.sql.exec('DELETE FROM panel_v2_room_log') }
+
   clocks(): CountdownClock[] {
     return this.storage.sql.exec<ClockRow>('SELECT clock_json FROM panel_v2_clocks ORDER BY position').toArray().map(row => JSON.parse(row.clock_json) as CountdownClock)
   }
@@ -261,7 +273,7 @@ export class RoomV2Storage {
           protocolVersion: 2, roomId: meta.roomId, name: meta.name, inviteCode: meta.inviteCode,
           expiresAt: meta.expiresAt, seq: row.seq,
           members: meta.players.map(player => ({ ...player, online: onlineIds.has(player.id) })),
-          characters, fear: { value: row.fear, max: 12 }, clocks: this.clocks(), dice,
+          characters, fear: { value: row.fear, max: 12 }, clocks: this.clocks(), dice, roomLog: this.roomLog(),
           ...(includeMap ? { map: this.roomMap() } : {}),
           xCard: row.xcard_json ? JSON.parse(row.xcard_json) as RoomV2Model['xCard'] : { active: false, updatedAt: null },
         },
@@ -281,6 +293,7 @@ export class RoomV2Storage {
   export(): unknown {
     const snapshot = this.snapshot('', [])
     if (!snapshot) return null
-    return { schemaVersion: 2, room: snapshot.room, characters: snapshot.room.characters.map(summary => ({ name: summary.name, sheet: this.sheet(summary.name)?.sheet })) }
+    const { name, characters, fear, clocks } = snapshot.room
+    return { schemaVersion: 2, room: { name, characters, fear, clocks }, characters: characters.map(summary => ({ name: summary.name, sheet: this.sheet(summary.name)?.sheet })) }
   }
 }

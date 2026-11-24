@@ -88,7 +88,7 @@ function restoreState(value: unknown): { name: string; fear: number; xCard: Room
   const backup = value as { schemaVersion?: unknown; room?: unknown; characters?: unknown }
   if (backup.schemaVersion !== 2 || !backup.room || typeof backup.room !== 'object' || !Array.isArray(backup.characters)) throw new Error('INVALID_BACKUP')
   const room = backup.room as Partial<RoomV2Model>
-  if (!Array.isArray(room.characters) || !Array.isArray(room.dice) || !room.fear || typeof room.fear.value !== 'number' || !room.xCard || typeof room.xCard.active !== 'boolean' || backup.characters.length > 100) throw new Error('INVALID_BACKUP')
+  if (!Array.isArray(room.characters) || !room.fear || !Number.isFinite(room.fear.value) || (room.dice !== undefined && !Array.isArray(room.dice)) || (room.xCard !== undefined && (!room.xCard || typeof room.xCard.active !== 'boolean')) || backup.characters.length > 100) throw new Error('INVALID_BACKUP')
   const summaries = new Map(room.characters.map(summary => [summary.name, summary]))
   const characters = backup.characters.map((entry, index) => {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new Error('INVALID_BACKUP')
@@ -106,10 +106,11 @@ function restoreState(value: unknown): { name: string; fear: number; xCard: Room
     if (resources.armor.length !== initial.armor.length && resources.armor.length !== (delivery.sheet.armorBoxes as boolean[]).length) throw new Error('INVALID_BACKUP')
     return { sheet: delivery.sheet, resources, position: Number.isSafeInteger(summary.position) ? summary.position : index }
   })
-  if (room.dice.some(roll => !roll || typeof roll !== 'object' || typeof roll.id !== 'string' || typeof roll.actor_name !== 'string' || typeof roll.normalized_formula !== 'string' || !Array.isArray(roll.results))) throw new Error('INVALID_BACKUP')
+  const dice = room.dice ?? []
+  if (dice.some(roll => !roll || typeof roll !== 'object' || typeof roll.id !== 'string' || typeof roll.actor_name !== 'string' || typeof roll.normalized_formula !== 'string' || !Array.isArray(roll.results))) throw new Error('INVALID_BACKUP')
   const clocks = room.clocks ?? []
   if (!Array.isArray(clocks) || clocks.length > 20 || new Set(clocks.map(clock => clock?.id)).size !== clocks.length || clocks.some(clock => !clock || typeof clock.id !== 'string' || !/^[\w-]{1,128}$/.test(clock.id) || typeof clock.name !== 'string' || !clock.name.trim() || clock.name.length > 60 || !Number.isSafeInteger(clock.max) || clock.max < 2 || clock.max > 12 || !Number.isSafeInteger(clock.value) || clock.value < 0 || clock.value > clock.max)) throw new Error('INVALID_BACKUP')
-  return { name: text(room.name, 60) || 'Restored Room', fear: Math.max(0, Math.min(12, Math.floor(room.fear.value))), xCard: { active: room.xCard.active, updatedAt: typeof room.xCard.updatedAt === 'string' ? room.xCard.updatedAt : null }, dice: room.dice.slice(-50), clocks, map: parseRoomMap(room.map), characters }
+  return { name: text(room.name, 60) || 'Restored Room', fear: Math.max(0, Math.min(12, Math.floor(room.fear.value))), xCard: { active: room.xCard?.active ?? false, updatedAt: typeof room.xCard?.updatedAt === 'string' ? room.xCard.updatedAt : null }, dice: dice.slice(-50), clocks, map: parseRoomMap(room.map), characters }
 }
 
 async function restore(request: Request, env: RoomV2Env): Promise<Response> {

@@ -7,6 +7,10 @@ export const MAP_STROKE_LIMIT = 256
 export const MAP_CLASS_IMAGES = ['bard', 'druid', 'guardian', 'ranger', 'rogue', 'seraph', 'sorcerer', 'warrior', 'wizard'] as const
 export const MAP_MONSTER_IMAGES = ['dragon', 'golem', 'ghost', 'dark-mage', 'demon'] as const
 export const MAP_IMAGES = [...MAP_CLASS_IMAGES, ...MAP_MONSTER_IMAGES] as const
+export const MAP_AVATAR_MAX_LENGTH = 12 * 1024
+export function isMapAvatar(value: string): boolean {
+  return value.length <= MAP_AVATAR_MAX_LENGTH && /^avatar-(square|circle):data:image\/(webp|png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(value)
+}
 export type MapTokenSize = 1 | 2 | 3
 
 export type MapPoint = [number, number]
@@ -58,7 +62,7 @@ function name(value: unknown): string {
   return value.trim()
 }
 function image(value: unknown): string {
-  if (typeof value !== 'string' || !/^[\w-]{1,32}$/.test(value)) invalid()
+  if (typeof value !== 'string' || (!/^[\w-]{1,32}$/.test(value) && !isMapAvatar(value))) invalid()
   return value
 }
 export function mapTokenSize(token: Pick<MapToken, 'size'>): MapTokenSize { return token.size ?? 1 }

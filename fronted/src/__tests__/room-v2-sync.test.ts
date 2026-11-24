@@ -18,6 +18,22 @@ function harness(roomId = 'room-fixture') {
 }
 
 describe('Room V2 sync', () => {
+  it('shares other members logs without duplicates across events, reconnects and clearing', () => {
+    const { sync, room } = harness()
+    const entry = { id: 'shared-log', text: '恐惧点 → 1', actorId: 'player-b', actorName: '乙', createdAt: '2026-11-24T02:00:00.000Z' }
+    const event = { type: 'room.fearChanged' as const, seq: 1, requestId: 'other-member', fear: { value: 1, max: 12 }, log: entry }
+    sync.receive(event)
+    sync.receive(event)
+    expect(sync.getConfirmed()?.roomLog).toEqual([entry])
+    sync.receive({ type: 'room.snapshot', protocolVersion: 2, room: { ...room, seq: 1, fear: event.fear, roomLog: [entry] }, receipts: [] })
+    expect(sync.getConfirmed()?.roomLog).toEqual([entry])
+    const combat = { ...entry, id: 'combat', text: '攻击未命中', tag: '战斗' }
+    sync.receive({ type: 'room.logAppended', seq: 2, requestId: 'combat', entry: combat })
+    expect(sync.getConfirmed()?.roomLog).toEqual([entry, combat])
+    sync.receive({ type: 'room.logCleared', seq: 3, requestId: 'clear' })
+    expect(sync.getConfirmed()?.roomLog).toEqual([])
+    sync.destroy()
+  })
   it('keeps the resized token after the formal event, acknowledgement and reconnect snapshot', () => {
     const { sync, room } = harness()
     const token = { id: 'size-regression', image: 'dragon', name: '巨龙', labelColor: '#263950', x: 39, y: 39 }

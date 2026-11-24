@@ -2,7 +2,8 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type PointerEv
 import { MAP_IMAGES, MAP_CLASS_IMAGES, MAP_MONSTER_IMAGES, MAP_SIZE, mapTokenSize, fitMapToken, type MapTokenSize, type MapPoint, type MapStroke, type MapToken, type RoomMap } from '@dhgc/shared/desktop'
 import type { RoomSync } from '../state/room-sync'
 import type { PendingOperation } from '../sync/room-outbox'
-import { clamp, mapPoint, simplifyStroke, MAP_RANGES, tokenTouchesRange } from './map-geometry'
+import { clamp, mapPoint, simplifyStroke, MAP_RANGES, tokenTouchesRange, nearestFreeTokenCell } from './map-geometry'
+import AvatarUpload from './AvatarUpload'
 import TokenIcon from './token-icons'
 import RangeControl from './RangeControl'
 import './map.css'
@@ -755,6 +756,19 @@ export default function MapPanel({
                       <span>{imageLabels[id]}</span>
                     </button>
                   ))}
+                  {category === '怪物' && <AvatarUpload onConfirm={avatar => {
+                    const position = nearestFreeTokenCell([view.x + VIEW_WIDTH / view.zoom / 2, view.y + VIEW_HEIGHT / view.zoom / 2], projected.tokens.values())
+                    if (!position) { setNotice('地图上没有可用的空格'); return false }
+                    const id = crypto.randomUUID()
+                    if (!submit({ type: 'map.token.create', token: {
+                      id, image: avatar, name: '自选头像', labelColor: '#263950', x: position[0], y: position[1],
+                    } })) return false
+                    setSelectedId(id)
+                    setTool('select')
+                    setAddMenuOpen(false)
+                    addButton.current?.focus()
+                    return true
+                  }} />}
                 </div>
               ))}
             </div>

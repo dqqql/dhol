@@ -4,9 +4,11 @@ import { EMPTY_MAP, type RoomEvent, type RoomV2Model } from '@dhgc/shared/deskto
 export interface ConfirmedRoomState { room: RoomV2Model | null }
 
 export function applyRoomEvent(room: RoomV2Model, event: RoomEvent): RoomV2Model {
-  const base = { ...room, seq: event.seq }
+  const base = { ...room, seq: event.seq, ...(event.log ? { roomLog: [...(room.roomLog ?? []), event.log].slice(-50) } : {}) }
   const map = room.map ?? EMPTY_MAP
   switch (event.type) {
+    case 'room.logAppended': return { ...base, roomLog: [...(room.roomLog ?? []), event.entry].slice(-50) }
+    case 'room.logCleared': return { ...base, roomLog: [] }
     case 'character.replaced': {
       const existing = room.characters.find(character => character.name === event.name)
       const characters = existing
